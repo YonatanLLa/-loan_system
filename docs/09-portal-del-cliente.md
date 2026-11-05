@@ -88,7 +88,7 @@ Este dominio define la experiencia digital del prestatario (*Borrower*). Consist
 - **RF-29.2:** Opciones de canal:
   - Generación de código QR dinámico (Yape / Plin) con monto exacto precargado.
   - Pasarela de pagos con tarjeta de débito/crédito.
-  - Registro de reporte de transferencia con carga de foto de voucher bancario para validación.
+  - Registro de reporte de transferencia con carga de foto de voucher bancario: el pago queda en `PENDING_CONFIRMATION` y **solo se aplica cuando aparece en el extracto bancario conciliado** (US-37); el voucher nunca basta por sí solo (riesgo de capturas falsas).
 - **RF-29.3:** Actualización instantánea: Una vez confirmado el pago por la pasarela o webhook bancario, el portal actualiza el estado de la cuota a `PAID` en tiempo real.
 - **RF-29.4:** Descarga de constancia: Generación en PDF del recibo oficial de pago con código de verificación QR (`GET /api/client/payments/{id}/receipt.pdf`).
 

@@ -1,8 +1,12 @@
 -- =============================================================================
 -- MIGRACIÓN 06 — PRÉSTAMOS, CRONOGRAMAS Y CUOTAS
--- Dominio: US-13 (Desembolso), US-14 (Cronograma Snapshot), US-15 (Contrato)
+-- Modelo: Fintech 100% Digital
+-- Dominio: US-13 (Desembolso Digital), US-14 (Cronograma Snapshot), US-15 (Contrato)
 --          US-31 (Reestructuración — versionado de schedule)
--- Dependencias: 05_loan_applications.sql, 08_treasury.sql (cashbox_id FK diferida)
+-- ELIMINADO: cashbox_id (sin cajas físicas de efectivo)
+-- AGREGADO:  disbursement_bank_account_id (cuenta de la fintech que envió el dinero)
+--            customer_bank_account_id (cuenta del cliente que recibió el dinero)
+-- Dependencias: 05_loan_applications.sql, 03_customers_kyc.sql, 01_admin_config.sql
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -55,9 +59,11 @@ CREATE TABLE loans (
     purpose_type                loan_purpose_type   NOT NULL DEFAULT 'CONSUMO',
     refinanced_from_loan_id     UUID                REFERENCES loans(id),
 
-    -- ── Desembolso ───────────────────────────────────────────────────────────
-    cashbox_id                  UUID,
-    -- FK → cash_boxes (añadida en migración 08 para evitar dependencia circular)
+    -- ── Desembolso Digital (reemplaza cashbox_id) ────────────────────────────
+    -- Cuenta de la Fintech desde donde salió la transferencia
+    disbursement_bank_account_id UUID               REFERENCES company_bank_accounts(id),
+    -- Cuenta del cliente que recibió el depósito
+    customer_bank_account_id    UUID                REFERENCES customer_bank_accounts(id),
     disbursed_by                UUID                REFERENCES users(id),
 
     -- ── Idempotencia del desembolso (US-13, RF-13.2) ────────────────────────
@@ -68,15 +74,55 @@ CREATE TABLE loans (
 );
 
 COMMENT ON TABLE loans IS
-    'Préstamos desembolsados. Los parámetros financieros quedan congelados (snapshot) al momento del desembolso (US-13, RNF-06).';
+    'Préstamos desembolsados digitalmente. Los parámetros financieros quedan congelados (snapshot) al momento del desembolso (US-13, RNF-06).';
 COMMENT ON COLUMN loans.disbursed_amount IS
-    'Monto neto entregado al cliente. Puede diferir de principal si la comisión es deductiva (RF-13.5).';
+    'Monto neto transferido al cliente. Puede diferir de principal si la comisión es deductiva (RF-13.5).';
+COMMENT ON COLUMN loans.disbursement_bank_account_id IS
+    'Cuenta bancaria de la Fintech desde la cual se realizó la transferencia al cliente. Reemplaza cashbox_id.';
+COMMENT ON COLUMN loans.customer_bank_account_id IS
+    'Cuenta bancaria/tarjeta/billetera del cliente que recibió el desembolso.';
 COMMENT ON COLUMN loans.idempotency_key IS
     'Garantiza que reintentos de red no dupliquen desembolsos (RF-13.2, US-13, CA-13.2).';
 
 CREATE TRIGGER tg_loans_updated_at
     BEFORE UPDATE ON loans
     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Desembolsos bancarios — registro detallado de cada transferencia al cliente
+-- Nuevo en modelo digital: registra el estado de la operación bancaria
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE disbursements (
+    id                          UUID                 PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_id                     UUID                 NOT NULL UNIQUE REFERENCES loans(id),
+    -- Origen (Fintech) y Destino (Cliente)
+    company_bank_account_id     UUID                 NOT NULL REFERENCES company_bank_accounts(id),
+    customer_bank_account_id    UUID                 NOT NULL REFERENCES customer_bank_accounts(id),
+    -- Monto y moneda
+    amount                      NUMERIC(18,4)        NOT NULL CHECK (amount > 0),
+    currency_id                 UUID                 NOT NULL REFERENCES currencies(id),
+    -- Canal de transferencia
+    channel                     disbursement_channel NOT NULL,
+    -- Estado del proceso bancario
+    status                      disbursement_status  NOT NULL DEFAULT 'PENDING',
+    -- Referencias bancarias para conciliación
+    operation_number            VARCHAR(100),    -- Número de operación del banco (llega por webhook)
+    external_reference          VARCHAR(150),    -- Referencia de la pasarela o banco
+    bank_response_code          VARCHAR(20),     -- Código de respuesta del banco ('00' = éxito)
+    bank_response_message       TEXT,            -- Mensaje de error si status=FAILED
+    -- Trazabilidad temporal
+    initiated_at                TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
+    confirmed_at                TIMESTAMPTZ,     -- Cuando el banco confirmó la transferencia
+    failed_at                   TIMESTAMPTZ,     -- Cuando el banco rechazó la operación
+    -- Idempotencia
+    idempotency_key             VARCHAR(100)     UNIQUE,
+    initiated_by                UUID             REFERENCES users(id)
+);
+
+COMMENT ON TABLE disbursements IS
+    'Registro de cada transferencia bancaria de desembolso. Permite rastrear el estado desde PENDING hasta COMPLETED o FAILED (US-13, RF-13.3).';
+COMMENT ON COLUMN disbursements.operation_number IS
+    'Número de operación bancaria recibido por webhook de confirmación. Usado para conciliación (US-37).';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Versiones del cronograma — inmutable tras el desembolso (US-14)

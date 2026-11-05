@@ -8,13 +8,18 @@ Este dominio gobierna el núcleo transaccional más sensible del sistema: el pro
 ## 2. Historias de Usuario
 
 ### US-16: Registro de Pago con Cascada Estricta de Prelación
-**Como** Cajero u Operador de Recaudación,  
-**Quiero** asentar un abono monetario a un préstamo específico,  
+**Como** Sistema de Recaudación (webhook de pasarela/banco) u Operador de Recaudación,  
+**Quiero** asentar un abono digital confirmado a un préstamo específico,  
 **Para** amortizar las obligaciones del cliente siguiendo exactamente la jerarquía legal de imputación de pagos.
 
 #### Requerimientos Funcionales
 - **RF-16.1:** Endpoint de cobro: `POST /api/loans/{id}/payments`.
-- **RF-16.2:** Parámetros de entrada: `amount`, `payment_method` (EFECTIVO, TRANSFERENCIA, YAPE, PLIN, TARJETA), `reference` (código de operación o voucher), `paid_at` (fecha/hora efectiva), `idempotency_key`.
+- **RF-16.2:** Parámetros de entrada: `amount`, `payment_method` (`TRANSFERENCIA_BANCARIA`, `YAPE`, `PLIN`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `PASARELA_PAGO`), `gateway_reference` / `external_reference` (código de operación de la pasarela o banco), `company_bank_account_id` (cuenta de la Fintech donde ingresó), `paid_at` (fecha/hora efectiva de la operación), `idempotency_key`. No existen pagos en efectivo ni en ventanilla.
+- **RF-16.2.1:** Origen del pago y confirmación:
+  - **Automático:** webhook firmado de la pasarela o banco (US-36).
+  - **Manual:** el Operador registra un abono ya visible en el extracto bancario (US-37).
+  - El voucher o captura que sube el cliente **no basta** para aplicar un pago: queda en `PENDING_CONFIRMATION` hasta confirmarse contra el banco o el extracto.
+  > Pendiente de modelado: hoy `payments.status` tiene `DEFAULT 'APPLIED'`; en el modelo digital debería nacer en `PENDING_CONFIRMATION`.
 - **RF-16.3:** Control de concurrencia: El procesamiento debe aplicar **bloqueo pesimista de fila** (`SELECT ... FOR UPDATE` sobre el registro del `Loan`) durante la transacción de cobro, evitando que dos solicitudes concurrentes imputen la misma cuota en simultáneo.
 - **RF-16.4:** Regla de Oro de Prelación / Cascada de Imputación (Inviolable):
   El monto recibido se distribuye en las cuotas pendientes (ordenadas cronológicamente por fecha de vencimiento más antigua) bajo este orden jerárquico estricto:
@@ -53,7 +58,7 @@ Este dominio gobierna el núcleo transaccional más sensible del sistema: el pro
   - El préstamo se marca como `PAGADO`.
   - El excedente neto se registra en la cuenta corriente del cliente como `saldo_a_favor` (*Customer credit balance*).
   - Se genera una transacción contable de tipo `CUSTOMER_CREDIT_BALANCE`.
-- **RF-17.3:** El saldo a favor puede ser utilizado en el futuro para pagar otros créditos del mismo cliente o reembolsado mediante solicitud de egreso de caja.
+- **RF-17.3:** El saldo a favor puede ser utilizado en el futuro para pagar otros créditos del mismo cliente o reembolsado mediante transferencia a una cuenta verificada del cliente (pendiente de modelado: tipo de transacción `REFUND`).
 
 #### Criterios de Aceptación
 - **CA-17.1 (Adelanto de Cuota Siguiente):**  
@@ -69,7 +74,7 @@ Este dominio gobierna el núcleo transaccional más sensible del sistema: el pro
 
 ### US-18: Reverso y Anulación de Pagos con Contra-Asientos
 **Como** Administrador o Supervisor de Operaciones,  
-**Quiero** revertir un pago registrado erróneamente (por ejemplo, digitación incorrecta del monto o cheque rebotado),  
+**Quiero** revertir un pago registrado erróneamente (por ejemplo, un abono conciliado con el préstamo equivocado, un pago anulado por la pasarela o un contracargo de tarjeta),  
 **Para** restituir el saldo y las cuotas a su estado anterior sin alterar la historia ni borrar registros de la base de datos.
 
 #### Requerimientos Funcionales
@@ -87,7 +92,7 @@ Este dominio gobierna el núcleo transaccional más sensible del sistema: el pro
 #### Criterios de Aceptación
 - **CA-18.1 (Reverso Exitoso con Contra-Asiento):**  
   *Dado que* se registró un pago erróneo de \$ 500 que marcó una cuota como `PAID`,  
-  *Cuando* el supervisor ejecuta el reverso con motivo "Voucher digitado por error",  
+  *Cuando* el supervisor ejecuta el reverso con motivo "Abono conciliado con el préstamo equivocado",  
   *Entonces* se genera el contra-asiento, la cuota regresa a su saldo original de \$ 500 y estado `OVERDUE`, y la auditoría registra la operación reversada.
 - **CA-18.2 (Intento de Doble Reverso):**  
   *Dado que* un pago ya fue revertido con anterioridad,  

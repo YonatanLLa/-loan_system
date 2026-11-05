@@ -41,7 +41,7 @@ Este dominio gestiona el seguimiento y recuperación de la cartera vencida. Incl
 ### US-20: Bandeja de Cobranzas por Tramos de *Aging*
 **Como** Gestor de Cobranza o Supervisor de Cartera,  
 **Quiero** visualizar una bandeja operativa con los préstamos clasificados por tramos de días de atraso,  
-**Para** priorizar llamadas, visitas o derivación prejudicial de acuerdo con la criticidad de la deuda.
+**Para** priorizar llamadas, mensajes digitales o derivación prejudicial de acuerdo con la criticidad de la deuda (cobranza 100% remota, sin visitas de campo).
 
 #### Requerimientos Funcionales
 - **RF-20.1:** Clasificación estándar de tramos de *Aging*:
@@ -50,7 +50,7 @@ Este dominio gestiona el seguimiento y recuperación de la cartera vencida. Incl
   - **Tramo 2 (Mora Media):** 31 a 60 días de atraso.
   - **Tramo 3 (Mora Tardía):** 61 a 90 días de atraso.
   - **Tramo 4 (Cobranza Judicial / Pre-castigo):** Más de 90 días de atraso.
-- **RF-20.2:** Endpoint: `GET /api/collections/aging` con filtros por tramo, asesor asignado, monto y zona geográfica.
+- **RF-20.2:** Endpoint: `GET /api/collections/aging` con filtros por tramo, gestor asignado, monto y producto.
 - **RF-20.3:** Datos visibles por crédito: Nombre del cliente, teléfono verificado, días de mora, cuotas vencidas, saldo de capital impago, total exigible (capital + interés + mora).
 
 #### Criterios de Aceptación
@@ -63,14 +63,14 @@ Este dominio gestiona el seguimiento y recuperación de la cartera vencida. Incl
 
 ### US-21: Registro de Acciones y Promesas de Pago
 **Como** Gestor de Cobranza,  
-**Quiero** registrar el resultado de cada contacto con el cliente (llamada, mensaje, visita o compromiso de pago),  
+**Quiero** registrar el resultado de cada contacto con el cliente (llamada, WhatsApp, SMS, correo o compromiso de pago),  
 **Para** documentar la trazabilidad de la gestión y programar recordatorios de seguimiento.
 
 #### Requerimientos Funcionales
 - **RF-21.1:** Endpoint: `POST /api/collections/actions`.
 - **RF-21.2:** Estructura de la acción (`CollectionAction`):
   - `loan_id` (préstamo intervenido).
-  - `action_type`: `LLAMADA`, `WHATSAPP`, `VISITA_DOMICILIARIA`, `NOTIFICACION_ESCRITA`, `PROMESA_DE_PAGO`.
+  - `action_type`: `LLAMADA_TELEFONICA`, `WHATSAPP`, `EMAIL`, `SMS`, `NOTIFICACION_PUSH`, `PROMESA_DE_PAGO`, `ACUERDO_DE_PAGO_DIGITAL`.
   - `note` (detalle del contacto y argumentos del cliente).
   - `next_action_at` (fecha/hora de próxima acción o cumplimiento de promesa).
   - `promise_amount` y `promise_date` (si aplica promesa de pago).

@@ -21,6 +21,17 @@ CREATE INDEX idx_customers_portal_user
     WHERE portal_user_id IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- CUENTAS BANCARIAS DEL CLIENTE (03_customers_kyc.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE UNIQUE INDEX idx_customer_bank_primary
+    ON customer_bank_accounts (customer_id)
+    WHERE is_primary = TRUE AND status = 'ACTIVE';
+-- UNIQUE parcial: solo una cuenta primaria activa por cliente (chk_one_primary_per_customer)
+
+CREATE INDEX idx_customer_bank_customer
+    ON customer_bank_accounts (customer_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- USUARIOS Y TOKENS (02_security_users.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE INDEX idx_users_email
@@ -76,6 +87,23 @@ CREATE INDEX idx_loans_idempotency
     WHERE idempotency_key IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- DESEMBOLSOS DIGITALES (06_loans_schedules.sql)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE INDEX idx_disbursements_idempotency
+    ON disbursements (idempotency_key)
+    WHERE idempotency_key IS NOT NULL;
+
+CREATE INDEX idx_disbursements_pending
+    ON disbursements (status, initiated_at)
+    WHERE status IN ('PENDING', 'PROCESSING');
+-- Transferencias de desembolso aún sin confirmación bancaria
+
+CREATE INDEX idx_disbursements_operation
+    ON disbursements (operation_number)
+    WHERE operation_number IS NOT NULL;
+-- Match del webhook / extracto con el desembolso (US-37)
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- CUOTAS — CRÍTICO para el job diario de mora (06_loans_schedules.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE INDEX idx_installments_loan
@@ -117,6 +145,16 @@ CREATE INDEX idx_payments_active
     WHERE status = 'APPLIED' AND payment_kind = 'NORMAL';
 -- Solo pagos vigentes (no revertidos)
 
+CREATE INDEX idx_payments_gateway_ref
+    ON payments (gateway_reference)
+    WHERE gateway_reference IS NOT NULL;
+-- Match de webhook / extracto con el pago (US-37)
+
+CREATE INDEX idx_payments_pending_confirmation
+    ON payments (created_at)
+    WHERE status = 'PENDING_CONFIRMATION';
+-- Pagos digitales a la espera de confirmación bancaria o de pasarela
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- IMPUTACIONES (07_payments_ledger.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -138,30 +176,26 @@ CREATE INDEX idx_transactions_created_at
 CREATE INDEX idx_transactions_type
     ON transactions (transaction_type);
 
-CREATE INDEX idx_transactions_cashbox
-    ON transactions (cashbox_id)
-    WHERE cashbox_id IS NOT NULL;
+CREATE INDEX idx_transactions_bank_account
+    ON transactions (company_bank_account_id, created_at DESC)
+    WHERE company_bank_account_id IS NOT NULL;
+-- Movimientos por cuenta bancaria de la Fintech (reemplaza idx_transactions_cashbox)
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- CAJA Y TESORERÍA (08_treasury_cashbox.sql)
+-- TESORERÍA DIGITAL Y CONCILIACIÓN (08_treasury_reconciliation.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE INDEX idx_cash_boxes_branch
-    ON cash_boxes (branch_id);
+CREATE INDEX idx_bank_statements_pending
+    ON bank_statements (company_bank_account_id, reconciliation_status)
+    WHERE reconciliation_status = 'PENDIENTE_CONCILIACION';
+-- Bandeja de movimientos del extracto aún sin emparejar (US-37)
 
-CREATE INDEX idx_cash_sessions_cashbox
-    ON cash_sessions (cashbox_id);
+CREATE INDEX idx_bank_statements_payment
+    ON bank_statements (reconciled_payment_id)
+    WHERE reconciled_payment_id IS NOT NULL;
 
-CREATE INDEX idx_cash_sessions_open
-    ON cash_sessions (cashbox_id)
-    WHERE closed_at IS NULL;
--- Sesión actualmente abierta por caja
-
-CREATE INDEX idx_cash_movements_cashbox
-    ON cash_movements (cashbox_id, created_at DESC);
-
-CREATE INDEX idx_cash_transfers_status
-    ON cash_transfers (status)
-    WHERE status = 'EN_TRANSITO';
+CREATE INDEX idx_bank_statements_disbursement
+    ON bank_statements (reconciled_disbursement_id)
+    WHERE reconciled_disbursement_id IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- COBRANZA (09_collections_notifications.sql)
@@ -206,16 +240,6 @@ CREATE INDEX idx_integration_retry
 -- Job de reintentos exponenciales (US-38)
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- CONCILIACIÓN (10_integrations_reconciliation.sql)
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE INDEX idx_reconciliation_status
-    ON reconciliations (status);
-
-CREATE INDEX idx_reconciliation_payment
-    ON reconciliations (payment_id)
-    WHERE payment_id IS NOT NULL;
-
--- ─────────────────────────────────────────────────────────────────────────────
 -- AUDITORÍA (02_security_users.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE INDEX idx_audit_entity
@@ -230,6 +254,5 @@ CREATE INDEX idx_audit_created_at
 -- ─────────────────────────────────────────────────────────────────────────────
 -- FERIADOS (01_admin_config.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE INDEX idx_holidays_date_scope
-    ON holidays (holiday_date, scope);
--- Consulta del motor de cronogramas para ajuste de vencimientos
+-- holidays.holiday_date ya tiene índice por su restricción UNIQUE (sin scope ni
+-- sucursal en el modelo digital); no requiere índice adicional.

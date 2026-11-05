@@ -1,34 +1,35 @@
 # Diagramas de Entidad - Relación (ERD)
 
+> **Modelo:** Fintech 100% Digital — Sin sucursales físicas, sin cajas de efectivo, sin cobradores de campo.
+> Todo el flujo de dinero ocurre por transferencias bancarias, Yape, Plin o pasarelas digitales.
+
 Este documento detalla la topología de la base de datos a través de modelos conceptuales y físicos mediante diagramas Mermaid.
 
 ---
 
 ## 1. Diagrama General de la Arquitectura (Core del Sistema)
 
-El siguiente diagrama presenta la interacción central entre los prestatarios, las solicitudes, los créditos formalizados, el cronograma de amortización, los abonos y la tesorería.
+El siguiente diagrama presenta la interacción central entre los prestatarios, las cuentas bancarias digitales, los créditos formalizados, el cronograma de amortización, los abonos y la conciliación bancaria.
 
 ```mermaid
 erDiagram
-    branches ||--o{ users : "asigna a"
-    branches ||--o{ cash_boxes : "posee"
-    branches ||--o{ zones : "agrupa"
+    company ||--o{ company_bank_accounts : "posee cuentas"
 
     users ||--o{ refresh_tokens : "posee"
     users ||--o{ audit_logs : "genera accion"
     users ||--o{ loan_applications : "evalua"
     users ||--o{ loans : "desembolsa"
     users ||--o{ payments : "registra"
-    users ||--o{ cash_sessions : "opera"
 
     customers ||--o{ customer_documents : "adjunta expediente"
     customers ||--o{ otp_verifications : "solicita verificacion"
     customers ||--o{ loan_applications : "solicita credito"
     customers ||--o{ loans : "titular de"
     customers ||--o{ notifications : "recibe"
+    customers ||--o{ customer_bank_accounts : "registra cuenta"
 
     currencies ||--o{ loan_products : "moneda de"
-    currencies ||--o{ cash_boxes : "moneda de"
+    currencies ||--o{ company_bank_accounts : "moneda de"
     currencies ||--o{ transactions : "moneda de"
 
     loan_products ||--o{ loan_applications : "parametriza"
@@ -36,12 +37,18 @@ erDiagram
 
     loan_applications ||--o| loans : "se formaliza en"
 
+    customer_bank_accounts ||--o{ loans : "destino desembolso"
+    company_bank_accounts  ||--o{ loans : "origen desembolso"
+    company_bank_accounts  ||--o{ disbursements : "emite transferencia"
+    customer_bank_accounts ||--o{ disbursements : "recibe transferencia"
+
     loans ||--o{ schedules : "versiona"
     loans ||--o{ installments : "compromete"
     loans ||--o{ payments : "recibe abonos"
     loans ||--o{ transactions : "registra en ledger"
     loans ||--o{ collection_actions : "gestiona mora"
     loans ||--o{ prepayment_quotes : "cotiza liquidacion"
+    loans ||--o| disbursements : "tiene desembolso"
 
     schedules ||--o{ installments : "contiene cuotas"
 
@@ -49,36 +56,21 @@ erDiagram
     installments ||--o{ payment_allocations : "amortiza"
     payments ||--o{ transactions : "asienta en ledger"
 
-    cash_boxes ||--o{ cash_sessions : "abre/cierra"
-    cash_boxes ||--o{ cash_movements : "registra flujo"
-    cash_boxes ||--o{ cash_transfers : "origen / destino"
-    cash_boxes ||--o{ loans : "desembolsa de"
-    cash_boxes ||--o{ payments : "cobra en"
+    company_bank_accounts ||--o{ bank_statements : "extractos de"
+    bank_statements ||--o| payments : "concilia pago"
+    bank_statements ||--o| disbursements : "concilia desembolso"
 ```
 
 ---
 
 ## 2. Subsistemas Detallados
 
-### 2.1 Subsistema de Seguridad, Usuarios y Organización
+### 2.1 Subsistema de Seguridad y Usuarios (Fintech Digital)
 Gestiona las credenciales de acceso, la autenticación por JWT rotativo y el registro de bitácora inmutable.
+Sin sucursales ni zonas geográficas: operación centralizada 100% digital.
 
 ```mermaid
 erDiagram
-    branches {
-        UUID id PK
-        varchar code UK
-        varchar name
-        text address
-        varchar district
-        boolean is_active
-    }
-    zones {
-        UUID id PK
-        varchar name
-        UUID branch_id FK
-        boolean is_active
-    }
     users {
         UUID id PK
         varchar email UK
@@ -86,13 +78,9 @@ erDiagram
         varchar full_name
         user_role role
         user_status_type status
-        UUID branch_id FK
         smallint failed_login_count
         timestamptz locked_until
-    }
-    user_zones {
-        UUID user_id PK,FK
-        UUID zone_id PK,FK
+        timestamptz last_login_at
     }
     refresh_tokens {
         UUID id PK
@@ -100,6 +88,8 @@ erDiagram
         varchar token_hash UK
         timestamptz expires_at
         timestamptz revoked_at
+        inet user_ip
+        text user_agent
     }
     audit_logs {
         bigserial id PK
@@ -109,21 +99,18 @@ erDiagram
         jsonb state_before
         jsonb state_after
         UUID user_id FK
+        inet user_ip
         timestamptz created_at
     }
 
-    branches ||--o{ users : "pertenece"
-    branches ||--o{ zones : "contiene"
-    users ||--o{ user_zones : "asigna"
-    zones ||--o{ user_zones : "asignada a"
-    users ||--o{ refresh_tokens : "emite"
-    users ||--o{ audit_logs : "interviene"
+    users ||--o{ refresh_tokens : "emite sesion por dispositivo"
+    users ||--o{ audit_logs : "genera huella de auditoria"
 ```
 
 ---
 
-### 2.2 Subsistema de Clientes, Expedientes KYC y Portal
-Administra el perfil integral del prestatario, el expediente documental y el portal de autoservicio.
+### 2.2 Subsistema de Clientes, KYC y Cuentas Bancarias
+Administra el perfil integral del prestatario, el expediente documental y las cuentas bancarias/tarjetas a las que se deposita el dinero.
 
 ```mermaid
 erDiagram
@@ -133,7 +120,7 @@ erDiagram
         UUID id PK
         person_type person_type
         document_type doc_type
-        varchar doc_number
+        varchar doc_number UK
         varchar full_name
         varchar email
         varchar phone_primary
@@ -141,6 +128,19 @@ erDiagram
         kyc_status_type kyc_status
         numeric credit_balance
         UUID portal_user_id FK
+        timestamptz consent_given_at
+    }
+    customer_bank_accounts {
+        UUID id PK
+        UUID customer_id FK
+        varchar bank_name
+        bank_account_type account_type
+        varchar account_number_masked
+        varchar cci
+        varchar phone_wallet
+        boolean is_verified
+        boolean is_primary
+        bank_account_status status
     }
     customer_documents {
         UUID id PK
@@ -168,7 +168,8 @@ erDiagram
         notification_status status
     }
 
-    customers ||--o{ customer_documents : "expediente digital"
+    customers ||--o{ customer_bank_accounts : "registra cuenta o tarjeta"
+    customers ||--o{ customer_documents : "expediente digital KYC"
     customers ||--o{ otp_verifications : "codigos OTP"
     customers ||--o{ notifications : "envio de alertas"
 ```
@@ -176,7 +177,7 @@ erDiagram
 ---
 
 ### 2.3 Subsistema de Originación, Préstamos y Cronogramas (Core Financiero)
-Gestiona el ciclo de vida de la solicitud, el desembolso con idempotencia y el cronograma congelado en snapshots.
+Gestiona el ciclo de vida de la solicitud, el desembolso digital con idempotencia y el cronograma congelado en snapshots.
 
 ```mermaid
 erDiagram
@@ -208,7 +209,7 @@ erDiagram
     }
     loans {
         UUID id PK
-        UUID application_id FK,UK
+        UUID application_id FK
         UUID customer_id FK
         UUID product_id FK
         numeric principal
@@ -220,9 +221,22 @@ erDiagram
         loan_status status
         date disbursement_date
         date first_due_date
-        varchar idempotency_key UK
-        UUID cashbox_id FK
+        UUID disbursement_bank_account_id FK
+        UUID customer_bank_account_id FK
         UUID disbursed_by FK
+        varchar idempotency_key UK
+    }
+    disbursements {
+        UUID id PK
+        UUID loan_id FK
+        UUID company_bank_account_id FK
+        UUID customer_bank_account_id FK
+        numeric amount
+        disbursement_channel channel
+        disbursement_status status
+        varchar operation_number
+        varchar external_reference
+        timestamptz confirmed_at
     }
     schedules {
         UUID id PK
@@ -256,7 +270,6 @@ erDiagram
         numeric outstanding_principal
         numeric accrued_interest
         numeric accrued_mora
-        numeric prepayment_penalty
         numeric total_to_pay
         date quote_valid_until
         boolean is_applied
@@ -267,22 +280,27 @@ erDiagram
     loan_applications ||--o| loans : "formaliza a"
     customers ||--o{ loans : "deudor"
     loan_products ||--o{ loans : "condiciones"
-    loans ||--o{ schedules : "versiones"
-    schedules ||--o{ installments : "lista cuotas"
+    customer_bank_accounts ||--o{ loans : "cuenta destino del cliente"
+    company_bank_accounts ||--o{ loans : "cuenta origen fintech"
+    loans ||--o| disbursements : "tiene transferencia bancaria"
+    loans ||--o{ schedules : "versiones del cronograma"
+    schedules ||--o{ installments : "lista de cuotas"
     loans ||--o{ installments : "pertenece"
     loans ||--o{ prepayment_quotes : "cotiza prepago"
 ```
 
 ---
 
-### 2.4 Subsistema de Pagos, Cascada de Prelación y Libro Mayor
-Gobernado por la jerarquía estricta de imputación: Mora -> Intereses -> Comisiones -> Capital.
+### 2.4 Subsistema de Pagos Digitales, Cascada de Prelación y Libro Mayor
+Gobernado por la jerarquía estricta de imputación: Mora → Intereses → Comisiones → Capital.
+Sin efectivo: todos los pagos llegan por transferencia, Yape, Plin o pasarela de pago con confirmación por webhook.
 
 ```mermaid
 erDiagram
-    loans ||--o{ payments : "recibe pago"
+    loans ||--o{ payments : "recibe pago digital"
     payment_methods ||--o{ payments : "canal de abono"
-    cash_boxes ||--o{ payments : "caja receptora"
+    customer_bank_accounts ||--o| payments : "cuenta origen del cliente"
+    company_bank_accounts ||--o| payments : "cuenta destino fintech"
 
     payments {
         UUID id PK
@@ -290,12 +308,16 @@ erDiagram
         payment_kind payment_kind
         numeric amount
         UUID payment_method_id FK
-        varchar reference
+        UUID customer_bank_account_id FK
+        UUID company_bank_account_id FK
+        varchar gateway_reference
+        varchar external_reference
         timestamptz paid_at
         payment_status status
         UUID reversal_of_id FK
         text reversal_reason
         varchar receipt_number UK
+        text receipt_url
         varchar idempotency_key UK
     }
 
@@ -313,7 +335,8 @@ erDiagram
         bigserial id PK
         UUID loan_id FK
         UUID payment_id FK
-        UUID cashbox_id FK
+        UUID disbursement_id FK
+        UUID company_bank_account_id FK
         transaction_type transaction_type
         transaction_dir direction
         numeric amount
@@ -321,78 +344,62 @@ erDiagram
         varchar reference
     }
 
-    payments ||--o{ payment_allocations : "imputa"
+    payments ||--o{ payment_allocations : "imputa por prelacion"
     installments ||--o{ payment_allocations : "es amortizada"
-    payments ||--o{ transactions : "movimiento financiero"
+    payments ||--o{ transactions : "movimiento en ledger"
     loans ||--o{ transactions : "desembolso o ajuste"
     payments ||--o| payments : "reverso de"
 ```
 
 ---
 
-### 2.5 Subsistema de Tesorería, Cajas y Arqueos
-Supervisa la custodia física de efectivo, sesiones con arqueo ciego y transferencias seguras entre cajas.
+### 2.5 Subsistema de Tesorería Digital y Conciliación Bancaria
+Reemplaza las cajas físicas y el arqueo ciego por extractos bancarios digitales y conciliación automática por referencia/webhook.
 
 ```mermaid
 erDiagram
-    cash_boxes {
+    company_bank_accounts {
         UUID id PK
-        varchar name
-        UUID branch_id FK
+        varchar bank_name
+        varchar account_number_masked
+        varchar cci
         UUID currency_id FK
-        UUID responsible_user_id FK
-        numeric current_balance
-        cashbox_status status
-    }
-    cash_sessions {
-        UUID id PK
-        UUID cashbox_id FK
-        UUID opened_by FK
-        numeric opening_balance
-        timestamptz opened_at
-        UUID closed_by FK
-        timestamptz closed_at
-        numeric counted_amount
-        numeric expected_amount
-        numeric difference
-        arqueo_result arqueo_result
-        jsonb arqueo_detail
-    }
-    cash_movements {
-        UUID id PK
-        UUID cashbox_id FK
-        UUID session_id FK
-        cash_movement_type movement_type
-        varchar concept
-        numeric amount
-        varchar voucher_number
-        UUID created_by FK
-    }
-    cash_transfers {
-        UUID id PK
-        UUID source_cashbox_id FK
-        UUID destination_cashbox_id FK
-        numeric amount
-        transfer_status status
-        UUID initiated_by FK
-        UUID accepted_by FK
+        boolean is_disbursement
+        boolean is_collection
+        boolean is_active
     }
 
-    cash_boxes ||--o{ cash_sessions : "sesiones"
-    cash_boxes ||--o{ cash_movements : "flujos extraordinarios"
-    cash_sessions ||--o{ cash_movements : "asocia"
-    cash_boxes ||--o{ cash_transfers : "origen"
-    cash_boxes ||--o{ cash_transfers : "destino"
+    bank_statements {
+        UUID id PK
+        UUID company_bank_account_id FK
+        date statement_date
+        varchar operation_number UK
+        date value_date
+        numeric amount
+        UUID currency_id FK
+        text description
+        varchar external_reference
+        reconciliation_status reconciliation_status
+        UUID reconciled_payment_id FK
+        UUID reconciled_disbursement_id FK
+        timestamptz reconciled_at
+        varchar import_source
+    }
+
+    company_bank_accounts ||--o{ bank_statements : "extractos importados"
+    bank_statements ||--o| payments : "concilia con pago"
+    bank_statements ||--o| disbursements : "concilia con desembolso"
 ```
 
 ---
 
-### 2.6 Subsistema de Cobranzas, Integraciones y Conciliación
-Motor de recuperación de cartera vencida y enlace seguro con el ecosistema bancario (webhooks y extractos).
+### 2.6 Subsistema de Cobranza Digital e Integraciones
+Motor de recuperación digital de cartera vencida: notificaciones, recordatorios y acuerdos de pago online.
+Sin visitas domiciliarias ni cobradores de campo.
 
 ```mermaid
 erDiagram
-    loans ||--o{ collection_actions : "gestiones"
+    loans ||--o{ collection_actions : "gestiones de cobranza"
     installments ||--o{ collection_actions : "cuota intervenida"
 
     collection_actions {
@@ -419,29 +426,4 @@ erDiagram
         smallint retry_count
         timestamptz next_retry_at
     }
-
-    bank_accounts {
-        UUID id PK
-        varchar bank_name
-        varchar account_number_masked
-        UUID currency_id FK
-        boolean is_active
-    }
-
-    reconciliations {
-        UUID id PK
-        UUID bank_account_id FK
-        varchar source
-        varchar external_reference
-        date bank_date
-        numeric bank_amount
-        UUID loan_id FK
-        UUID payment_id FK
-        reconciliation_status status
-        UUID reconciled_by FK
-    }
-
-    bank_accounts ||--o{ reconciliations : "extracto de"
-    loans ||--o{ reconciliations : "vincula credito"
-    payments ||--o{ reconciliations : "confirma abono"
 ```

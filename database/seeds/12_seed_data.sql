@@ -37,23 +37,20 @@ INSERT INTO document_types (code, name, char_length, validation_regex) VALUES
 ON CONFLICT (code) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Métodos de pago habilitados
+-- Métodos de pago digitales (sin efectivo ni ventanilla)
+--   webhook_enabled = TRUE  → confirmación automática por pasarela / banco
+--   webhook_enabled = FALSE → confirmación por conciliación con el extracto
+--   Tarjeta de crédito queda inactiva hasta que negocio apruebe su uso
+--   (costo de comisión de la pasarela y pago de deuda con deuda).
 -- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO payment_methods (name, method_type, is_active) VALUES
-    ('Efectivo',                  'EFECTIVO',            TRUE),
-    ('Transferencia Bancaria',    'TRANSFERENCIA',       TRUE),
-    ('Yape',                      'YAPE',                TRUE),
-    ('Plin',                      'PLIN',                TRUE),
-    ('Tarjeta Débito/Crédito',    'TARJETA',             TRUE),
-    ('Depósito en Ventanilla',    'DEPOSITO_VENTANILLA', TRUE)
+INSERT INTO payment_methods (name, method_type, webhook_enabled, is_active) VALUES
+    ('Transferencia bancaria (CCI)', 'TRANSFERENCIA_BANCARIA', FALSE, TRUE),
+    ('Yape',                         'YAPE',                   TRUE,  TRUE),
+    ('Plin',                         'PLIN',                   TRUE,  TRUE),
+    ('Tarjeta de débito',            'TARJETA_DEBITO',         TRUE,  TRUE),
+    ('Tarjeta de crédito',           'TARJETA_CREDITO',        TRUE,  FALSE),
+    ('Pasarela de pago',             'PASARELA_PAGO',          TRUE,  TRUE)
 ON CONFLICT DO NOTHING;
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Sucursal principal (sede central)
--- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO branches (code, name, address, district, is_active) VALUES
-    ('SUC-01', 'Sede Central', 'Av. Principal 100', 'Lima', TRUE)
-ON CONFLICT (code) DO NOTHING;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Usuario Administrador inicial
@@ -61,14 +58,13 @@ ON CONFLICT (code) DO NOTHING;
 --    generado con BCrypt (cost=12) o Argon2id ANTES de usar en producción.
 --    Nunca almacenar contraseñas en texto plano.
 -- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO users (email, password_hash, full_name, role, status, branch_id)
+INSERT INTO users (email, password_hash, full_name, role, status)
 VALUES (
     'admin@sistema.local',
     '$2b$12$PLACEHOLDER_REEMPLAZAR_CON_HASH_REAL',
     'Administrador del Sistema',
     'ROLE_ADMIN',
-    'ACTIVE',
-    (SELECT id FROM branches WHERE code = 'SUC-01')
+    'ACTIVE'
 )
 ON CONFLICT (email) DO NOTHING;
 
@@ -105,17 +101,17 @@ ON CONFLICT (code, version) DO NOTHING;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Feriados nacionales de Perú (año corriente — ajustar anualmente)
 -- ─────────────────────────────────────────────────────────────────────────────
-INSERT INTO holidays (holiday_date, name, scope, is_recurring) VALUES
-    ('2026-01-01', 'Año Nuevo',                             'NACIONAL', TRUE),
-    ('2026-04-02', 'Jueves Santo',                          'NACIONAL', FALSE),
-    ('2026-04-03', 'Viernes Santo',                         'NACIONAL', FALSE),
-    ('2026-05-01', 'Día del Trabajo',                       'NACIONAL', TRUE),
-    ('2026-06-29', 'San Pedro y San Pablo',                 'NACIONAL', TRUE),
-    ('2026-07-28', 'Fiestas Patrias — Independencia',       'NACIONAL', TRUE),
-    ('2026-07-29', 'Fiestas Patrias — Día de las FFAA',    'NACIONAL', TRUE),
-    ('2026-08-30', 'Santa Rosa de Lima',                    'NACIONAL', TRUE),
-    ('2026-10-08', 'Combate de Angamos',                    'NACIONAL', TRUE),
-    ('2026-11-01', 'Día de Todos los Santos',               'NACIONAL', TRUE),
-    ('2026-12-08', 'Inmaculada Concepción',                 'NACIONAL', TRUE),
-    ('2026-12-25', 'Navidad',                               'NACIONAL', TRUE)
-ON CONFLICT (holiday_date, scope, branch_id) DO NOTHING;
+INSERT INTO holidays (holiday_date, name, is_recurring) VALUES
+    ('2026-01-01', 'Año Nuevo',                             TRUE),
+    ('2026-04-02', 'Jueves Santo',                          FALSE),
+    ('2026-04-03', 'Viernes Santo',                         FALSE),
+    ('2026-05-01', 'Día del Trabajo',                       TRUE),
+    ('2026-06-29', 'San Pedro y San Pablo',                 TRUE),
+    ('2026-07-28', 'Fiestas Patrias — Independencia',       TRUE),
+    ('2026-07-29', 'Fiestas Patrias — Día de las FFAA',    TRUE),
+    ('2026-08-30', 'Santa Rosa de Lima',                    TRUE),
+    ('2026-10-08', 'Combate de Angamos',                    TRUE),
+    ('2026-11-01', 'Día de Todos los Santos',               TRUE),
+    ('2026-12-08', 'Inmaculada Concepción',                 TRUE),
+    ('2026-12-25', 'Navidad',                               TRUE)
+ON CONFLICT (holiday_date) DO NOTHING;

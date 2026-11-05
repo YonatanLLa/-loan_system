@@ -19,7 +19,7 @@ Este dominio proporciona inteligencia de negocio, control financiero y transpare
     $$\text{Ratio de Mora} = \frac{\text{Saldo de Capital en Mora}}{\text{Saldo de Cartera Total}} \times 100$$
   - **Recaudación del Día:** Monto recaudado real vs. Meta/Expectativa de cobro del día.
   - **Colocaciones / Desembolsos del Día:** Monto total y número de operaciones otorgadas.
-  - **Saldo Consolidado en Cajas y Bancos.**
+  - **Saldo Consolidado en Cuentas Bancarias** de la Fintech (según el último cuadre diario, US-24) y desembolsos en tránsito.
 - **RF-33.2:** Gráficas interactivas:
   - Evolución mensual de colocaciones vs. recuperaciones.
   - Distribución de la cartera por producto y por tramo de mora (*Aging Chart*).
@@ -35,7 +35,7 @@ Este dominio proporciona inteligencia de negocio, control financiero y transpare
 
 ### US-34: Reportes de Cartera, *Aging* y Flujo de Caja
 **Como** Analista Financiero, Contador o Auditor,  
-**Quiero** generar reportes consolidados y detallados con filtros por fecha, sucursal o producto, y exportarlos en formatos PDF y Excel,  
+**Quiero** generar reportes consolidados y detallados con filtros por fecha, producto o canal de pago, y exportarlos en formatos PDF y Excel,  
 **Para** realizar análisis de solvencia, conciliación contable y remitir informes a la gerencia.
 
 #### Requerimientos Funcionales
@@ -46,7 +46,7 @@ Este dominio proporciona inteligencia de negocio, control financiero y transpare
   - Cuantificación de provisión exigida por nivel de riesgo.
 - **RF-34.3:** **Reporte de Flujo de Caja (`GET /api/reports/cashflow`):**
   - Entradas de dinero (cobro de capital, cobro de intereses, cobro de mora, comisiones).
-  - Salidas de dinero (desembolsos, gastos operativos, comisiones bancarias).
+  - Salidas de dinero (desembolsos por transferencia, comisiones bancarias y de pasarela de pago).
   - Flujo neto del período seleccionado.
 - **RF-34.4:** Formatos de exportación obligatorios:
   - `Excel (.xlsx)` con tablas dinámicas y fórmulas nativas de suma.
@@ -61,7 +61,7 @@ Este dominio proporciona inteligencia de negocio, control financiero y transpare
 ---
 
 ### US-35: Emisión de Estado de Cuenta Oficial por Préstamo
-**Como** Cliente o Cajero de Atención al Usuario,  
+**Como** Cliente (desde el portal) u Operador de Atención al Cliente,  
 **Quiero** consultar y emitir el Estado de Cuenta detallado e histórico de un préstamo,  
 **Para** conocer la cronología completa de pagos efectuados, saldos amortizados y obligaciones pendientes.
 
@@ -83,5 +83,5 @@ Este dominio proporciona inteligencia de negocio, control financiero y transpare
 ---
 
 ## 3. Requisitos No Funcionales del Dominio
-- **RNF-22 (Optimización de Consultas Analíticas):** Los reportes masivos de cartera deben ejecutarse contra réplicas de lectura de base de datos o vistas materializadas indexadas para no degradar las transacciones OLTP de caja y cobros.
+- **RNF-22 (Optimización de Consultas Analíticas):** Los reportes masivos de cartera deben ejecutarse contra réplicas de lectura de base de datos o vistas materializadas indexadas para no degradar las transacciones OLTP de desembolsos y cobros.
 - **RNF-23 (Streaming de Datos en Exportación):** Las exportaciones masivas a Excel deben generarse por transmisión en streaming (OpenXML / FastExcel) para evitar desbordamientos de memoria en el servidor backend.

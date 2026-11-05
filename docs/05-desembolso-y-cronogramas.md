@@ -8,9 +8,9 @@ Este dominio formaliza el nacimiento jurídico y financiero del préstamo. Se en
 ## 2. Historias de Usuario
 
 ### US-13: Ejecución de Desembolso de Préstamo con Idempotencia
-**Como** Cajero u Operador de Tesorería,  
+**Como** Operador de Tesorería (o el sistema, tras la aceptación digital del contrato por el cliente),  
 **Quiero** procesar el desembolso de una solicitud aprobada utilizando una clave de idempotencia,  
-**Para** entregar los fondos al cliente (en efectivo o transferencia bancaria) y crear la entidad oficial de préstamo sin riesgo de duplicar la operación por caídas de red.
+**Para** transferir los fondos a la cuenta verificada del cliente (CCI o billetera digital) y crear la entidad oficial de préstamo sin riesgo de duplicar la operación por caídas de red. No existen desembolsos en efectivo.
 
 #### Requerimientos Funcionales
 - **RF-13.1:** Endpoint de desembolso: `POST /api/loans`.
@@ -18,18 +18,22 @@ Este dominio formaliza el nacimiento jurídico y financiero del préstamo. Se en
 - **RF-13.3:** Validaciones previas al desembolso:
   - La solicitud debe encontrarse en estado `APROBADO` o `APROBADO_CON_CONDICIONES`.
   - El cliente debe tener `kyc_status = VERIFIED`.
-  - Si el desembolso es en efectivo desde caja física, la caja asignada al cajero debe estar en estado `ABIERTA` y contar con saldo suficiente.
-- **RF-13.4:** Creación de la entidad `Loan` y transición de estado de la solicitud a `DESEMBOLSADO`.
+  - El cliente aceptó digitalmente el contrato y la hoja resumen (OTP de conformidad, US-27 / RF-27.4).
+  - La cuenta destino (`customer_bank_accounts`) pertenece al cliente, está verificada (`is_verified = true`) y opera en la moneda del préstamo.
+  - La cuenta de origen (`company_bank_accounts`) está activa y habilitada para desembolsos (US-23).
+- **RF-13.4:** Creación de la entidad `Loan` y de su registro `disbursements` en estado `PENDING`; la transferencia se envía al banco o pasarela de forma asíncrona (`PROCESSING`) y se confirma por webhook o extracto (`COMPLETED`). El seguimiento y los rechazos (`FAILED`) se gestionan en la bandeja de tesorería (US-25).
+- **RF-13.4.1:** La fecha de inicio de intereses (`disbursement_date`) es la fecha en que el banco **confirma** la transferencia, no la fecha en que se inició.
+  > Pendiente de modelado: hoy `loans.status` nace en `VIGENTE` y no existe un estado previo a la confirmación del desembolso; si la transferencia falla, el préstamo no debe quedar vigente ni devengar intereses.
 - **RF-13.5:** Tratamiento de la comisión de apertura:
   - Si la política es deductiva: `Monto Entregado = Monto Capital - Comisión Apertura`.
   - Si es financiada: Se agrega al capital o se programa como cargo en cuota.
-- **RF-13.6:** Asiento en el libro mayor (`Transaction`): Genera una transacción inmutable de tipo `DISBURSEMENT` con dirección `OUTFLOW`.
+- **RF-13.6:** Asiento en el libro mayor (`Transaction`): Genera una transacción inmutable de tipo `DISBURSEMENT` con dirección `OUTFLOW`, vinculada al `disbursement_id` y a la `company_bank_account_id` de origen, cuando el desembolso queda `COMPLETED`.
 
 #### Criterios de Aceptación
 - **CA-13.1 (Desembolso Exitoso):**  
   *Dado que* una solicitud de \$ 10,000 está aprobada y el cliente tiene KYC verificado,  
-  *Cuando* el cajero envía `POST /api/loans` con su `Idempotency-Key`,  
-  *Entonces* se crea el préstamo con estado `VIGENTE`, se genera el cronograma inmutable, se registra la salida en caja y retorna `201 Created`.
+  *Cuando* el operador envía `POST /api/loans` con su `Idempotency-Key`,  
+  *Entonces* se crea el préstamo y su desembolso en `PENDING`, se envía la transferencia a la cuenta verificada del cliente y retorna `201 Created`; al confirmarse la transferencia se genera el cronograma inmutable, se asienta la salida en el libro mayor y se notifica al cliente.
 - **CA-13.2 (Reintento de Red con Misma Idempotency-Key):**  
   *Dado que* un desembolso fue procesado pero el cliente perdió la conexión antes de recibir el `201`,  
   *Cuando* el frontend reintenta la misma llamada con el mismo `Idempotency-Key`,  
@@ -68,9 +72,9 @@ Este dominio formaliza el nacimiento jurídico y financiero del préstamo. Se en
 ---
 
 ### US-15: Emisión de Hoja Resumen y Contrato de Crédito
-**Como** Cajero, Asesor o Cliente,  
+**Como** Operador, Asesor o Cliente (desde el portal),  
 **Quiero** generar y descargar en formato PDF el contrato de crédito, pagaré y la hoja resumen con el cronograma oficial,  
-**Para** formalizar legalmente la obligación y entregar una copia física o digital al prestatario.
+**Para** formalizar legalmente la obligación con aceptación electrónica y entregar la copia digital al prestatario (portal y correo).
 
 #### Requerimientos Funcionales
 - **RF-15.1:** Generación en el acto del documento contractual en PDF a partir de una plantilla formal con los datos del préstamo recién desembolsado.
@@ -90,5 +94,7 @@ Este dominio formaliza el nacimiento jurídico y financiero del préstamo. Se en
 ---
 
 ## 3. Requisitos No Funcionales del Dominio
-- **RNF-10 (Transaccionalidad ACID):** El desembolso, la generación del cronograma y el movimiento de caja deben ejecutarse en una sola transacción atómica de base de datos; si cualquiera falla, se revierte todo (*Rollback* total).
+- **RNF-10 (Consistencia con el Banco):** Una transferencia bancaria no puede formar parte de una transacción de base de datos. Por eso el desembolso se procesa en dos fases:
+  1. **Transacción local atómica:** se crean `loans` y `disbursements` (`PENDING`) y el evento de envío en una tabla *outbox*; si algo falla, *Rollback* total y no se envía nada al banco.
+  2. **Confirmación asíncrona:** un worker envía la transferencia (`PROCESSING`); el webhook o el extracto la confirma (`COMPLETED`) y, en una segunda transacción atómica, se genera el cronograma y se asienta el `DISBURSEMENT` en el libro mayor. Un `FAILED` no genera asiento ni cronograma.
 - **RNF-11 (Regla de Oro Financiera):** El dinero se calcula una sola vez al generar el cronograma y se congela; los pagos solo consumen la deuda, nunca recalculan los valores del pasado hacia atrás.

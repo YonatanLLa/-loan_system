@@ -91,9 +91,9 @@ src/
 │   │   ├── Application/                       # RegisterPaymentCommand, ReversePaymentCommand
 │   │   └── Infrastructure/                    # PaymentDbContext, ReceiptsGenerator
 │   │
-│   ├── Treasury/                              # Módulo 08: Cajas, Arqueo Ciego, Transferencias
-│   │   ├── Domain/                            # CashBox, CashSession, CashMovement, CashTransfer
-│   │   ├── Application/                       # OpenCashBoxCommand, CloseBlindCashSessionCommand
+│   ├── Treasury/                              # Módulo 08: Tesorería digital (sin cajas ni efectivo)
+│   │   ├── Domain/                            # CompanyBankAccount, Disbursement, BankStatement, DailyBalance
+│   │   ├── Application/                       # ConfirmDisbursementCommand, ImportBankStatementCommand, RunDailyBalanceQuery
 │   │   └── Infrastructure/                    # TreasuryDbContext
 │   │
 │   ├── Collections/                           # Módulo 09: Mora, Aging y Promesas de Pago

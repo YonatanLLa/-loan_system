@@ -37,7 +37,7 @@ graph TD
         subgraph Outbound_Ports ["Puertos de Salida (Outbound Ports)"]
             Port_LoanRepo[ILoanRepository]
             Port_PaymentRepo[IPaymentRepository]
-            Port_CashBox[ICashBoxRepository]
+            Port_BankAccount[IBankAccountRepository]
             Port_Ledger[ITransactionLedger]
             Port_Audit[IAuditLogService]
             Port_SMS[ISmsNotificationSender]
@@ -51,7 +51,7 @@ graph TD
     subgraph Driven_Side ["Lado Conducido / Secundario (Driven / Outbound)"]
         Port_LoanRepo --> EF_LoanRepo[EF Core PostgreSQL Adapter]
         Port_PaymentRepo --> EF_PaymentRepo[EF Core PostgreSQL Adapter]
-        Port_CashBox --> EF_CashBox[EF Core Adapter]
+        Port_BankAccount --> EF_BankAccount[EF Core Adapter]
         Port_Ledger --> Dapper_Ledger[Dapper Ledger Adapter]
         Port_Audit --> Interceptor_Audit[AuditLog SaveChanges Interceptor]
         Port_SMS --> Twilio_Adapter[Twilio / WhatsApp API Adapter]
@@ -71,7 +71,7 @@ graph TD
 ### 2.1 El Núcleo de Dominio (Domain Core)
 Contiene las entidades y la lógica matemática financiera pura. No tiene referencias a ningún paquete NuGet de terceros ni a Entity Framework.
 
-- **Entidades de Dominio:** `Loan`, `Schedule`, `Installment`, `Payment`, `Customer`, `CashBox`.
+- **Entidades de Dominio:** `Loan`, `Schedule`, `Installment`, `Payment`, `Customer`, `Disbursement`, `CompanyBankAccount`.
 - **Servicios de Dominio:**
   - `PaymentCascadeEngine`: Aplica la prelación obligatoria (**Mora $\to$ Interés $\to$ Comisiones $\to$ Capital**).
   - `AmortizationScheduleGenerator`: Implementa fórmulas (Francés, Flat, Alemán, Americano) con ajuste obligatorio de centavos en cuota final.
@@ -154,7 +154,7 @@ public class LoansController : ControllerBase
     }
 
     [HttpPost("{id:guid}/payments")]
-    [Authorize(Roles = "ROLE_CASHIER,ROLE_ADMIN")]
+    [Authorize(Roles = "ROLE_OPERATOR,ROLE_ADMIN")]
     public async Task<IActionResult> Pay(
         [FromRoute] Guid id,
         [FromBody] RegisterPaymentRequest request,
@@ -275,5 +275,5 @@ src/
 |---|---|
 | **Testabilidad Incomparable** | Las fórmulas de cálculo financiero, amortización y prelación se prueban al 100% en memoria con mocks simples, sin requerir base de datos ni servidor web levantado. |
 | **Independencia de la Base de Datos** | Si el día de mañana se cambia PostgreSQL por SQL Server o se introduce MongoDB para auditoría, el dominio y los casos de uso permanecen intactos. |
-| **Múltiples Clientes para el Mismo Caso de Uso** | El caso de uso `RegisterPaymentUseCase` es invocado indistintamente por el Cajero en el Panel Web, por el Webhook del BCP o por un Job de conciliación automática, sin duplicar ni una sola línea de lógica financiera. |
+| **Múltiples Clientes para el Mismo Caso de Uso** | El caso de uso `RegisterPaymentUseCase` es invocado indistintamente por el Operador en el Panel Web (pago identificado en el extracto), por el Webhook del BCP o por un Job de conciliación automática, sin duplicar ni una sola línea de lógica financiera. |
 | **Aislamiento contra Caídas Externas** | Si el proveedor de SMS o de almacenamiento de archivos falla, el núcleo financiero puede seguir procesando pagos y desembolsos registrando los reintentos mediante adaptadores de fallback. |

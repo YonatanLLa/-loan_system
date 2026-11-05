@@ -36,6 +36,13 @@ Eso significa:
 - APIs claras para admin y cliente
 - colas para procesos asincornos
 
+### Modelo operativo: 100% digital
+
+- no hay sucursales, cajas, ventanillas ni efectivo
+- los desembolsos salen por transferencia (CCI) o billetera a una cuenta verificada del cliente
+- los pagos entran solo por canales digitales (transferencia, Yape/Plin, tarjeta, pasarela)
+- por eso **al menos un canal de cobro con webhook y la conciliacion basica con el extracto bancario son parte del arranque**, no de una etapa posterior
+
 ### Modulos minimos de arranque
 
 1. **Seguridad**
@@ -59,13 +66,15 @@ Eso significa:
    - evaluacion
    - aprobacion / rechazo
 5. **Prestamos**
-   - desembolso
+   - desembolso por transferencia digital (con seguimiento de estado)
    - cronograma
    - detalle de cuotas
-6. **Pagos**
-   - registro de pago
+6. **Pagos digitales**
+   - al menos un canal de cobro con webhook (pasarela o banco)
+   - confirmacion del pago antes de aplicarlo
    - aplicacion por prioridad
    - reversos
+   - conciliacion basica contra el extracto bancario
 7. **Cobranza**
    - aging
    - cuotas vencidas
@@ -79,7 +88,7 @@ Eso significa:
 ### Interfaces iniciales
 
 - **Panel administrativo**
-  - para analista, cajero, cobranza, auditoria y administrador
+  - para analista, operador, cobranza, tesoreria, auditoria y administrador
 - **Portal cliente**
   - para solicitar prestamo
   - consultar estado
@@ -122,7 +131,7 @@ Aunque al inicio sea una sola plataforma, internamente deberia separarse por dom
 - `cronogramas`
 - `pagos`
 - `cobranzas`
-- `caja`
+- `tesoreria`
 - `reportes`
 - `integraciones`
 - `auditoria`
@@ -159,11 +168,12 @@ La primera version buena del sistema deberia lograr esto:
 3. crear productos de credito
 4. simular prestamos
 5. aprobar solicitudes
-6. desembolsar
+6. desembolsar por transferencia a una cuenta verificada del cliente
 7. generar cronograma inmutable
-8. registrar pagos correctamente
+8. recibir pagos digitales confirmados (webhook o extracto) y aplicarlos correctamente
 9. calcular mora
-10. mostrar reportes y estado de cuenta
+10. conciliar pagos y desembolsos contra el extracto bancario
+11. mostrar reportes y estado de cuenta
 
 Si esa base funciona bien, el proyecto ya tiene valor real.
 
@@ -175,11 +185,11 @@ Cuando el nucleo ya este estable, el sistema deberia crecer hacia:
 
 ### Operacion interna mas fuerte
 
-- caja y tesoreria
-- apertura / cierre de caja
-- cuadre
-- transferencias entre cajas
-- gastos operativos
+- tesoreria digital
+- cuentas bancarias propias (desembolso y recaudacion)
+- cuadre diario por cuenta contra el extracto
+- bandeja de desembolsos pendientes y fallidos
+- fondeo entre cuentas propias
 
 ### Cobranza mas madura
 
@@ -204,7 +214,9 @@ Cuando el nucleo ya este estable, el sistema deberia crecer hacia:
 
 Cuando el negocio ya tenga volumen, conviene avanzar hacia capacidades enterprise:
 
-### Integraciones externas
+### Integraciones externas adicionales
+
+El primer canal de cobro y desembolso ya existe desde el arranque (modelo 100% digital). En esta etapa se suman el resto:
 
 - `BCP`
 - `Yape`
@@ -341,11 +353,12 @@ Despues se agregan integraciones, automatizacion y escalabilidad.
 
 - monolito modular
 - panel admin + portal cliente
-- productos, prestamos, cronograma, pagos, cobranza
+- productos, prestamos, cronograma, pagos digitales, cobranza
+- primer canal de cobro con webhook y conciliacion basica
 
 ### Como crecer
 
-- caja
+- tesoreria digital
 - reportes avanzados
 - portal cliente completo
 - integraciones bancarias
@@ -413,6 +426,7 @@ Desde el inicio deberian existir al menos estos ambientes:
 - una base de datos principal
 - un frontend admin
 - un frontend cliente
+- endpoint de webhooks protegido (firma HMAC) para el primer canal de cobro
 - pipeline de despliegue automatizado
 - backup diario
 - restore probado
@@ -431,7 +445,7 @@ Desde el inicio deberian existir al menos estos ambientes:
 
 ### Etapa 3 - Integraciones enterprise
 
-- endpoints de webhooks protegidos
+- endpoints de webhooks protegidos para multiples bancos y billeteras
 - reintentos controlados
 - cola de reprocesos
 - conciliacion automatica

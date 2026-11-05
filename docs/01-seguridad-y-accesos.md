@@ -8,7 +8,7 @@ Este dominio gestiona la autenticación, control de accesos y la pista inmutable
 ## 2. Historias de Usuario
 
 ### US-01: Autenticación Segura de Usuarios del Backoffice
-**Como** usuario del sistema administrativo (Administrador, Analista, Cajero, Cobrador, Auditor),  
+**Como** usuario del sistema administrativo (Administrador, Analista, Operador, Gestor de Cobranza, Auditor),  
 **Quiero** iniciar sesión con mis credenciales corporativas (correo y contraseña segura) y autenticación reforzada,  
 **Para** acceder a las funcionalidades autorizadas de acuerdo con mi rol asignado.
 
@@ -41,18 +41,18 @@ Este dominio gestiona la autenticación, control de accesos y la pista inmutable
 **Para** garantizar el principio de mínimo privilegio y que ningún colaborador ejecute acciones fuera de su competencia.
 
 #### Requerimientos Funcionales
-- **RF-02.1:** Soporte de roles base: `Administrador`, `Analista de Crédito`, `Cajero/Operador`, `Gestor de Cobranza`, `Auditor`.
+- **RF-02.1:** Soporte de roles base: `Administrador`, `Analista de Crédito`, `Operador` (desembolsos y pagos digitales; no existe el rol de cajero), `Gestor de Cobranza`, `Auditor`.
 - **RF-02.2:** Validación estricta a nivel de API: cada endpoint debe estar protegido por un middleware de autorización que verifique la directiva o claim de permiso (`Policies` / `Scopes`).
 - **RF-02.3:** Si un usuario intenta acceder a un recurso no autorizado, el backend debe responder de inmediato con `403 Forbidden` y no procesar la petición.
 - **RF-02.4:** Capacidad de activar o suspender usuarios inmediatamente, cortando la validez de los Refresh Tokens en el acto.
 
 #### Criterios de Aceptación
 - **CA-02.1 (Acceso Concedido):**  
-  *Dado que* un usuario con rol `Cajero` intenta invocar `POST /api/loans/{id}/payments`,  
+  *Dado que* un usuario con rol `Operador` intenta invocar `POST /api/loans/{id}/payments`,  
   *Cuando* el middleware evalúa sus claims,  
   *Entonces* valida que tiene el permiso `payments.create` y permite la ejecución.
 - **CA-02.2 (Acceso Denegado por Rol Insuficiente):**  
-  *Dado que* un usuario con rol `Cajero` intenta invocar `POST /api/loan-products` (crear producto),  
+  *Dado que* un usuario con rol `Operador` intenta invocar `POST /api/loan-products` (crear producto),  
   *Cuando* el middleware evalúa la petición,  
   *Entonces* retorna `403 Forbidden` y aborta la transacción.
 

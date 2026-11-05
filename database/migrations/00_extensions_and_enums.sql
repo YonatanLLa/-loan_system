@@ -1,5 +1,6 @@
 -- =============================================================================
 -- MIGRACIÓN 00 — EXTENSIONES Y TIPOS ENUMERADOS
+-- Modelo: Fintech 100% Digital (sin sucursales físicas ni cajas de efectivo)
 -- Ejecutar PRIMERO. No depende de ningún otro archivo.
 -- =============================================================================
 
@@ -34,21 +35,60 @@ CREATE TYPE kyc_status_type AS ENUM (
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- MÓDULO: SEGURIDAD / USUARIOS
+-- ROLES AJUSTADOS: sin CASHIER (cajero físico) ni COLLECTOR de campo.
+-- El cobrador digital gestiona recordatorios/cobranza desde el backoffice.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TYPE user_role AS ENUM (
-    'ROLE_ADMIN',
-    'ROLE_ANALYST',
-    'ROLE_CASHIER',
-    'ROLE_COLLECTOR',
-    'ROLE_AUDITOR',
-    'ROLE_CLIENT'
+    'ROLE_ADMIN',       -- Administrador total del sistema
+    'ROLE_ANALYST',     -- Analista de crédito: evalúa y aprueba solicitudes
+    'ROLE_OPERATOR',    -- Operador: procesa desembolsos y pagos digitales
+    'ROLE_COLLECTOR',   -- Gestor de cobranza digital: seguimiento de mora
+    'ROLE_AUDITOR',     -- Solo lectura: bitácora y reportes de cumplimiento
+    'ROLE_CLIENT'       -- Prestatario: accede al portal de autoservicio
 );
 
 CREATE TYPE user_status_type AS ENUM (
     'ACTIVE',
     'INACTIVE',
     'LOCKED'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- MÓDULO: CUENTAS BANCARIAS DEL CLIENTE
+-- Destino de desembolsos y origen de pagos por transferencia
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TYPE bank_account_type AS ENUM (
+    'CUENTA_CORRIENTE',
+    'CUENTA_AHORRO',
+    'TARJETA_DEBITO',
+    'BILLETERA_DIGITAL'  -- Yape, Plin, Tunki, etc.
+);
+
+CREATE TYPE bank_account_status AS ENUM (
+    'ACTIVE',
+    'INACTIVE',
+    'PENDING_VERIFICATION'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- MÓDULO: DESEMBOLSOS BANCARIOS
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE TYPE disbursement_status AS ENUM (
+    'PENDING',       -- Generado, pendiente de envío al banco
+    'PROCESSING',    -- Enviado al banco / pasarela, en tránsito
+    'COMPLETED',     -- Confirmado por el banco / webhook de confirmación
+    'FAILED',        -- Rechazado por el banco (fondos insuficientes, cuenta inválida)
+    'REVERSED'       -- Revertido por error o fraude
+);
+
+CREATE TYPE disbursement_channel AS ENUM (
+    'TRANSFERENCIA_BANCARIA',  -- Transferencia interbancaria (CCI)
+    'YAPE',
+    'PLIN',
+    'DEPOSITO_CCI'
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -148,12 +188,13 @@ CREATE TYPE installment_status AS ENUM (
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- MÓDULO: PAGOS Y LIBRO MAYOR
+-- Los métodos son 100% digitales: sin EFECTIVO ni DEPOSITO_VENTANILLA
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TYPE payment_status AS ENUM (
-    'APPLIED',
-    'REVERSED',
-    'PENDING_CONFIRMATION'
+    'PENDING_CONFIRMATION',  -- Registrado, pendiente de confirmación bancaria
+    'APPLIED',               -- Confirmado y aplicado al préstamo
+    'REVERSED'               -- Revertido mediante contra-asiento
 );
 
 CREATE TYPE payment_kind AS ENUM (
@@ -162,67 +203,41 @@ CREATE TYPE payment_kind AS ENUM (
 );
 
 CREATE TYPE payment_method_type AS ENUM (
-    'EFECTIVO',
-    'TRANSFERENCIA',
+    'TRANSFERENCIA_BANCARIA',  -- CCI a cuenta de la fintech
     'YAPE',
     'PLIN',
-    'TARJETA',
-    'DEPOSITO_VENTANILLA'
+    'TARJETA_DEBITO',
+    'TARJETA_CREDITO',
+    'PASARELA_PAGO'            -- Niubiz, Culqi, Mercado Pago, etc.
 );
 
 CREATE TYPE transaction_type AS ENUM (
-    'DISBURSEMENT',
-    'PAYMENT',
-    'REVERSAL',
-    'CUSTOMER_CREDIT_BALANCE',
-    'WRITE_OFF',
-    'ADJUSTMENT',
-    'CASH_TRANSFER',
-    'CASH_EXPENSE',
-    'CASH_INCOME'
+    'DISBURSEMENT',           -- Desembolso al cliente (OUTFLOW)
+    'PAYMENT',                -- Cobro de cuota (INFLOW)
+    'REVERSAL',               -- Contra-asiento de un pago o desembolso
+    'CUSTOMER_CREDIT_BALANCE',-- Saldo a favor del cliente
+    'WRITE_OFF',              -- Castigo contable
+    'ADJUSTMENT'              -- Ajuste manual aprobado
 );
 
 CREATE TYPE transaction_dir AS ENUM (
-    'INFLOW',
-    'OUTFLOW'
+    'INFLOW',   -- Dinero que entra: cobros de cuotas
+    'OUTFLOW'   -- Dinero que sale: desembolsos
 );
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- MÓDULO: CAJA Y TESORERÍA
--- ─────────────────────────────────────────────────────────────────────────────
-
-CREATE TYPE cashbox_status AS ENUM (
-    'ABIERTA',
-    'CERRADA'
-);
-
-CREATE TYPE cash_movement_type AS ENUM (
-    'INGRESO_EXTRAORDINARIO',
-    'EGRESO_GASTO'
-);
-
-CREATE TYPE transfer_status AS ENUM (
-    'EN_TRANSITO',
-    'COMPLETED',
-    'CANCELLED'
-);
-
-CREATE TYPE arqueo_result AS ENUM (
-    'CUADRADO',
-    'SOBRANTE',
-    'FALTANTE'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- MÓDULO: COBRANZA
+-- MÓDULO: COBRANZA DIGITAL
+-- Sin VISITA_DOMICILIARIA (no hay cobradores de campo)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE TYPE collection_action_type AS ENUM (
-    'LLAMADA',
+    'LLAMADA_TELEFONICA',
     'WHATSAPP',
-    'VISITA_DOMICILIARIA',
-    'NOTIFICACION_ESCRITA',
-    'PROMESA_DE_PAGO'
+    'EMAIL',
+    'SMS',
+    'NOTIFICACION_PUSH',
+    'PROMESA_DE_PAGO',
+    'ACUERDO_DE_PAGO_DIGITAL'
 );
 
 CREATE TYPE collection_action_status AS ENUM (
@@ -266,13 +281,4 @@ CREATE TYPE notification_status AS ENUM (
     'PENDING',
     'SENT',
     'FAILED'
-);
-
--- ─────────────────────────────────────────────────────────────────────────────
--- MÓDULO: ADMINISTRACIÓN
--- ─────────────────────────────────────────────────────────────────────────────
-
-CREATE TYPE holiday_scope AS ENUM (
-    'NACIONAL',
-    'SUCURSAL'
 );

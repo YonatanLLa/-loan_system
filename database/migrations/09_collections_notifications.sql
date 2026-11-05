@@ -1,5 +1,6 @@
 -- =============================================================================
 -- MIGRACIÓN 09 — MORA, COBRANZA Y NOTIFICACIONES
+-- Modelo: Fintech 100% Digital (sin cobradores de campo ni visitas)
 -- Dominio: US-19 (Job mora), US-20 (Aging), US-21 (Acciones), US-22 (Castigo)
 -- Dependencias: 06_loans_schedules.sql, 02_security_users.sql
 -- =============================================================================
@@ -14,7 +15,8 @@ CREATE TABLE collection_actions (
     -- NULL = acción sobre el préstamo completo; con valor = cuota específica
 
     action_type     collection_action_type      NOT NULL,
-    -- LLAMADA | WHATSAPP | VISITA_DOMICILIARIA | NOTIFICACION_ESCRITA | PROMESA_DE_PAGO
+    -- LLAMADA_TELEFONICA | WHATSAPP | EMAIL | SMS | NOTIFICACION_PUSH |
+    -- PROMESA_DE_PAGO | ACUERDO_DE_PAGO_DIGITAL  (cobranza 100% remota)
 
     note            TEXT,                        -- Resumen del contacto
 
@@ -33,7 +35,7 @@ CREATE TABLE collection_actions (
 );
 
 COMMENT ON TABLE collection_actions IS
-    'Gestiones de cobranza: llamadas, visitas y promesas de pago. El job diario marca PROMESA_INCUMPLIDA si vence sin pago (US-21, RF-21.3).';
+    'Gestiones de cobranza digital: llamadas, mensajes y promesas de pago. El job diario marca PROMESA_INCUMPLIDA si vence sin pago (US-21, RF-21.3).';
 COMMENT ON COLUMN collection_actions.promise_date IS
     'Si llega esta fecha y no se detecta pago, el job cambia el status a PROMESA_INCUMPLIDA (RF-21.3).';
 

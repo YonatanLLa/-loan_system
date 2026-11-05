@@ -1,7 +1,7 @@
-# Dominio 13: Administración General, Sucursales y Parámetros Globales
+# Dominio 13: Administración General, Canales Digitales y Parámetros Globales
 
 ## 1. Descripción del Dominio
-Este dominio centraliza la configuración corporativa y operativa del Backoffice. Permite al Administrador gestionar los datos fiscales de la empresa, sucursales y agencias físicas, zonas de cobertura, el calendario oficial de feriados (crucial para el cálculo de cronogramas sin vencimientos en días inhábiles), la parametrización de monedas, métodos de pago admitidos y las plantillas legales de los contratos.
+Este dominio centraliza la configuración corporativa y operativa del Backoffice. La operación es 100% digital y centralizada: no hay sucursales, agencias ni zonas físicas. Permite al Administrador gestionar los datos fiscales de la empresa, los canales digitales de pago y desembolso, el calendario oficial de feriados (crucial para el cálculo de cronogramas sin vencimientos en días inhábiles), la parametrización de monedas, métodos de pago admitidos y las plantillas legales de los contratos.
 
 ---
 
@@ -32,39 +32,36 @@ Este dominio centraliza la configuración corporativa y operativa del Backoffice
 
 ---
 
-### US-40: Gestión de Sucursales, Zonas y Asignación de Personal
+### US-40: Configuración de Canales Digitales de Pago y Desembolso
 **Como** Administrador de Operaciones,  
-**Quiero** crear y estructurar las agencias físicas, sucursales y zonas geográficas de atención,  
-**Para** segmentar la operación de cajas, analistas, carteras de crédito y reportes territoriales.
+**Quiero** habilitar y parametrizar los canales digitales por los que el cliente paga y recibe su préstamo (bancos, billeteras y pasarelas),  
+**Para** operar de forma 100% digital y centralizada, sin sucursales, cajas ni zonas físicas.
 
 #### Requerimientos Funcionales
-- **RF-40.1:** Creación de Sucursal (`Branch`):
-  - Código único de agencia, nombre de la sucursal, dirección física, zona/distrito y estado (`ACTIVA`, `INACTIVA`).
-- **RF-40.2:** Creación de Zonas Geográficas (`Zone`):
-  - Agrupación territorial para asignación de gestores de cobranza y analistas de campo.
-- **RF-40.3:** Asignación de usuarios internos:
-  - Cada cajero debe estar vinculado a una sucursal específica para operar sus cajas físicas.
-  - Los analistas y cobradores pueden asociarse a una o múltiples sucursales/zonas.
-- **RF-40.4:** Endpoints: `POST /api/admin/branches`, `GET /api/admin/branches`, `PUT /api/admin/branches/{id}`.
+- **RF-40.1:** Canales de cobro (`payment_methods`): nombre, tipo (`TRANSFERENCIA_BANCARIA`, `YAPE`, `PLIN`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `PASARELA_PAGO`), código del proveedor (`provider_code`), indicador de confirmación automática por webhook (`webhook_enabled`) y estado activo/inactivo.
+- **RF-40.2:** Canales de desembolso (`disbursement_channel`): `TRANSFERENCIA_BANCARIA`, `DEPOSITO_CCI`, `YAPE`, `PLIN`, cada uno vinculado a una cuenta bancaria de la Fintech habilitada para desembolsos (US-23).
+- **RF-40.3:** Un canal sin webhook (`webhook_enabled = false`, ej. transferencia por CCI) solo confirma pagos mediante conciliación con el extracto bancario (US-37); nunca por la sola declaración o voucher del cliente.
+- **RF-40.4:** Las credenciales técnicas de cada proveedor (API keys, secretos de firma HMAC) se gestionan en el gestor de secretos y se rotan sin intervención en base de datos.
+- **RF-40.5:** Endpoints: `GET /api/admin/payment-methods`, `PUT /api/admin/payment-methods/{id}`.
 
 #### Criterios de Aceptación
-- **CA-40.1 (Creación de Agencia):**  
-  *Dado que* se ingresan los datos de la "Sucursal Norte" con código `SUC-02`,  
-  *Cuando* el administrador confirma la creación,  
-  *Entonces* la sucursal queda disponible para asignarle cajas físicas y personal de ventanilla.
+- **CA-40.1 (Desactivación de Canal):**  
+  *Dado que* la pasarela de tarjetas presenta fallas,  
+  *Cuando* el administrador desactiva el método `PASARELA_PAGO`,  
+  *Entonces* el portal del cliente deja de ofrecerlo de inmediato y los demás canales siguen operando.
 
 ---
 
 ### US-41: Calendario de Feriados y Días No Hábiles
 **Como** Administrador o Especialista de Operaciones,  
-**Quiero** registrar el calendario oficial de feriados nacionales y locales del año,  
+**Quiero** registrar el calendario oficial de feriados nacionales del año,  
 **Para** que el motor de cronogramas desplace automáticamente los vencimientos que coincidan con días no laborables.
 
 #### Requerimientos Funcionales
 - **RF-41.1:** Entidad `Holiday`:
   - `date`: Fecha específica (año-mes-día).
-  - `name`: Motivo (ej. "Año Nuevo", "Fiestas Patrias", "Feriado Local").
-  - `scope`: `NACIONAL` o `SUCURSAL` (feriado patronal local).
+  - `name`: Motivo (ej. "Año Nuevo", "Fiestas Patrias").
+  - Alcance único nacional: al no existir sucursales no hay feriados locales por agencia (una fecha = un registro).
   - `is_recurring`: Indica si se repite todos los años en la misma fecha.
 - **RF-41.2:** Regla de negocio en la generación de cronogramas (`US-14`):
   - El motor verifica si la fecha calculada de vencimiento de una cuota cae en fin de semana (sábado/domingo) o en una fecha registrada en `Holiday`.
@@ -89,7 +86,7 @@ Este dominio centraliza la configuración corporativa y operativa del Backoffice
 - **RF-42.1:** Gestión de Tipos de Documentos de Identidad:
   - Definición de código (`DNI`, `CE`, `RUC`, `PAS`), nombre, longitud exacta de caracteres y máscara de validación regex.
 - **RF-42.2:** Gestión de Métodos de Pago Habilitados:
-  - Activación/desactivación de métodos: `EFECTIVO`, `TRANSFERENCIA`, `YAPE`, `PLIN`, `TARJETA`, `DEPOSITO_VENTANILLA`.
+  - Solo canales digitales (ver US-40): `TRANSFERENCIA_BANCARIA`, `YAPE`, `PLIN`, `TARJETA_DEBITO`, `TARJETA_CREDITO`, `PASARELA_PAGO`. No existen efectivo ni depósito en ventanilla.
 - **RF-42.3:** Editor de Plantillas Contractuales (*Legal Templates*):
   - Gestión de textos y cláusulas legales en formato markdown o HTML con variables dinámicas reemplazables:
     `{{cliente_nombre}}`, `{{cliente_documento}}`, `{{monto_prestamo}}`, `{{tasa_tea}}`, `{{tasa_mora}}`, `{{cronograma_tabla}}`.
@@ -105,12 +102,12 @@ Este dominio centraliza la configuración corporativa y operativa del Backoffice
 
 ### US-43: Administración Centralizada de Usuarios y Colaboradores del Backoffice
 **Como** Administrador del Sistema,  
-**Quiero** gestionar el ciclo de vida de los colaboradores internos (creación, asignación de roles, bloqueo de acceso y reasignación de sucursales),  
+**Quiero** gestionar el ciclo de vida de los colaboradores internos (creación, asignación de roles y bloqueo de acceso),  
 **Para** asegurar que solo el personal autorizado y activo tenga acceso al panel de control.
 
 #### Requerimientos Funcionales
 - **RF-43.1:** Alta de colaborador:
-  - Nombres, apellidos, correo corporativo, teléfono, rol asignado (`ROLE_ADMIN`, `ROLE_ANALYST`, `ROLE_CASHIER`, `ROLE_COLLECTOR`, `ROLE_AUDITOR`) y sucursal base.
+  - Nombres, apellidos, correo corporativo, teléfono, rol asignado (`ROLE_ADMIN`, `ROLE_ANALYST`, `ROLE_OPERATOR`, `ROLE_COLLECTOR`, `ROLE_AUDITOR`). Sin sucursal base: la operación es centralizada.
 - **RF-43.2:** Invitación y contraseña:
   - Generación de enlace de invitación seguro por correo electrónico para que el colaborador defina su contraseña inicial cumpliendo las políticas de complejidad.
 - **RF-43.3:** Suspensión inmediata:
@@ -119,9 +116,9 @@ Este dominio centraliza la configuración corporativa y operativa del Backoffice
 
 #### Criterios de Aceptación
 - **CA-43.1 (Bloqueo Inmediato de Empleado):**  
-  *Dado que* un cajero es dado de baja en la empresa,  
+  *Dado que* un operador es dado de baja en la empresa,  
   *Cuando* el administrador marca su usuario como `INACTIVO`,  
-  *Entonces* cualquier petición subsecuente del cajero es rechazada con `401 Unauthorized` impidiendo cualquier operación en caja.
+  *Entonces* cualquier petición subsecuente del operador es rechazada con `401 Unauthorized`, impidiendo procesar desembolsos o pagos.
 
 ---
 

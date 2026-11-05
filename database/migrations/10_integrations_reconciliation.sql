@@ -1,7 +1,10 @@
 -- =============================================================================
--- MIGRACIÓN 10 — INTEGRACIONES BANCARIAS Y CONCILIACIÓN
--- Dominio: US-36 (Webhooks), US-37 (Conciliación), US-38 (DLQ y Reintentos)
--- Dependencias: 07_payments_ledger.sql, 08_treasury_cashbox.sql
+-- MIGRACIÓN 10 — INTEGRACIONES BANCARIAS (WEBHOOKS, REINTENTOS Y DLQ)
+-- Modelo: Fintech 100% Digital
+-- Dominio: US-36 (Webhooks), US-38 (DLQ y Reintentos)
+-- ELIMINADO: reconciliations — duplicaba a bank_statements (migración 08), que
+--            es la única base de la conciliación bancaria (US-37).
+-- Dependencias: 07_payments_ledger.sql, 08_treasury_reconciliation.sql
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -38,34 +41,3 @@ COMMENT ON TABLE integration_events IS
     'Eventos de webhooks bancarios con reintentos exponenciales y DLQ. Idempotente por (provider, external_id) (US-36, US-38, RF-36.4).';
 COMMENT ON COLUMN integration_events.retry_count IS
     'Contador de reintentos: 1°→30s, 2°→2min, 3°→10min, 4°→30min. Tras 4 fallos → DEAD_LETTER (US-38, RF-38.1).';
-
--- ─────────────────────────────────────────────────────────────────────────────
--- Conciliación de pagos — extractos bancarios vs sistema (US-37, RF-37.3 / RF-37.4)
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE TABLE reconciliations (
-    id                  UUID                    PRIMARY KEY DEFAULT gen_random_uuid(),
-    bank_account_id     UUID                    REFERENCES bank_accounts(id),
-
-    -- ── Movimiento bancario importado (extracto) ─────────────────────────────
-    source              VARCHAR(50)             NOT NULL,
-    -- 'BCP_EXTRACTO' | 'YAPE_ARCHIVO' | 'BBVA_API'
-    external_reference  VARCHAR(150),
-    bank_date           DATE,
-    bank_description    TEXT,
-    bank_amount         NUMERIC(18,4),
-
-    -- ── Match contra sistema interno ─────────────────────────────────────────
-    loan_id             UUID                    REFERENCES loans(id),
-    payment_id          UUID                    REFERENCES payments(id),
-
-    -- ── Estado de conciliación (RF-37.4) ────────────────────────────────────
-    status              reconciliation_status   NOT NULL DEFAULT 'PENDIENTE_CONCILIACION',
-    -- CONCILIADO_AUTOMATICO | PENDIENTE_CONCILIACION | DESCUADRADO | RECONCILED
-
-    reconciled_by       UUID                    REFERENCES users(id),
-    reconciled_at       TIMESTAMPTZ,
-    created_at          TIMESTAMPTZ             NOT NULL DEFAULT NOW()
-);
-
-COMMENT ON TABLE reconciliations IS
-    'Conciliación de extractos bancarios vs pagos internos. Estados: automático, pendiente, descuadrado (US-37, RF-37.3, RF-37.4).';

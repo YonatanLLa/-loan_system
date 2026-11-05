@@ -47,26 +47,6 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Función: sincroniza el saldo actual de la caja tras cada movimiento
--- Se aplica como trigger AFTER INSERT en cash_movements
--- ─────────────────────────────────────────────────────────────────────────────
-CREATE OR REPLACE FUNCTION fn_update_cashbox_balance_on_movement()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
-BEGIN
-    IF NEW.movement_type = 'INGRESO_EXTRAORDINARIO' THEN
-        UPDATE cash_boxes
-           SET current_balance = current_balance + NEW.amount
-         WHERE id = NEW.cashbox_id;
-    ELSIF NEW.movement_type = 'EGRESO_GASTO' THEN
-        UPDATE cash_boxes
-           SET current_balance = current_balance - NEW.amount
-         WHERE id = NEW.cashbox_id;
-    END IF;
-    RETURN NEW;
-END;
-$$;
-
--- ─────────────────────────────────────────────────────────────────────────────
 -- Función: valida que solo haya 1 schedule activo por préstamo
 -- Al activar un nuevo schedule, desactiva los anteriores
 -- ─────────────────────────────────────────────────────────────────────────────

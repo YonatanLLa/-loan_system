@@ -1,7 +1,12 @@
 -- =============================================================================
 -- MIGRACIÓN 07 — PAGOS Y LIBRO MAYOR (LEDGER)
+-- Modelo: Fintech 100% Digital
 -- Dominio: US-16 (Prelación), US-17 (Sobrepagos), US-18 (Reversos)
--- Dependencias: 06_loans_schedules.sql, 01_admin_config.sql
+-- ELIMINADO: cashbox_id (sin cajas físicas)
+-- AGREGADO:  customer_bank_account_id (desde qué cuenta pagó el cliente)
+--            company_bank_account_id  (a qué cuenta de la fintech llegó el pago)
+--            gateway_reference        (referencia de la pasarela de pago / webhook)
+-- Dependencias: 06_loans_schedules.sql, 01_admin_config.sql, 03_customers_kyc.sql
 -- =============================================================================
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -12,51 +17,57 @@
 --   Las correcciones se realizan con un nuevo registro de payment_kind='REVERSAL'.
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE payments (
-    id                UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
-    loan_id           UUID            NOT NULL REFERENCES loans(id),
+    id                        UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+    loan_id                   UUID            NOT NULL REFERENCES loans(id),
 
     -- ── Tipo de pago ─────────────────────────────────────────────────────────
-    payment_kind      payment_kind    NOT NULL DEFAULT 'NORMAL',
+    payment_kind              payment_kind    NOT NULL DEFAULT 'NORMAL',
     -- REVERSAL apunta a reversal_of_id y tiene monto "negativo" en la lógica de app
 
     -- ── Monto ────────────────────────────────────────────────────────────────
-    amount            NUMERIC(18,4)   NOT NULL,
-    -- Positivo para NORMAL; la lógica de app lo trata como negativo para REVERSAL
+    amount                    NUMERIC(18,4)   NOT NULL,
 
-    -- ── Método de pago (US-16, RF-16.2) ─────────────────────────────────────
-    payment_method_id UUID            REFERENCES payment_methods(id),
-    reference         VARCHAR(150),              -- Código de operación / voucher / QR
+    -- ── Método de pago digital (US-16, RF-16.2) ──────────────────────────────
+    payment_method_id         UUID            REFERENCES payment_methods(id),
+
+    -- ── Trazabilidad bancaria digital ────────────────────────────────────────
+    -- Cuenta del cliente desde donde se originó el pago
+    customer_bank_account_id  UUID            REFERENCES customer_bank_accounts(id),
+    -- Cuenta de la Fintech donde se recibió el pago
+    company_bank_account_id   UUID            REFERENCES company_bank_accounts(id),
+    -- Referencia de la pasarela de pago / banco / billetera digital
+    gateway_reference         VARCHAR(150),   -- Código de operación Yape/Plin/Niubiz/Webhook
+    external_reference        VARCHAR(150),   -- Número de operación del banco externo
 
     -- ── Fecha efectiva del pago ──────────────────────────────────────────────
-    paid_at           TIMESTAMPTZ     NOT NULL,
+    paid_at                   TIMESTAMPTZ     NOT NULL,
 
-    -- ── Estado ───────────────────────────────────────────────────────────────
-    status            payment_status  NOT NULL DEFAULT 'APPLIED',
+    -- ── Estado del pago digital ──────────────────────────────────────────────
+    status                    payment_status  NOT NULL DEFAULT 'APPLIED',
 
     -- ── Reverso (US-18, RF-18.2 → RF-18.4) ─────────────────────────────────
-    reversal_of_id    UUID            REFERENCES payments(id),
-    -- Apunta al pago original que este registro revierte
-    reversal_reason   TEXT,                      -- Obligatorio en REVERSAL (RF-18.3)
+    reversal_of_id            UUID            REFERENCES payments(id),
+    reversal_reason           TEXT,           -- Obligatorio en REVERSAL (RF-18.3)
 
-    -- ── Recibo (RNF-13) ──────────────────────────────────────────────────────
-    receipt_number    VARCHAR(30)     UNIQUE,    -- Nro. correlativo auto-generado
-
-    -- ── Caja donde se recibió el efectivo ────────────────────────────────────
-    cashbox_id        UUID,                      -- FK → cash_boxes (añadida en migración 08)
+    -- ── Recibo digital (RNF-13) ───────────────────────────────────────────────
+    receipt_number            VARCHAR(30)     UNIQUE,    -- Nro. correlativo auto-generado
+    receipt_url               TEXT,                      -- URL del PDF en Object Storage
 
     -- ── Metadatos ────────────────────────────────────────────────────────────
-    registered_by     UUID            REFERENCES users(id),
-    idempotency_key   VARCHAR(100)    UNIQUE,    -- RF-16.2: evita doble registro
+    registered_by             UUID            REFERENCES users(id),
+    idempotency_key           VARCHAR(100)    UNIQUE,    -- RF-16.2: evita doble registro
 
-    created_at        TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    created_at                TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE payments IS
     'Pagos registrados. INMUTABLES: las correcciones se realizan con contra-asiento (payment_kind=REVERSAL). Prohibido UPDATE/DELETE (US-16, US-18, RF-18.1).';
+COMMENT ON COLUMN payments.gateway_reference IS
+    'Referencia de la pasarela de pago (Yape, Plin, Niubiz, etc.). Usar para conciliación automática (US-37).';
 COMMENT ON COLUMN payments.receipt_number IS
-    'Número correlativo único de recibo generado automáticamente por trigger fn_generate_receipt_number() (RNF-13).';
+    'Número correlativo único de recibo digital generado automáticamente (RNF-13).';
 COMMENT ON COLUMN payments.idempotency_key IS
-    'Garantiza que reintentos de red no dupliquen registros de pago (RF-16.2).';
+    'Garantiza que reintentos de red o doble clic no dupliquen registros de pago (RF-16.2).';
 
 -- Trigger: genera receipt_number automáticamente al insertar un pago NORMAL
 CREATE TRIGGER tg_payments_receipt_number
@@ -87,33 +98,38 @@ COMMENT ON TABLE payment_allocations IS
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Libro Mayor / Ledger — transacciones financieras inmutables
 -- Registra TODO movimiento de dinero para control contable (US-13, US-16)
+-- Sin cashbox_id: el flujo de fondos se rastrea por company_bank_account_id
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE transactions (
-    id               BIGSERIAL           PRIMARY KEY,
+    id                      BIGSERIAL           PRIMARY KEY,
     -- Usando BIGSERIAL para garantizar orden cronológico confiable
 
     -- ── Referencias de negocio ───────────────────────────────────────────────
-    loan_id          UUID                REFERENCES loans(id),
-    payment_id       UUID                REFERENCES payments(id),
-    cashbox_id       UUID,               -- FK → cash_boxes (añadida en migración 08)
+    loan_id                 UUID                REFERENCES loans(id),
+    payment_id              UUID                REFERENCES payments(id),
+    disbursement_id         UUID                REFERENCES disbursements(id),
+    -- Cuenta de la Fintech involucrada en la transacción (reemplaza cashbox_id)
+    company_bank_account_id UUID                REFERENCES company_bank_accounts(id),
 
     -- ── Clasificación ────────────────────────────────────────────────────────
-    transaction_type transaction_type    NOT NULL,
-    direction        transaction_dir     NOT NULL,
-    -- INFLOW = ingresa dinero al sistema; OUTFLOW = sale dinero del sistema
+    transaction_type        transaction_type    NOT NULL,
+    direction               transaction_dir     NOT NULL,
+    -- INFLOW = ingresa dinero al sistema (cobros); OUTFLOW = sale dinero (desembolsos)
 
     -- ── Monto y moneda ───────────────────────────────────────────────────────
-    amount           NUMERIC(18,4)       NOT NULL CHECK (amount > 0),
-    currency_id      UUID                NOT NULL REFERENCES currencies(id),
+    amount                  NUMERIC(18,4)       NOT NULL CHECK (amount > 0),
+    currency_id             UUID                NOT NULL REFERENCES currencies(id),
 
     -- ── Trazabilidad ─────────────────────────────────────────────────────────
-    reference        VARCHAR(150),
-    notes            TEXT,
-    created_by       UUID                REFERENCES users(id),
-    created_at       TIMESTAMPTZ         NOT NULL DEFAULT NOW()
+    reference               VARCHAR(150),       -- Referencia bancaria / número de operación
+    notes                   TEXT,
+    created_by              UUID                REFERENCES users(id),
+    created_at              TIMESTAMPTZ         NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE transactions IS
-    'Libro mayor / ledger financiero. Inmutable: registra TODO flujo de dinero para control contable (US-13, US-16, US-18).';
+    'Libro mayor / ledger financiero. Inmutable: registra TODO flujo de dinero digital para control contable (US-13, US-16, US-18).';
 COMMENT ON COLUMN transactions.direction IS
-    'INFLOW = cobro/ingreso al sistema; OUTFLOW = desembolso/egreso del sistema.';
+    'INFLOW = cobro/ingreso al sistema (cuotas pagadas); OUTFLOW = desembolso/egreso del sistema (transferencia al cliente).';
+COMMENT ON COLUMN transactions.company_bank_account_id IS
+    'Cuenta bancaria de la Fintech involucrada. Reemplaza cashbox_id del modelo físico.';

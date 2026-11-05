@@ -8,7 +8,7 @@ Este dominio regula las alteraciones contractuales en la vida de un crédito act
 ## 2. Historias de Usuario
 
 ### US-30: Cotización y Liquidación por Cancelación Anticipada (*Prepago*)
-**Como** Cliente o Cajero de Ventanilla,  
+**Como** Cliente (desde el portal) u Operador de atención remota,  
 **Quiero** solicitar una cotización exacta de liquidación total a la fecha de hoy y registrar el pago cancelatorio,  
 **Para** extinguir la deuda de forma prematura ahorrando los intereses futuros no devengados.
 
@@ -69,11 +69,11 @@ Este dominio regula las alteraciones contractuales en la vida de un crédito act
 - **RF-32.1:** Proceso de solicitud con tipo especial `REFINANCING` o `CONSOLIDATION`.
 - **RF-32.2:** Selección de préstamos a cancelar: El analista selecciona los créditos activos del cliente a liquidar.
 - **RF-32.3:** Desembolso y cancelación atómica:
-  - `Monto Nuevo Préstamo = Suma Liquidaciones de Préstamos Previos + Efectivo Adicional al Cliente`.
+  - `Monto Nuevo Préstamo = Suma Liquidaciones de Préstamos Previos + Monto Adicional para el Cliente (cash-out)`.
   - En la transacción atómica de desembolso:
     1. Se liquidan y marcan como `PAGADO` los préstamos anteriores por concepto `REFINANCIAMIENTO`.
     2. Se crea y activa el nuevo préstamo con su propio cronograma.
-    3. Si hubo monto adicional, se entrega al cliente o se deposita en su cuenta.
+    3. Si hubo monto adicional, se transfiere a la cuenta verificada del cliente como desembolso digital (US-13, US-25).
 
 #### Criterios de Aceptación
 - **CA-32.1 (Consolidación Exitosa de Dos Préstamos):**  

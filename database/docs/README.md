@@ -21,7 +21,7 @@ El esquema implementa un **Monolito Modular** en base de datos con las siguiente
    - Las transacciones desembolsadas (`loans`), los cronogramas congelados (`schedules`, `installments`) y los pagos efectuados (`payments`) son inmutables. Toda corrección de cobro se efectúa exclusivamente mediante contra-asientos (`payment_kind = 'REVERSAL'`).
 
 4. **Idempotencia Transaccional:**
-   - Claves de idempotencia únicas (`idempotency_key UNIQUE`) en `loans` y `payments`.
+   - Claves de idempotencia únicas (`idempotency_key UNIQUE`) en `loans`, `disbursements` y `payments`.
    - Identificador externo único por proveedor (`UNIQUE(provider, external_id)`) en `integration_events` para webhooks bancarios (BCP, BBVA, Yape, Plin).
 
 5. **Zonas Horarias:**
@@ -35,32 +35,33 @@ Esta carpeta `/database/docs` está organizada en los siguientes documentos espe
 
 | Documento | Descripción |
 |---|---|
-| [**`diagrama-entidad-relacion.md`**](file:///c:/Users/SISTEMAS/Desktop/PLAN/database/docs/diagrama-entidad-relacion.md) | Diagramas ER visuales completos en Mermaid (diagrama global y diagramas por subsistemas). |
-| [**`diccionario-de-datos.md`**](file:///c:/Users/SISTEMAS/Desktop/PLAN/database/docs/diccionario-de-datos.md) | Especificación exhaustiva de las 33 tablas, sus columnas, tipos de datos, constraints y tipos `ENUM`. |
-| [**`relaciones-y-claves-foraneas.md`**](file:///c:/Users/SISTEMAS/Desktop/PLAN/database/docs/relaciones-y-claves-foraneas.md) | Matriz completa de Foreign Keys, cardinalidad (1:1, 1:N, N:M), reglas de integridad y dependencias. |
-| [**`triggers-y-automatizaciones.md`**](file:///c:/Users/SISTEMAS/Desktop/PLAN/database/docs/triggers-y-automatizaciones.md) | Documentación de funciones PL/pgSQL, triggers automáticos, reglas de negocio en BD y partial indexes. |
+| [**`diagrama-entidad-relacion.md`**](diagrama-entidad-relacion.md) | Diagramas ER visuales completos en Mermaid (diagrama global y diagramas por subsistemas). |
+| [**`diccionario-de-datos.md`**](diccionario-de-datos.md) | Especificación de las 28 tablas, sus columnas, tipos de datos, constraints y los 32 tipos `ENUM`. |
+| [**`relaciones-y-claves-foraneas.md`**](relaciones-y-claves-foraneas.md) | Matriz completa de Foreign Keys, cardinalidad (1:1, 1:N, N:M), reglas de integridad y dependencias. |
+| [**`triggers-y-automatizaciones.md`**](triggers-y-automatizaciones.md) | Documentación de funciones PL/pgSQL, triggers automáticos, reglas de negocio en BD y partial indexes. |
 
 ---
 
 ## 3. Resumen de Estructura de Archivos del Proyecto
 
 ```text
-c:\Users\SISTEMAS\Desktop\PLAN\database\
-├── run_all.sql                             # Script maestro de instalación secuencial
+database.sql                                # (raíz del proyecto) Esquema en un solo archivo, GENERADO desde database/
+database\
+├── run_all.sql                             # Script maestro: atómico (BEGIN/COMMIT) y con ON_ERROR_STOP
 ├── functions\
 │   └── fn_updated_at.sql                  # Funciones PL/pgSQL, secuencias y triggers
 ├── migrations\
-│   ├── 00_extensions_and_enums.sql        # Extensiones y los 34 tipos ENUM
-│   ├── 01_admin_config.sql                # Company, Currencies, Branches, Zones, Holidays, Catálogos
-│   ├── 02_security_users.sql              # Users, Refresh Tokens, Audit Logs, User Zones
-│   ├── 03_customers_kyc.sql               # Customers, Customer Documents, OTP Verifications
+│   ├── 00_extensions_and_enums.sql        # Extensiones y los 32 tipos ENUM
+│   ├── 01_admin_config.sql                # Company, Company Bank Accounts, Currencies, Holidays, Catálogos
+│   ├── 02_security_users.sql              # Users, Refresh Tokens, Audit Logs
+│   ├── 03_customers_kyc.sql               # Customers, Customer Bank Accounts, Customer Documents, OTP
 │   ├── 04_loan_products.sql               # Catálogo de Productos y Reglas Financieras
 │   ├── 05_loan_applications.sql           # Solicitudes de Préstamo y Evaluación (DTI)
-│   ├── 06_loans_schedules.sql             # Loans, Schedules (Snapshot), Installments, Prepago
+│   ├── 06_loans_schedules.sql             # Loans, Disbursements, Schedules (Snapshot), Installments, Prepago
 │   ├── 07_payments_ledger.sql             # Payments, Payment Allocations (Prelación), Transactions
-│   ├── 08_treasury_cashbox.sql            # Cash Boxes, Cash Sessions, Cash Movements, Transfers
+│   ├── 08_treasury_reconciliation.sql     # Bank Statements (extractos) — base de la conciliación bancaria
 │   ├── 09_collections_notifications.sql   # Collection Actions, Promesas de Pago, Notificaciones
-│   └── 10_integrations_reconciliation.sql # Integration Events (Webhooks), Conciliaciones Bancarias
+│   └── 10_integrations_reconciliation.sql # Integration Events (Webhooks, reintentos y DLQ)
 ├── indexes\
 │   └── 11_indexes.sql                     # Índices B-Tree y Partial Indexes de alto rendimiento
 ├── seeds\

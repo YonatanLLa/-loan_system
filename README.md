@@ -9,6 +9,11 @@ Esta primera versión **prioriza la lógica de negocio** (el "por qué" y las re
 
 **Objetivo:** gestionar el ciclo de vida completo de un préstamo: solicitud → evaluación → desembolso → cobranza → liquidación, con cálculo financiero correcto y trazabilidad total (auditoría).
 
+**Modelo operativo: Fintech 100% digital.**
+- **Desembolsos:** solo por transferencia (CCI) o billetera digital a una cuenta verificada a nombre del cliente.
+- **Pagos:** solo por canales digitales: transferencia bancaria, Yape/Plin, tarjeta de débito y pasarela de pago. La tarjeta de crédito queda sujeta a decisión de negocio.
+- **Sin** sucursales, cajas, ventanillas, bóvedas, arqueos ni efectivo. El dinero vive en las cuentas bancarias de la empresa y se controla con conciliación contra el extracto.
+
 **En alcance (Fase 1):**
 - Registro de clientes y KYC básico.
 - Productos de crédito configurables.
@@ -18,11 +23,13 @@ Esta primera versión **prioriza la lógica de negocio** (el "por qué" y las re
 - Reportes y estados de cuenta.
 
 **Canales / interfaces esperadas:**
-- **Panel administrativo web** para analistas, cajeros, cobranza, auditoría y administración.
+- **Panel administrativo web** para analistas, operadores, cobranza, tesorería, auditoría y administración.
 - **Portal del cliente web responsive** para solicitud, seguimiento, consulta de cronograma, estado de cuenta y pagos.
 - **App móvil del cliente** como fase posterior, reutilizando la misma API de negocio.
 
-**Fuera de alcance (fases posteriores):** scoring con buró de crédito, app móvil del cliente, pasarelas de pago, cobranza automatizada, contabilidad/IFRS completa.
+**En alcance desde la Fase 1 por ser 100% digital:** al menos un canal de cobro (pasarela o banco con webhook), desembolso por transferencia y conciliación básica con el extracto bancario. Sin ellos no hay forma de cobrar ni desembolsar.
+
+**Fuera de alcance (fases posteriores):** scoring con buró de crédito, app móvil del cliente, canales de pago adicionales y débito automático, cobranza automatizada, contabilidad/IFRS completa.
 
 ---
 
@@ -107,7 +114,8 @@ status (PENDING | PARTIAL | PAID | OVERDUE) | days_late
 ### 3.4 Desembolso
 
 - Al aprobar y desembolsar: registrar `disbursement_amount`, `disbursement_date`, comisión de apertura (si aplica) y generar el cronograma.
-- **Fecha de desembolso = fecha de inicio** del cómputo de intereses.
+- El desembolso es una **transferencia digital asíncrona** (`PENDING → PROCESSING → COMPLETED | FAILED`) hacia la cuenta verificada del cliente; el cronograma y el asiento contable se confirman cuando el banco confirma la transferencia.
+- **Fecha de desembolso = fecha de inicio** del cómputo de intereses = fecha de confirmación bancaria de la transferencia.
 - Si el producto cobra comisión de apertura, descontarla del desembolso o registrarla como cargo separado (configurable).
 
 ### 3.5 Pagos y orden de aplicación
@@ -209,8 +217,8 @@ Reglas de decisión (motor de reglas configurable):
 |---|---|
 | **Administrador** | Configuración total, productos, usuarios, tasas. |
 | **Analista de crédito** | Evaluar y aprobar/rechazar solicitudes. |
-| **Cajero/Operador** | Registrar desembolsos y pagos. |
-| **Gestor de cobranza** | Ver mora, registrar acuerdos, llamadas. |
+| **Operador** | Seguir desembolsos digitales, validar pagos pendientes de confirmación y conciliar. |
+| **Gestor de cobranza** | Cobranza remota: ver mora, registrar acuerdos, llamadas y mensajes. |
 | **Auditor** | Solo lectura de todo, incluida la bitácora. |
 | **Cliente** | Ver su(s) préstamo(s), estado de cuenta, pagos. |
 
@@ -231,13 +239,16 @@ Payment         (id, loan_id, amount, method, paid_at, reference, status)
 PaymentAllocation (id, payment_id, installment_id, to_mora, to_interest, to_fee, to_principal)
 Transaction     (id, loan_id, type, amount, direction, created_by, created_at)   -- libro mayor
 AuditLog        (id, entity, entity_id, action, before, after, user_id, created_at)
-CashBox         (id, name, currency_id, branch_id, opening_balance, status, created_at)
-CashMovement    (id, cashbox_id, type, amount, reference_type, reference_id, created_by, created_at)
-PaymentMethod   (id, name, type, provider_code, active)
+CompanyBankAccount (id, bank_name, account_number_masked, cci, currency_id, is_disbursement, is_collection, active)
+CustomerBankAccount(id, customer_id, bank_name, account_type, account_number_masked, cci, phone_wallet,
+                    is_verified, is_primary, status)
+Disbursement    (id, loan_id, company_bank_account_id, customer_bank_account_id, amount, channel, status,
+                 operation_number, initiated_at, confirmed_at, failed_at)
+PaymentMethod   (id, name, type, provider_code, webhook_enabled, active)
 CollectionAction(id, loan_id, installment_id, action_type, note, next_action_at, created_by, created_at)
 Notification    (id, customer_id, channel, template_code, payload, status, sent_at)
-BankAccount     (id, company_id, bank_name, account_number_masked, currency_id, active)
-Reconciliation  (id, source, external_reference, loan_id, payment_id, amount, status, reconciled_at)
+BankStatement   (id, company_bank_account_id, operation_number, value_date, amount, reconciliation_status,
+                 reconciled_payment_id, reconciled_disbursement_id)        -- base de la conciliación
 IntegrationEvent(id, provider, event_type, external_id, payload, status, processed_at)
 ```
 
@@ -252,7 +263,7 @@ IntegrationEvent(id, provider, event_type, external_id, payload, status, process
 5. **Desembolso y Cronograma** — generación del plan de pagos.
 6. **Pagos** — registro, aplicación, reversos.
 7. **Mora y Cobranza** — aging, penalidades, acciones.
-8. **Caja / Tesorería** — cajas, apertura/cierre, cuadre, transferencias, movimientos.
+8. **Tesorería digital** — cuentas bancarias propias, seguimiento de desembolsos, cuadre diario contra el extracto.
 9. **Reportes** — cartera, mora, flujo de caja, estado de cuenta.
 10. **Configuración** — tasas, feriados, parámetros globales.
 11. **Portal del Cliente** — registro, login, solicitud de préstamo, seguimiento, pagos, estado de cuenta.
@@ -264,7 +275,7 @@ Tomando como referencia la app analizada (`prestamos.devstackcode.com`) y ampli�
 
 1. **Tablero**
    - KPIs: cartera vigente/vencida, mora, recaudación esperada vs. real, desembolsos del día, pagos del día.
-   - Widgets: cuentas por cobrar, próximos vencimientos, tareas de cobranza, caja, alertas de integración.
+   - Widgets: cuentas por cobrar, próximos vencimientos, tareas de cobranza, saldos bancarios y desembolsos en tránsito, alertas de integración.
    - Exportación a PDF / Excel.
 2. **Clientes**
    - Lista de clientes, detalle, KYC, documentos, historial, múltiples préstamos activos.
@@ -278,12 +289,12 @@ Tomando como referencia la app analizada (`prestamos.devstackcode.com`) y ampli�
    - Próximos pagos, cuotas vencidas, aging, balance pendiente por cliente y por préstamo.
 7. **Cobranza**
    - Bandeja por aging, acuerdos, llamadas, promesas de pago, refinanciación, castigo.
-8. **Caja / Tesorería**
-   - Cajas, apertura/cierre, cuadre, transferencias entre cajas, movimientos, gastos operativos.
+8. **Tesorería digital**
+   - Cuentas bancarias propias, bandeja de desembolsos (pendientes, en proceso, fallidos), cuadre diario contra el extracto.
 9. **Reportes**
    - Cartera, aging, flujo de caja, productividad, auditoría, conciliación.
 10. **Administración**
-   - Usuarios, roles, monedas, zonas, métodos de pago, tipos de documentos, mensajes legales, empresa.
+   - Usuarios, roles, monedas, canales digitales de pago y desembolso, tipos de documentos, mensajes legales, empresa.
 11. **Configuración de negocio**
    - Productos de crédito, tasas, comisiones, mora, feriados, parámetros globales.
 12. **Integraciones**
@@ -324,10 +335,10 @@ POST   /api/loans/{id}/quote-prepayment            → liquidación por cancelac
 POST   /api/loans/{id}/restructure
 GET    /api/collections/aging
 POST   /api/collections/actions
-GET    /api/cashboxes
-POST   /api/cashboxes/{id}/open
-POST   /api/cashboxes/{id}/close
-POST   /api/cashboxes/transfers
+GET    /api/treasury/bank-accounts
+GET    /api/treasury/disbursements                 → bandeja de desembolsos (PENDING / PROCESSING / FAILED)
+GET    /api/disbursements/{id}
+GET    /api/treasury/daily-balance                 → cuadre diario por cuenta vs. extracto
 GET    /api/reconciliation
 POST   /api/reconciliation/import
 POST   /api/integrations/webhooks/{provider}
@@ -386,7 +397,7 @@ POST   /api/client/payments
 - **Mensajería/eventos:** RabbitMQ o Kafka si el volumen e integraciones lo requieren.
 - **Infraestructura:** Docker, CI/CD, observabilidad y gestión de secretos.
 
-> Recomendación arquitectónica: para este dominio, conviene iniciar con un **monolito modular** bien separado por dominios (`clientes`, `originacion`, `prestamos`, `pagos`, `cobranza`, `caja`, `integraciones`, `auditoria`). Si más adelante el volumen o las integraciones lo exigen, extraer servicios alrededor del core.
+> Recomendación arquitectónica: para este dominio, conviene iniciar con un **monolito modular** bien separado por dominios (`clientes`, `originacion`, `prestamos`, `pagos`, `cobranza`, `tesoreria`, `integraciones`, `auditoria`). Si más adelante el volumen o las integraciones lo exigen, extraer servicios alrededor del core.
 
 > La app de referencia (`prestamos.devstackcode.com`) es útil como inspiración para el **panel administrativo**, pero no cubre por sí sola el nivel de trazabilidad, conciliación, productos configurables y flujos enterprise que este sistema requiere.
 
@@ -399,12 +410,12 @@ POST   /api/client/payments
 | **0. Descubrimiento** | Definir productos, tasas, métodos y reglas reales del negocio. |
 | **1. Núcleo financiero** | Motor de cálculo (francés/flat/alemán) + generador de cronograma con tests. |
 | **2. Clientes y originación** | KYC, solicitudes, evaluación, aprobación. |
-| **3. Desembolso y pagos** | Desembolso, registro y aplicación de pagos, reversos. |
-| **4. Caja y tesorería** | Cajas, movimientos, cuadre, transferencias, gastos operativos. |
+| **3. Desembolso y pagos digitales** | Desembolso por transferencia, al menos un canal de cobro con webhook, aplicación de pagos, reversos y conciliación básica con el extracto. |
+| **4. Tesorería digital** | Cuentas bancarias propias, bandeja de desembolsos, cuadre diario por cuenta. |
 | **5. Mora y cobranza** | Aging, penalidades, acuerdos, notificaciones. |
 | **6. Portal del cliente** | Solicitud, seguimiento, consulta de cronograma y pagos. |
 | **7. Reportes y auditoría** | Cartera, mora, estado de cuenta, bitácora. |
-| **8. Integraciones y conciliación** | Bancos, billeteras, webhooks, archivos, conciliación. |
+| **8. Integraciones adicionales** | Más bancos y billeteras, débito automático, conciliación avanzada (liquidaciones en lote de pasarelas). |
 | **9. Refinanciamiento** | Reestructuración, prepago, consolidación. |
 
 ---

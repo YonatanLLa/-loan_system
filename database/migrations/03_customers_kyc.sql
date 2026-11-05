@@ -1,6 +1,8 @@
 -- =============================================================================
--- MIGRACIÓN 03 — CLIENTES Y KYC
+-- MIGRACIÓN 03 — CLIENTES, KYC Y CUENTAS BANCARIAS DEL CLIENTE
+-- Modelo: Fintech 100% Digital
 -- Dominio: US-04 (Registro), US-05 (KYC), US-06 (Vista 360), US-26 (Portal)
+-- AGREGADO: customer_bank_accounts — tarjeta/CCI a donde se deposita el préstamo
 -- Dependencias: 02_security_users.sql
 -- =============================================================================
 
@@ -24,7 +26,7 @@ CREATE TABLE customers (
     occupation              VARCHAR(150),
     employer_name           VARCHAR(200),
     work_seniority_months   SMALLINT        NOT NULL DEFAULT 0,
-    -- ── Estado KYC (US-05) ───────────────────────────────────────────────────
+    -- ── Estado KYC Digital (US-05) ───────────────────────────────────────────
     kyc_status              kyc_status_type NOT NULL DEFAULT 'PENDING',
     kyc_verified_by         UUID            REFERENCES users(id),
     kyc_verified_at         TIMESTAMPTZ,
@@ -35,7 +37,7 @@ CREATE TABLE customers (
                                             CHECK (credit_balance >= 0),
     -- ── Vínculo con el portal de autoservicio (US-26) ────────────────────────
     portal_user_id          UUID            REFERENCES users(id),
-    -- ── Consentimiento GDPR / LPDP (RF-05.4) ────────────────────────────────
+    -- ── Consentimiento GDPR / LPDP digital (RF-05.4) ─────────────────────────
     consent_given_at        TIMESTAMPTZ,
     consent_ip              INET,
     -- ── Metadatos ───────────────────────────────────────────────────────────
@@ -58,6 +60,41 @@ CREATE TRIGGER tg_customers_updated_at
     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- Cuentas bancarias del cliente — destino de desembolsos y origen de pagos
+-- Reemplaza la lógica de "caja física" por datos de cuenta/tarjeta del cliente
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE customer_bank_accounts (
+    id              UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id     UUID                NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    bank_name       VARCHAR(100)        NOT NULL,            -- BCP, Interbank, BBVA, Yape, etc.
+    account_type    bank_account_type   NOT NULL,            -- CUENTA_AHORRO, TARJETA_DEBITO, etc.
+    -- Datos enmascarados: solo últimos 4 dígitos visibles para el analista (RNF-05)
+    account_number_masked VARCHAR(30)   NOT NULL,            -- '**** **** **** 4821'
+    cci              VARCHAR(30),                            -- Código de Cuenta Interbancario (Perú, 20 dígitos)
+    phone_wallet     VARCHAR(20),                            -- Teléfono vinculado a Yape/Plin
+    -- Verificación de titularidad (RF-04.3: la cuenta debe pertenecer al cliente)
+    is_verified      BOOLEAN            NOT NULL DEFAULT FALSE,
+    verified_by      UUID               REFERENCES users(id),
+    verified_at      TIMESTAMPTZ,
+    -- Una sola cuenta activa como destino principal de desembolsos
+    is_primary       BOOLEAN            NOT NULL DEFAULT FALSE,
+    status           bank_account_status NOT NULL DEFAULT 'PENDING_VERIFICATION',
+    created_at       TIMESTAMPTZ        NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ        NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE customer_bank_accounts IS
+    'Cuentas bancarias/tarjetas/billeteras digitales del cliente. Destino de desembolsos y origen de pagos por transferencia (US-04, RF-04.3).';
+COMMENT ON COLUMN customer_bank_accounts.cci IS
+    'Código de Cuenta Interbancario de 20 dígitos. Requerido para transferencias interbancarias en Perú.';
+COMMENT ON COLUMN customer_bank_accounts.is_primary IS
+    'Solo una cuenta puede ser primaria por cliente. El desembolso va a la cuenta primaria verificada.';
+
+CREATE TRIGGER tg_customer_bank_accounts_updated_at
+    BEFORE UPDATE ON customer_bank_accounts
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Expediente digital KYC — documentos adjuntos (US-05, RF-05.1)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE customer_documents (
@@ -65,16 +102,16 @@ CREATE TABLE customer_documents (
     customer_id   UUID        NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
     doc_category  VARCHAR(60) NOT NULL,
     -- Categorías esperadas: DNI_FRONTAL | DNI_REVERSO | BOLETA_PAGO |
-    --                       RECIBO_SERVICIOS | SELFIE | OTRO
+    --                       RECIBO_SERVICIOS | SELFIE | ESTADO_CUENTA_BANCO | OTRO
     file_hash     VARCHAR(100) NOT NULL,    -- SHA-256 del archivo para verificar integridad
-    storage_uri   TEXT         NOT NULL,   -- URI en Object Storage (S3 / Azure Blob / local)
+    storage_uri   TEXT         NOT NULL,    -- URI en Object Storage (S3 / Azure Blob)
     mime_type     VARCHAR(60),
     uploaded_by   UUID         REFERENCES users(id),
     uploaded_at   TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE customer_documents IS
-    'Expediente KYC: archivos adjuntos del cliente almacenados en Object Storage (US-05, RNF-04).';
+    'Expediente KYC digital: archivos adjuntos del cliente almacenados en Object Storage (US-05, RNF-04).';
 COMMENT ON COLUMN customer_documents.storage_uri IS
     'Solo se guarda la URI/hash en BD. El archivo físico reside en Object Storage (RNF-04).';
 
@@ -82,15 +119,15 @@ COMMENT ON COLUMN customer_documents.storage_uri IS
 -- Códigos OTP para verificación del portal cliente (US-26, RF-26.2)
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE TABLE otp_verifications (
-    id          UUID                PRIMARY KEY DEFAULT gen_random_uuid(),
-    customer_id UUID                NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
-    target      VARCHAR(150)        NOT NULL,  -- Email o número de teléfono
-    channel     notification_channel NOT NULL, -- SMS | WHATSAPP | EMAIL
-    otp_hash    VARCHAR(255)        NOT NULL,  -- Hash del código de 6 dígitos
-    expires_at  TIMESTAMPTZ         NOT NULL,
-    verified_at TIMESTAMPTZ,                   -- NULL = aún no verificado
-    created_at  TIMESTAMPTZ         NOT NULL DEFAULT NOW()
+    id          UUID                 PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_id UUID                 NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+    target      VARCHAR(150)         NOT NULL,  -- Email o número de teléfono
+    channel     notification_channel NOT NULL,  -- SMS | WHATSAPP | EMAIL
+    otp_hash    VARCHAR(255)         NOT NULL,  -- Hash del código de 6 dígitos
+    expires_at  TIMESTAMPTZ          NOT NULL,
+    verified_at TIMESTAMPTZ,                    -- NULL = aún no verificado
+    created_at  TIMESTAMPTZ          NOT NULL DEFAULT NOW()
 );
 
 COMMENT ON TABLE otp_verifications IS
-    'Códigos OTP de verificación para el onboarding del portal cliente (US-26, RF-26.2).';
+    'Códigos OTP de verificación para onboarding y operaciones sensibles del portal cliente (US-26, RF-26.2).';

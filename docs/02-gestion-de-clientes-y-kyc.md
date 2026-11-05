@@ -8,7 +8,7 @@ Este dominio administra la información maestra de los clientes (personas natura
 ## 2. Historias de Usuario
 
 ### US-04: Registro y Actualización de Clientes
-**Como** Analista de Crédito o Cajero,  
+**Como** Analista de Crédito u Operador (o el propio cliente desde el portal, US-26),  
 **Quiero** registrar a nuevos solicitantes (personas naturales o jurídicas) y actualizar sus datos de contacto y financieros,  
 **Para** mantener una base de datos fidedigna y habilitarlos para la solicitud de préstamos.
 
@@ -54,7 +54,7 @@ Este dominio administra la información maestra de los clientes (personas natura
   *Entonces* el estado cambia a `VERIFIED`, se guarda fecha y usuario aprobador, y se desbloquea el desembolso.
 - **CA-05.2 (Bloqueo de Desembolso por KYC Incompleto):**  
   *Dado que* un préstamo fue aprobado pero el cliente aún tiene `kyc_status = PENDING`,  
-  *Cuando* el cajero o el sistema intenta procesar el desembolso (`POST /api/loans`),  
+  *Cuando* el operador o el sistema intenta procesar el desembolso (`POST /api/loans`),  
   *Entonces* la operación se bloquea con código `422 Unprocessable Entity` ("Cliente con KYC pendiente").
 
 ---

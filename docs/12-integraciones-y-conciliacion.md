@@ -43,8 +43,10 @@ Este dominio capacita al sistema para operar en un ecosistema bancario y fintech
 
 #### Requerimientos Funcionales
 - **RF-37.1:** Endpoints: `POST /api/reconciliation/import` y `GET /api/reconciliation`.
-- **RF-37.2:** Carga de extracto de cuenta bancaria (`BankAccount`):
-  - Importación de transacciones bancarias: Fecha valor, número de operación bancaria, descripción/glosa, monto, tipo (abono/cargo).
+- **RF-37.2:** Carga de extracto de cada cuenta bancaria de la Fintech (`company_bank_accounts`) a la tabla `bank_statements`:
+  - Importación de transacciones bancarias: Fecha valor, número de operación bancaria, descripción/glosa, monto (positivo = abono, negativo = cargo).
+  - Fuentes: archivo (CSV/Excel/TXT), API del banco o webhook.
+  - Concilia tanto cobros (`reconciled_payment_id`) como desembolsos (`reconciled_disbursement_id`). Es la base del cuadre diario por cuenta (US-24).
 - **RF-37.3:** Motor de conciliación automática (Reglas de Matching):
   1. Coincidencia exacta de `external_reference` (código de operación) + `monto` + `fecha`.
   2. Coincidencia por DNI/Código de cliente en la glosa + `monto exacto`.

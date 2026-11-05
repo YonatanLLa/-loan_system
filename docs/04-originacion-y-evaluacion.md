@@ -8,7 +8,7 @@ Este dominio gestiona el ciclo inicial del crédito: la simulación previa del f
 ## 2. Historias de Usuario
 
 ### US-10: Registro de Solicitud de Préstamo
-**Como** Analista de Crédito o Cajero (en Backoffice) o Cliente (vía Portal),  
+**Como** Analista de Crédito u Operador (en Backoffice) o Cliente (vía Portal),  
 **Quiero** ingresar una solicitud de crédito especificando cliente, producto, monto solicitado y plazo deseado,  
 **Para** iniciar formalmente el proceso de evaluación y scoring crediticio.
 

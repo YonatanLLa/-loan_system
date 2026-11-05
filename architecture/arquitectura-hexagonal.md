@@ -1,5 +1,7 @@
 # Arquitectura Hexagonal (Ports & Adapters) en .NET 8 — Sistema de Préstamos
 
+> **Documento de detalle.** La referencia vigente es [`ARQUITECTURA_GENERAL.md`](../ARQUITECTURA_GENERAL.md). Si algo aquí la contradice (versión .NET 8, estructura de carpetas, webhook síncrono, bloqueo sin transacción), prevalece ese documento; ver su sección 13.
+
 Este documento detalla la implementación formal del patrón de **Arquitectura Hexagonal (Ports and Adapters)** propuesta por Alistair Cockburn, adaptada al ecosistema **.NET 8 / C# 12** dentro del contexto del Sistema Financiero y de Préstamos.
 
 ---

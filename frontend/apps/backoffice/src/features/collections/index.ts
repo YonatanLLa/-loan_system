@@ -1,0 +1,1 @@
+export { collectionsRoutes } from './routes'

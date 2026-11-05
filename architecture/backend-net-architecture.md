@@ -1,5 +1,7 @@
 # Arquitectura Backend .NET (C#) — Sistema de Préstamos y Créditos
 
+> **Documento de detalle.** La referencia vigente es [`ARQUITECTURA_GENERAL.md`](../ARQUITECTURA_GENERAL.md). Si algo aquí la contradice (versión .NET 8, numeración de módulos, redondeo, licencias de librerías), prevalece ese documento; ver su sección 13.
+
 Este documento define la arquitectura técnica del Backend para la plataforma de gestión de créditos y préstamos, implementada sobre el ecosistema **.NET 8 / C# 12**, siguiendo el patrón arquitectónico de **Monolito Modular (Modular Monolith)** con principios de **Clean Architecture (Onion/Hexagonal)** y diseño guiado por el dominio (**Domain-Driven Design - DDD**).
 
 ---

@@ -54,3 +54,37 @@ Cada módulo cuenta con su propio archivo `.md` detallando historias de usuario,
 | [**`11-reportes-y-estados-de-cuenta.md`**](11-reportes-y-estados-de-cuenta.md) | Reportería Operativa, Financiera y Estados | US-33 (Dashboard KPIs), US-34 (Reporte Cartera/Aging), US-35 (Estado de Cuenta) |
 | [**`12-integraciones-y-conciliacion.md`**](12-integraciones-y-conciliacion.md) | Integraciones Bancarias y Conciliación | US-36 (Webhooks BCP/BBVA/Yape), US-37 (Conciliación Extractos), US-38 (Cola Reprocesos) |
 | [**`13-administracion-y-configuracion.md`**](13-administracion-y-configuracion.md) | Administración General y Configuración | US-39 (Datos de Empresa), US-40 (Canales Digitales), US-41 (Feriados y Días No Hábiles), US-42 (Catálogos y Plantillas Legales), US-43 (Gestión de Colaboradores) |
+
+---
+
+## 4. Requerimientos por Capa
+
+Las historias de usuario anteriores están separadas por capa técnica. Cada requerimiento indica de qué historia proviene, la fase y si ya estaba especificado o es una brecha nueva frente al negocio:
+
+| Archivo | Capa | Contenido |
+|---|---|---|
+| [**`REQUERIMIENTOS_FRONTEND.md`**](REQUERIMIENTOS_FRONTEND.md) | Frontend | Backoffice (`FE-BO`), portal del cliente (`FE-CP`) y no funcionales (`FE-NF`) |
+| [**`REQUERIMIENTOS_BACKEND.md`**](REQUERIMIENTOS_BACKEND.md) | Backend | API y jobs por módulo (`BE-SEC`, `BE-CUS`, `BE-PRO`, `BE-ORI`, `BE-LOA`, `BE-PAY`, `BE-TRE`, `BE-COL`, `BE-INT`, `BE-NOT`, `BE-REP`, `BE-ADM`) y no funcionales (`BE-NF`) |
+| [**`REQUERIMIENTOS_BDD.md`**](REQUERIMIENTOS_BDD.md) | Base de datos | Requerimientos del esquema (`DB`) contrastados con lo que ya existe en `database/` |
+
+### 4.1 Cobertura de lo que pide el negocio (README)
+
+| Requisito del negocio | Historias | Cobertura |
+|---|---|---|
+| Productos configurables (tasa, método, plazo, frecuencia, comisiones, mora, elegibilidad) | US-07 a US-09 | Parcial: faltan el día de pago, la antigüedad laboral y la separación entre comisión de administración y seguro |
+| Métodos Francés, Flat, Alemán y Americano | US-08 | Completa |
+| Cronograma con redondeo, snapshot y feriados | US-14, US-41 | Completa |
+| Desembolso | US-13, US-25 | Completa en historias; el esquema aún no tiene el estado previo a la confirmación |
+| Prelación, parciales, sobrepagos y reversos | US-16 a US-18 | Completa; falta un pago repartido entre varios préstamos |
+| Mora, gracia y aging | US-09, US-19, US-20 | Completa |
+| Cancelación anticipada | US-30 | Parcial: falta el prepago parcial y hay que revisar la penalidad frente a la ley |
+| Refinanciamiento y reestructuración | US-31, US-32 | Completa (con un ajuste en RNF-21 por el desembolso digital) |
+| Estados del préstamo por job diario | US-19 | Completa; falta `DESEMBOLSADO` en el estado de la solicitud |
+| Evaluación (elegibilidad, capacidad de pago, decisiones, auditoría) | US-10, US-12 | Parcial: DTI fijo en 35/50 %; admisión sin ingreso mínimo ni antigüedad |
+| KYC, AML/PEP y consentimiento | US-05, US-26 | Parcial: sin verificaciones automáticas ni consentimientos por finalidad |
+| Cobranza y recordatorios | US-20 a US-22 | Parcial: sin asignación de gestores, plantillas ni horarios |
+| Panel administrativo (12 módulos) | US-01 a US-43 | Parcial: faltan cuentas por cobrar, productividad y parámetros globales |
+| Portal del cliente | US-26 a US-29 | Parcial: faltan las cuentas del cliente, el cambio seguro de cuenta y la devolución del saldo a favor |
+| KPIs (mora, aging, recaudación, aprobación, originación, duración, prepago) | US-33 | Parcial: faltan aprobación, tiempo de originación, duración media y cancelación anticipada |
+| Operación 100% digital (firma, intención de pago, conciliación, Outbox) | US-13, US-25, US-29, US-36, US-37 | Parcial: falta modelar la firma, la intención de pago y el Outbox |
+| Cumplimiento en Perú (TCEA, tasas máximas, SUNAT, Libro de Reclamaciones, PLAFT) | ninguna | **No cubierto**: validar con asesoría legal y contable |

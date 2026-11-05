@@ -1,0 +1,13 @@
+{
+  "extends": "@vue/tsconfig/tsconfig.dom.json",
+  "include": ["src/**/*.ts", "src/**/*.vue"],
+  "compilerOptions": {
+    "noUncheckedIndexedAccess": true,
+    // El paquete se importa a sí mismo con su nombre, igual que lo hacen las apps,
+    // para que los componentes generados por shadcn-vue funcionen en ambos lados.
+    "paths": {
+      "@prestamos/ui": ["./src/index.ts"],
+      "@prestamos/ui/*": ["./src/*"]
+    }
+  }
+}

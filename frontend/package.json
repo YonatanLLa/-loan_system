@@ -1,0 +1,38 @@
+{
+  "name": "prestamos-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.1.2",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "^24.12.0",
+      "onFail": "download"
+    }
+  },
+  "scripts": {
+    "dev:backoffice": "pnpm --filter @prestamos/backoffice dev",
+    "dev:portal": "pnpm --filter @prestamos/portal dev",
+    "build": "pnpm --filter \"./apps/*\" build",
+    "type-check": "pnpm -r type-check",
+    "test": "pnpm -r test:unit --run",
+    "lint": "oxlint . --fix && eslint . --fix --cache",
+    "format": "prettier --write .",
+    "gen:api": "pnpm --filter @prestamos/api-client gen"
+  },
+  "devDependencies": {
+    "@vitest/eslint-plugin": "^1.6.28",
+    "@vue/eslint-config-typescript": "^14.9.0",
+    "eslint": "^10.14.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-oxlint": "~1.82.0",
+    "eslint-plugin-playwright": "^2.12.2",
+    "eslint-plugin-vue": "~10.11.1",
+    "jiti": "^2.7.0",
+    "oxlint": "~1.82.0",
+    "prettier": "3.9.6",
+    "typescript": "~6.0.3",
+    "vue-eslint-parser": "^10.4.1"
+  }
+}

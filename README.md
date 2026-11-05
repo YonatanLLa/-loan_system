@@ -388,12 +388,12 @@ POST   /api/client/payments
 
 ## 9. Stack sugerido (a validar)
 
-> **Arquitectura consolidada y stack decidido:** ver [`ARQUITECTURA_GENERAL.md`](ARQUITECTURA_GENERAL.md) (.NET 10 LTS, PostgreSQL, monolito modular con hexágono por módulo) y, para el frontend, [`ARQUITECTURA_FRONTEND.md`](ARQUITECTURA_FRONTEND.md) (Vue 3 + PrimeVue + Tailwind). Lo que sigue es el análisis original de opciones.
+> **Arquitectura consolidada y stack decidido:** ver [`ARQUITECTURA_GENERAL.md`](ARQUITECTURA_GENERAL.md) (.NET 10 LTS, PostgreSQL, monolito modular con hexágono por módulo) y, para el frontend, [`ARQUITECTURA_FRONTEND.md`](ARQUITECTURA_FRONTEND.md) (Vue 3 + shadcn-vue + Tailwind). Lo que sigue es el análisis original de opciones.
 
 - **Backend (opción enterprise recomendada):** `Java + Spring Boot` o `.NET + ASP.NET Core`.
 - **Backend (si se prioriza velocidad de salida):** Laravel / NestJS / Django con capa de dominio bien separada.
 - **BD:** PostgreSQL (transacciones, `numeric`, `jsonb` para snapshots).
-- **Frontend:** Vue 3 + TypeScript (PrimeVue, Tailwind CSS) para panel administrativo y portal cliente web.
+- **Frontend:** Vue 3 + TypeScript (shadcn-vue, Tailwind CSS) para panel administrativo y portal cliente web.
 - **Jobs / procesamiento asíncrono:** scheduler + colas para mora, estados, notificaciones e integraciones.
 - **Cache / colas:** Redis.
 - **Mensajería/eventos:** RabbitMQ o Kafka si el volumen e integraciones lo requieren.

@@ -51,8 +51,8 @@ flowchart LR
 ```mermaid
 flowchart TB
     subgraph Front["Frontend: 2 SPAs independientes"]
-        BO["Backoffice - Vue 3 + PrimeVue"]
-        CP["Portal cliente - Vue 3 + PrimeVue, mobile-first"]
+        BO["Backoffice - Vue 3 + shadcn-vue"]
+        CP["Portal cliente - Vue 3 + shadcn-vue, mobile-first"]
     end
     GW["Reverse proxy / WAF - TLS, rate limiting"]
     subgraph Back["Backend .NET 10 - monolito modular"]
@@ -154,7 +154,7 @@ backend/
     ├── Architecture.Tests/                    # Verifica que ningún módulo dependa del interior de otro
     └── IntegrationTests/                      # PostgreSQL y Redis reales con Testcontainers
 
-frontend/                                      # Vue 3 + PrimeVue (detalle en ARQUITECTURA_FRONTEND.md)
+frontend/                                      # Vue 3 + shadcn-vue (detalle en ARQUITECTURA_FRONTEND.md)
 ├── apps/
 │   ├── backoffice/src/features/               # auth, audit, customers, products, origination, loans,
 │   │                                          # payments, treasury, integrations, collections, reports, admin
@@ -162,7 +162,7 @@ frontend/                                      # Vue 3 + PrimeVue (detalle en AR
 │                                              # payments, profile, notifications, complaints
 └── packages/
     ├── api-client/                            # Axios + tipos generados desde OpenAPI (fuente única)
-    ├── ui/                                    # Preset de PrimeVue, Tailwind y componentes compartidos
+    ├── ui/                                    # Componentes shadcn-vue, Tailwind y componentes compartidos
     ├── utils/                                 # Formatos es-PE, fechas de negocio, esquemas Zod comunes
     └── config/                                # tsconfig, ESLint, Prettier
 ```
@@ -318,7 +318,7 @@ Cada job corre con un **bloqueo distribuido** (por ejemplo, el *clustering* de Q
 | PDF | QuestPDF | Licencia Community gratuita solo bajo USD 1M de ingresos anuales; validar |
 | Pruebas | xUnit + Testcontainers + Shouldly o AwesomeAssertions | FluentAssertions v8+ tiene licencia comercial |
 | Observabilidad | OpenTelemetry (trazas, métricas, logs) + Serilog | Id de correlación de extremo a extremo, incluido `external_reference` |
-| Frontend | Vue 3 + TypeScript + Vite, PrimeVue, Tailwind CSS, Vue Router, Pinia, Axios, VueUse, Chart.js, VeeValidate + Zod | Detalle en [`ARQUITECTURA_FRONTEND.md`](ARQUITECTURA_FRONTEND.md); tipos generados desde OpenAPI en `packages/api-client` |
+| Frontend | Vue 3 + TypeScript + Vite, shadcn-vue, Tailwind CSS, Vue Router, Pinia, Axios, VueUse, Chart.js, Vue Sonner, Lucide, VeeValidate + Zod | Detalle en [`ARQUITECTURA_FRONTEND.md`](ARQUITECTURA_FRONTEND.md); tipos generados desde OpenAPI en `packages/api-client` |
 | Archivos | Object Storage compatible con S3 o Azure Blob | Cifrado en reposo; URLs firmadas |
 | Infraestructura | Docker + CI/CD; ambientes `dev`, `qa`, `staging`, `prod` | Backups con recuperación a un punto en el tiempo (PITR) y restauración probada |
 
@@ -337,7 +337,7 @@ Cada job corre con un **bloqueo distribuido** (por ejemplo, el *clustering* de Q
 | 07 | Tarjetas solo tokenizadas por la pasarela | Guardar datos de tarjeta |
 | 08 | Dos SPAs separadas (backoffice y portal) | Una sola aplicación con roles |
 | 09 | Conciliación y cuentas bancarias en **Treasury**; transporte de proveedores en **Integrations** | Mezclar conciliación con webhooks |
-| 10 | Frontend en **Vue 3 + PrimeVue + Tailwind**, monorepo pnpm con dos apps | React 18/19 de los documentos anteriores |
+| 10 | Frontend en **Vue 3 + shadcn-vue + Tailwind**, monorepo pnpm con dos apps | React 18/19 de los documentos anteriores |
 
 ---
 

@@ -1,6 +1,6 @@
 # Arquitectura Global del Sistema — Backend Hexagonal (.NET 8) y Frontend Feature-Driven
 
-> **Documento de detalle.** La referencia vigente es [`ARQUITECTURA_GENERAL.md`](../ARQUITECTURA_GENERAL.md). Si algo aquí la contradice (versión .NET 8, React 18, mensajería), prevalece ese documento; ver su sección 13. **El frontend React descrito aquí fue reemplazado por Vue 3 + PrimeVue:** ver [`ARQUITECTURA_FRONTEND.md`](../ARQUITECTURA_FRONTEND.md).
+> **Documento de detalle.** La referencia vigente es [`ARQUITECTURA_GENERAL.md`](../ARQUITECTURA_GENERAL.md). Si algo aquí la contradice (versión .NET 8, React 18, mensajería), prevalece ese documento; ver su sección 13. **El frontend React descrito aquí fue reemplazado por Vue 3 + shadcn-vue:** ver [`ARQUITECTURA_FRONTEND.md`](../ARQUITECTURA_FRONTEND.md).
 
 Este documento define la **arquitectura integral de referencia** para la plataforma de Préstamos y Créditos. Consolida el diseño técnico requerido tras el análisis completo de los requisitos de negocio (`README.md`, `LINEA_DE_CRECIMIENTO_DEL_PROYECTO.md`, `docs/`, `database/`), alineando:
 1. **Backend:** Arquitectura Hexagonal (Ports & Adapters) estructurada bajo un Monolito Modular en **.NET 8 / C# 12**.

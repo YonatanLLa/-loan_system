@@ -5,7 +5,7 @@ Requerimientos de las dos aplicaciones web del sistema, derivados de las histori
 - **Backoffice:** panel interno para analistas, operadores, tesorería, cobranza, auditoría y administración.
 - **Portal del cliente:** autoservicio *mobile-first* para el prestatario. En un modelo 100% digital es el único canal del cliente, así que **forma parte del MVP**.
 
-Documentos hermanos: [Backend](REQUERIMIENTOS_BACKEND.md) · [Base de datos](REQUERIMIENTOS_BDD.md) · Arquitectura y stack (Vue 3 + PrimeVue): [`ARQUITECTURA_FRONTEND.md`](../ARQUITECTURA_FRONTEND.md)
+Documentos hermanos: [Backend](REQUERIMIENTOS_BACKEND.md) · [Base de datos](REQUERIMIENTOS_BDD.md) · Arquitectura y stack (Vue 3 + shadcn-vue): [`ARQUITECTURA_FRONTEND.md`](../ARQUITECTURA_FRONTEND.md)
 
 **Convenciones**
 

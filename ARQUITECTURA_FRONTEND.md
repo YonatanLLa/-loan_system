@@ -19,13 +19,15 @@ Arquitectura de las dos aplicaciones web del sistema sobre **Vue 3**. Implementa
 | Tecnología | Uso | Regla en este proyecto |
 |---|---|---|
 | **Vue 3** | Framework | Solo Composition API con `<script setup lang="ts">`; nada de Options API |
-| **PrimeVue** (v4) | Componentes e interfaces | Modo *styled* con un preset propio (basado en Aura) en `packages/ui`; los componentes se importan bajo demanda |
-| **Tailwind CSS** (v4) | Diseño y estilos | Layout, espaciado y ajustes finos; integración con PrimeVue mediante el plugin `tailwindcss-primeui` y capas CSS (`cssLayer`) para que las utilidades no choquen con el tema |
+| **shadcn-vue** | Componentes e interfaces | Componentes **copiados al código** (no es una dependencia): viven en `packages/ui/src/components/ui`, construidos sobre Reka UI y Tailwind. Se agregan con `pnpm --filter @prestamos/ui ui:add <componente>` y son nuestros para modificar |
+| **Tailwind CSS** (v4) | Diseño y estilos | Layout, espaciado y ajustes finos; el tema son variables CSS (`--primary`, `--background`, `--success`…) definidas una vez en `packages/ui/src/styles.css`, con modo oscuro listo |
 | **Vue Router** | Navegación | Rutas *lazy* por feature y guardas de sesión, permisos y estado de onboarding |
 | **Pinia** | Gestión de estado | Solo estado **global del cliente**: sesión, permisos, catálogos en cache y preferencias de UI. Los datos del servidor no viven en Pinia (sección 5) |
 | **Axios** | Consumo de API | Una instancia por app creada en `packages/api-client`, con interceptores de autenticación, refresco de sesión, correlación, idempotencia y errores |
 | **VueUse** | Funcionalidades y UX | `useIdle` (cierre de sesión por inactividad), `useBroadcastChannel` (logout en todas las pestañas), `useIntervalFn` (seguimiento de pagos), `useUserMedia` (cámara para KYC), `useDebounceFn` (filtros y simulador), `useClipboard` (copiar CCI u operación), `useOnline` |
-| **Chart.js** | Gráficos | A través del componente `Chart` de PrimeVue (que usa Chart.js), con la paleta del tema |
+| **Chart.js** | Gráficos | Envoltorio propio `ChartCanvas` en `packages/ui` (recibe una configuración de Chart.js), con la fuente y los colores del tema |
+| **Vue Sonner** | Notificaciones | `toast.error(...)`/`toast.success(...)` desde cualquier parte; el `<Toaster>` se monta una vez en `App.vue` |
+| **Lucide** (`@lucide/vue`) | Iconografía | Paquete actual de Lucide; `lucide-vue-next` está deprecado. Los iconos se importan por nombre (tree-shaking) |
 | **VeeValidate** | Formularios | Estado, errores y envío de formularios; los errores del backend (`ProblemDetails.errors`) se asignan a los campos |
 | **Zod** | Validación | Esquemas por feature y primitivas compartidas (DNI, RUC, CE, CCI, celular, monto). Integrado con VeeValidate mediante `@vee-validate/zod` |
 
@@ -39,12 +41,11 @@ Hacen que el stack definido cumpla requerimientos ya escritos:
 | **Vite** | Herramienta de build y servidor de desarrollo estándar de Vue | FE-NF-11 |
 | **pnpm workspaces** | Monorepo con dos apps y paquetes compartidos | FE-NF-03 |
 | **openapi-typescript** | Genera solo los tipos (`paths`, `components`) desde el `swagger.json` del backend; Axios sigue siendo el cliente | FE-NF-03 |
-| **unplugin-vue-components** + `@primevue/auto-import-resolver` | Importa solo los componentes de PrimeVue usados (bundle más liviano en el portal) | FE-NF-01 |
 | **Vitest** + **Vue Test Utils** | Pruebas de formateadores, esquemas, composables y componentes | — |
 | **Playwright** | Pruebas de extremo a extremo de los flujos críticos con la API simulada | — |
 | **ESLint** + **Prettier** | Estilo y reglas, incluida la de no importar el interior de otra feature | Sección 4.3 |
 
-> Al instalar, verificar que la versión de Zod sea compatible con `@vee-validate/zod`.
+> `@vee-validate/zod` solo admite **Zod 3** (`^3.24`), por eso el proyecto fija `zod@^3.25`. Migrar a Zod 4 exige cambiar el adaptador.
 
 ---
 
@@ -66,7 +67,7 @@ frontend/
     │       └── idempotency.ts      # helper de Idempotency-Key
     ├── ui/                         # tema y componentes compartidos
     │   └── src/
-    │       ├── theme/              # preset PrimeVue (colores de marca, tipografía) + CSS base de Tailwind
+    │       ├── theme/              # styles.css: tokens del tema (variables CSS), modo oscuro y fuente Geist local
     │       ├── components/         # MoneyText, StatusTag, PageHeader, EmptyState, ConfirmAction, FileDrop
     │       └── status.ts           # mapa único de colores por estado (cuotas, préstamos, pagos, desembolsos)
     ├── utils/                      # formateadores es-PE, fechas de negocio, máscaras, esquemas Zod comunes
@@ -84,12 +85,12 @@ frontend/
 
 ```text
 apps/backoffice/src/
-├── main.ts                         # crea la app, registra Pinia, Router, PrimeVue, Toast y ConfirmDialog
+├── main.ts                         # crea la app, registra Pinia y Router; `App.vue` monta el `Toaster` de Vue Sonner
 ├── App.vue
 ├── app/
 │   ├── router/                     # index.ts (une las rutas de cada feature) + guards.ts
 │   ├── layouts/                    # AppLayout (menú lateral + barra superior), AuthLayout
-│   ├── plugins/                    # primevue.ts, api.ts (instancia de Axios)
+│   ├── plugins/                    # api.ts (instancia de Axios)
 │   └── stores/                     # stores globales: session, catalogs, ui
 ├── features/
 │   └── <feature>/
@@ -104,7 +105,7 @@ apps/backoffice/src/
 └── shared/                         # piezas de esta app usadas por varias features
 ```
 
-`apps/portal` usa la misma estructura con un `MobileLayout` (barra inferior: Inicio, Préstamos, Pagar y Perfil) y un `OnboardingLayout` (pasos con `Stepper`).
+`apps/portal` usa la misma estructura con un `MobileLayout` (barra inferior: Inicio, Préstamos, Pagar y Perfil) y un `OnboardingLayout` (pasos del proceso).
 
 ### 3.1 Features del backoffice
 
@@ -149,7 +150,7 @@ flowchart LR
     Composable --> Store["stores Pinia globales"]
     Api --> Client["packages/api-client: Axios + tipos OpenAPI"]
     Client --> Backend["API .NET"]
-    Comp --> UI["packages/ui: PrimeVue + Tailwind"]
+    Comp --> UI["packages/ui: shadcn-vue + Tailwind"]
 ```
 
 ### 4.1 Responsabilidades
@@ -242,7 +243,7 @@ export function createApiClient(baseURL: string, session: SessionPort) {
 | Tema | Regla |
 |---|---|
 | **Tipos** | `pnpm gen:api` regenera `packages/api-client/src/generated` desde el OpenAPI del backend. Prohibido escribir DTOs a mano (FE-NF-03) |
-| **Errores** | Todo error llega como `ApiError { status, title, detail, errors?, traceId }`. Se muestra `detail` en un Toast y `errors` se asigna a los campos del formulario (FE-NF-05) |
+| **Errores** | Todo error llega como `ApiError { status, title, detail, errors?, traceId }`. Se muestra `detail` en un toast de Vue Sonner y `errors` se asigna a los campos del formulario (FE-NF-05) |
 | **Idempotencia** | Cada acción que mueve dinero (desembolsar, registrar pago, revertir, pagar desde el portal) genera **una** `Idempotency-Key` al iniciar la acción y la **reutiliza** en todos sus reintentos. El botón queda deshabilitado mientras espera (FE-NF-04) |
 | **Montos** | Los montos viajan como **string decimal** (`"1250.50"`). El frontend no suma, no resta y no redondea: solo formatea para mostrar |
 | **Reintentos** | Solo se reintentan automáticamente las lecturas (GET). Las mutaciones se reintentan solo con la misma `Idempotency-Key` |
@@ -269,21 +270,24 @@ export const monto     = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Monto con hasta 
 
 ---
 
-## 8. Interfaz: PrimeVue + Tailwind
+## 8. Interfaz: shadcn-vue + Tailwind
 
-| Necesidad | Componente | Notas |
+Los componentes de shadcn-vue se generan dentro de `packages/ui/src/components/ui` y se importan por ruta (`@prestamos/ui/components/ui/button`). Los textos para lectores de pantalla vienen traducidos al español. Instalados hoy: `alert`, `avatar`, `badge`, `button`, `card`, `dropdown-menu`, `field`, `input`, `label`, `separator`, `sheet`, `sidebar`, `skeleton`, `sonner` y `tooltip`.
+
+| Necesidad | Componente | Estado |
 |---|---|---|
-| Listas grandes (clientes, solicitudes, aging, pagos) | `DataTable` en modo *lazy* | Paginación, orden y filtros en el servidor |
-| Formularios | `InputText`, `InputNumber`, `Select`, `DatePicker`, `ToggleSwitch` | Nombres de PrimeVue v4 |
-| OTP | `InputOtp` | Registro, firma de contrato, cambio de cuenta |
-| Onboarding y solicitud | `Stepper` | Portal |
-| Línea de tiempo de la solicitud | `Timeline` | FE-CP-08 |
-| Estados | `Tag` con `packages/ui/status.ts` | Un solo mapa de colores |
-| Confirmaciones irreversibles | `ConfirmDialog` | Reverso, castigo, desembolso |
-| Avisos | `Toast` | Errores y confirmaciones |
-| Carga de archivos | `FileUpload` o `FileDrop` propio | Extractos y sustentos |
-| Gráficos | `Chart` (Chart.js) | Dashboard |
-| Menú | `Menu` / `PanelMenu` | Menú lateral del backoffice |
+| Menú lateral del backoffice | `sidebar` (colapsable, móvil como `sheet`) | Instalado |
+| Formularios | `field` + `input` + `label`, con errores de VeeValidate | Instalado |
+| Estados | `StatusBadge` (sobre `badge`) con `packages/ui/src/status.ts` | Hecho |
+| Avisos | Vue Sonner (`toast`) | Instalado |
+| Montos | `MoneyText` | Hecho |
+| Gráficos | `ChartCanvas` (Chart.js) | Hecho |
+| Listas grandes (clientes, solicitudes, aging, pagos) | `table` + TanStack Table si hace falta orden y filtros en servidor | Pendiente: agregar `table` con el CLI |
+| Selectores y fechas | `select`, `calendar`/`popover` | Pendiente |
+| OTP | `pin-input` | Pendiente |
+| Pasos de onboarding y solicitud | `stepper` | Pendiente |
+| Confirmaciones irreversibles (reverso, castigo, desembolso) | `alert-dialog` | Pendiente |
+| Carga de archivos | `FileDrop` propio | Pendiente |
 
 **Colores de estado** (únicos para todo el sistema, RF-28.3):
 
@@ -296,8 +300,8 @@ export const monto     = z.string().regex(/^\d+(\.\d{1,2})?$/, 'Monto con hasta 
 | Pago `PENDING_CONFIRMATION` | Gris ("En validación") |
 | Desembolso `FAILED` | Rojo, con el motivo |
 
-- El tema (colores de marca y tipografía) se define una sola vez en el preset de `packages/ui` y Tailwind usa los mismos tokens.
-- Accesibilidad WCAG 2.1 AA: contraste del preset verificado, foco visible y etiquetas en todos los campos (FE-NF-07).
+- El tema (colores de marca y tipografía) se define una sola vez en `packages/ui/src/styles.css` y Tailwind usa los mismos tokens.
+- Accesibilidad WCAG 2.1 AA: contraste del tema verificado, foco visible y etiquetas en todos los campos (FE-NF-07).
 
 ---
 
@@ -368,7 +372,7 @@ export const formatInstant = (isoUtc: string) => limaDateTime.format(new Date(is
 | Extremo a extremo | Playwright (API simulada) | Login + MFA; onboarding completo; solicitud → firma → desembolso; pagar cuota (QR y voucher); reverso con permiso; conciliación manual |
 | Estático | ESLint + `vue-tsc` | Tipos estrictos y fronteras entre features |
 
-**Rendimiento del portal:** rutas *lazy*, componentes de PrimeVue importados bajo demanda y un presupuesto de JavaScript inicial menor a 200 KB comprimido, medido en el CI.
+**Rendimiento del portal:** rutas *lazy*, componentes importados solo donde se usan (shadcn-vue no agrega una librería completa) y un presupuesto de JavaScript inicial menor a 200 KB comprimido, medido en el CI.
 
 **Despliegue:** cada app se compila por separado (`pnpm --filter backoffice build`, `pnpm --filter portal build`) y se publica como sitio estático en CDN (FE-NF-11).
 
@@ -376,7 +380,7 @@ export const formatInstant = (isoUtc: string) => limaDateTime.format(new Date(is
 
 ## 13. Orden de construcción (MVP)
 
-1. **Base del monorepo:** `packages/config`, `ui` (preset y tema), `utils` (formatos y esquemas) y `api-client` (instancia, errores, idempotencia y generación de tipos).
+1. **Base del monorepo:** `packages/config`, `ui` (tema y componentes shadcn-vue), `utils` (formatos y esquemas) y `api-client` (instancia, errores, idempotencia y generación de tipos).
 2. **Backoffice:**
    1. `auth`: login, MFA, guardas y layout.
    2. `customers`.

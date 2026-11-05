@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   readonly VITE_DEMO_LOGIN?: string
   /** Backend al que apunta el proxy de desarrollo (por defecto http://localhost:5000). */
   readonly VITE_API_PROXY_TARGET?: string
+  /** 'true' activa la API simulada (MSW). Solo desarrollo; nunca en producción. */
+  readonly VITE_USE_MOCKS?: string
 }
 
 interface ImportMeta {

@@ -5,13 +5,15 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import vueDevTools from 'vite-plugin-vue-devtools'
+import { msw } from 'msw/vite'
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
 
   return {
-    plugins: [vue(), tailwindcss(), vueDevTools()],
+    // msw() sirve /mockServiceWorker.js para la API simulada (no se incluye en el build de producción).
+    plugins: [vue(), tailwindcss(), vueDevTools(), ...(mode === 'production' ? [] : [msw({ mode: 'worker-only' })])],
     resolve: {
       alias: {
         '@': fileURLToPath(new URL('./src', import.meta.url)),

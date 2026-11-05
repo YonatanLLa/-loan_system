@@ -10,12 +10,7 @@ export const treasuryRoutes: RouteRecordRaw[] = [
   {
     path: 'tesoreria',
     name: 'treasury',
-    component: placeholder,
-    props: {
-      title: 'Tesorería',
-      description: 'Cuentas bancarias propias, desembolsos en tránsito, conciliación de extractos y cuadre diario.',
-      requirements: 'FE-BO-27 a FE-BO-30',
-    },
+    component: () => import('./pages/TreasuryDashboardPage.vue'),
     meta: {
       title: 'Tesorería',
       permission: PERMISSIONS.treasury,

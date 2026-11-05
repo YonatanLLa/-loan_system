@@ -10,12 +10,7 @@ export const auditRoutes: RouteRecordRaw[] = [
   {
     path: 'auditoria',
     name: 'audit',
-    component: placeholder,
-    props: {
-      title: 'Auditoría',
-      description: 'Bitácora de cambios con usuario, fecha y vista antes y después.',
-      requirements: 'FE-BO-05',
-    },
+    component: () => import('./pages/AuditLogPage.vue'),
     meta: {
       title: 'Auditoría',
       permission: PERMISSIONS.audit,

@@ -10,12 +10,7 @@ export const paymentsRoutes: RouteRecordRaw[] = [
   {
     path: 'pagos',
     name: 'payments',
-    component: placeholder,
-    props: {
-      title: 'Pagos',
-      description: 'Pagos pendientes de confirmación, registro de pagos identificados, reversos y saldo a favor.',
-      requirements: 'FE-BO-21 a FE-BO-24',
-    },
+    component: () => import('./pages/PaymentsListPage.vue'),
     meta: {
       title: 'Pagos',
       permission: PERMISSIONS.payments,

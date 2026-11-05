@@ -54,4 +54,21 @@ describe('LoginPage', () => {
 
     expect(wrapper.find('#email').attributes('aria-invalid')).toBe('true')
   })
+
+  it('muestra aviso cuando la sesión ha expirado', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/ingresar', name: 'login', component: LoginPage },
+        { path: '/', name: 'dashboard', component: Empty },
+      ],
+    })
+    await router.push('/ingresar?motivo=sesion-expirada')
+    await router.isReady()
+    const wrapper = mount(LoginPage, { global: { plugins: [pinia, router] } })
+
+    expect(wrapper.text()).toContain('Tu sesión expiró')
+  })
 })

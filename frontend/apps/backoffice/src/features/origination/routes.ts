@@ -10,16 +10,20 @@ export const originationRoutes: RouteRecordRaw[] = [
   {
     path: 'solicitudes',
     name: 'applications',
-    component: placeholder,
-    props: {
-      title: 'Solicitudes',
-      description: 'Simulador, bandeja de solicitudes, evaluación con DTI y dictamen.',
-      requirements: 'FE-BO-13 a FE-BO-17',
-    },
+    component: () => import('./pages/ApplicationsQueuePage.vue'),
     meta: {
       title: 'Solicitudes',
       permission: PERMISSIONS.applications,
       menu: { label: 'Solicitudes', icon: FileText, group: 'Operación', order: 2 },
+    },
+  },
+  {
+    path: 'solicitudes/:id',
+    name: 'application-detail',
+    component: () => import('./pages/ApplicationEvaluationPage.vue'),
+    meta: {
+      title: 'Evaluación de Solicitud',
+      permission: PERMISSIONS.applications,
     },
   },
 ]

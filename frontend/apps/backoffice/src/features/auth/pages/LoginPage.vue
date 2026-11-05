@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { toast } from 'vue-sonner'
-import { HandCoins, LoaderCircle } from '@lucide/vue'
+import { HandCoins, LoaderCircle, Lock } from '@lucide/vue'
 
 import { toApiError, toFormErrors } from '@prestamos/api-client'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
@@ -30,6 +30,13 @@ const session = useSessionStore()
 
 const sessionExpired = computed(() => route.query.motivo === 'sesion-expirada')
 
+/* ── Account locked state (HTTP 423) ── */
+const accountLocked = ref<{ title: string; detail: string } | null>(null)
+
+function resetLocked() {
+  accountLocked.value = null
+}
+
 const { defineField, errors, handleSubmit, isSubmitting, setErrors } = useForm({
   validationSchema: toTypedSchema(loginSchema),
   // Sin valores iniciales los campos son undefined y Zod responde "Required" en inglés.
@@ -48,6 +55,17 @@ const onSubmit = handleSubmit(async (values) => {
     await goNext()
   } catch (error) {
     const apiError = toApiError(error)
+
+    // HTTP 423 – cuenta bloqueada: mostrar pantalla dedicada
+    if (apiError.status === 423) {
+      accountLocked.value = {
+        title: apiError.title,
+        detail: apiError.detail,
+      }
+      return
+    }
+
+    // Para cualquier otro error (401, etc.) usar mensajes genéricos
     setErrors(toFormErrors(apiError))
     toast.error(apiError.title, { description: apiError.detail })
   }
@@ -71,12 +89,33 @@ function enterDemo() {
         Sistema de Préstamos
       </div>
 
-      <Alert v-if="sessionExpired">
+      <Alert v-if="sessionExpired && !accountLocked">
         <AlertTitle>Tu sesión expiró</AlertTitle>
         <AlertDescription>Ingresa nuevamente para continuar.</AlertDescription>
       </Alert>
 
-      <Card>
+      <!-- ── Cuenta bloqueada (HTTP 423) ── -->
+      <Card v-if="accountLocked">
+        <CardHeader class="items-center text-center">
+          <span
+            class="mb-2 flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
+          >
+            <Lock class="size-6" aria-hidden="true" />
+          </span>
+          <CardTitle>
+            <h1>{{ accountLocked.title }}</h1>
+          </CardTitle>
+          <CardDescription>{{ accountLocked.detail }}</CardDescription>
+        </CardHeader>
+        <CardContent class="flex justify-center">
+          <Button variant="outline" class="w-full" @click="resetLocked">
+            Reintentar
+          </Button>
+        </CardContent>
+      </Card>
+
+      <!-- ── Formulario de login ── -->
+      <Card v-else>
         <CardHeader>
           <CardTitle>
             <h1>Iniciar sesión</h1>
@@ -119,7 +158,7 @@ function enterDemo() {
         </CardContent>
       </Card>
 
-      <div v-if="session.demoEnabled" class="space-y-2 text-center">
+      <div v-if="session.demoEnabled && !accountLocked" class="space-y-2 text-center">
         <Button variant="outline" class="w-full" @click="enterDemo">Entrar en modo demo</Button>
         <p class="text-xs text-muted-foreground">
           Solo en desarrollo: recorre las pantallas sin backend.

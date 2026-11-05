@@ -10,12 +10,7 @@ export const integrationsRoutes: RouteRecordRaw[] = [
   {
     path: 'integraciones',
     name: 'integrations',
-    component: placeholder,
-    props: {
-      title: 'Integraciones',
-      description: 'Eventos de bancos y pasarelas con error (DLQ) y reintento manual.',
-      requirements: 'FE-BO-31',
-    },
+    component: () => import('./pages/IntegrationsEventsPage.vue'),
     meta: {
       title: 'Integraciones',
       permission: PERMISSIONS.integrations,

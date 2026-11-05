@@ -10,12 +10,7 @@ export const productsRoutes: RouteRecordRaw[] = [
   {
     path: 'productos',
     name: 'products',
-    component: placeholder,
-    props: {
-      title: 'Productos',
-      description: 'Catálogo de productos de crédito: montos, plazos, tasas, comisiones, mora y elegibilidad.',
-      requirements: 'FE-BO-11 y FE-BO-12',
-    },
+    component: () => import('./pages/ProductsListPage.vue'),
     meta: {
       title: 'Productos',
       permission: PERMISSIONS.products,

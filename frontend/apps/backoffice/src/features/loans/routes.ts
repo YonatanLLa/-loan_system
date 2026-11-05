@@ -10,16 +10,20 @@ export const loansRoutes: RouteRecordRaw[] = [
   {
     path: 'prestamos',
     name: 'loans',
-    component: placeholder,
-    props: {
-      title: 'Préstamos',
-      description: 'Detalle, cronograma, desembolso, documentos, prepago, reestructuración y refinanciamiento.',
-      requirements: 'FE-BO-18 a FE-BO-20, FE-BO-25 y FE-BO-26',
-    },
+    component: () => import('./pages/LoansListPage.vue'),
     meta: {
       title: 'Préstamos',
       permission: PERMISSIONS.loans,
       menu: { label: 'Préstamos', icon: HandCoins, group: 'Operación', order: 3 },
+    },
+  },
+  {
+    path: 'prestamos/:id',
+    name: 'loan-detail',
+    component: () => import('./pages/LoanDetailPage.vue'),
+    meta: {
+      title: 'Detalle del Préstamo',
+      permission: PERMISSIONS.loans,
     },
   },
 ]

@@ -1,0 +1,24 @@
+{
+  "name": "@prestamos/mocks",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "API simulada (MSW) con datos semilla y estado en memoria, para desarrollar el frontend sin backend.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser.ts",
+    "./node": "./src/node.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest"
+  },
+  "dependencies": {
+    "@prestamos/api-client": "workspace:*",
+    "msw": "^3.0.3"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

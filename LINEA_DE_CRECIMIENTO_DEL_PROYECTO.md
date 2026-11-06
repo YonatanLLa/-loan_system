@@ -103,7 +103,7 @@ Si el proyecto apunta a crecimiento serio, integraciones bancarias y operacion f
 
 - **Backend:** `Java + Spring Boot` o `.NET + ASP.NET Core`
 - **Base de datos:** `PostgreSQL`
-- **Frontend:** `React + TypeScript`
+- **Frontend:** `Vue 3 + TypeScript` con shadcn-vue y Tailwind CSS (ver `ARQUITECTURA_FRONTEND.md`)
 - **Cache / colas:** `Redis`
 - **Mensajeria futura:** `RabbitMQ` o `Kafka`
 - **Contenedores:** `Docker`

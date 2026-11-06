@@ -1,0 +1,29 @@
+# Dependencias y builds
+node_modules
+dist
+dist-ssr
+coverage
+*.local
+*.tsbuildinfo
+.eslintcache
+
+# Logs
+logs
+*.log
+pnpm-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea
+.DS_Store
+*.sw?
+
+# Vitest / Vite
+__screenshots__/
+*.timestamp-*-*.mjs
+
+# Playwright
+test-results/
+playwright-report/

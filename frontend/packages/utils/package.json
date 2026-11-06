@@ -1,0 +1,21 @@
+{
+  "name": "@prestamos/utils",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Formatos es-PE, fechas de negocio y esquemas Zod compartidos por backoffice y portal.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest"
+  },
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12"
+  }
+}

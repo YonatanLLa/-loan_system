@@ -1,0 +1,564 @@
+/**
+ * CONTRATOS PROVISIONALES de la API (camelCase, montos como string decimal).
+ *
+ * Reflejan docs/REQUERIMIENTOS_BACKEND.md y el esquema de database/. Los implementa la
+ * API simulada de @prestamos/mocks. Cuando el backend publique su OpenAPI, estos tipos
+ * se reemplazan por los generados (`pnpm gen:api`) y se borra este archivo (FE-NF-03).
+ */
+
+/** Monto decimal exacto como texto: "1250.50". El frontend nunca lo suma ni lo redondea. */
+export type Money = string
+/** Fecha de negocio AAAA-MM-DD (vencimientos, feriados). */
+export type BusinessDate = string
+/** Instante UTC en ISO 8601. */
+export type Instant = string
+
+export interface Page<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export type KycStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED'
+export type PaymentFrequency = 'DIARIA' | 'SEMANAL' | 'QUINCENAL' | 'MENSUAL'
+export type AmortizationMethod = 'FRANCES' | 'FLAT' | 'ALEMAN' | 'AMERICANO'
+export type ApplicationStatus =
+  | 'SOLICITADO'
+  | 'EN_EVALUACION'
+  | 'APROBADO'
+  | 'APROBADO_CON_CONDICIONES'
+  | 'RECHAZADO'
+  | 'ANULADO'
+  | 'DESEMBOLSADO'
+export type LoanStatus =
+  | 'PENDIENTE_DESEMBOLSO'
+  | 'VIGENTE'
+  | 'EN_MORA'
+  | 'PAGADO'
+  | 'CASTIGADO'
+  | 'CANCELADO'
+export type InstallmentStatus = 'PENDING' | 'PARTIAL' | 'PAID' | 'OVERDUE' | 'CANCELLED_BY_PREPAYMENT'
+export type PaymentStatus = 'PENDING_CONFIRMATION' | 'APPLIED' | 'REVERSED'
+export type PaymentMethodType =
+  | 'TRANSFERENCIA_BANCARIA'
+  | 'YAPE'
+  | 'PLIN'
+  | 'TARJETA_DEBITO'
+  | 'TARJETA_CREDITO'
+  | 'PASARELA_PAGO'
+export type DisbursementStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED'
+
+// ── Sesión ───────────────────────────────────────────────────────────────────
+export interface LoginRequest {
+  email: string
+  password: string
+}
+export interface TokenResponse {
+  accessToken: string
+}
+export interface Me {
+  id: string
+  fullName: string
+  email: string
+  role: string
+  permissions: string[]
+  /** Solo clientes del portal. */
+  customerId?: string
+  kycStatus?: KycStatus
+}
+
+// ── Clientes ─────────────────────────────────────────────────────────────────
+export interface CustomerBankAccount {
+  id: string
+  customerId: string
+  bankName: string
+  accountType: 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TARJETA_DEBITO' | 'BILLETERA_DIGITAL'
+  /** Enmascarada: "**** 4821". */
+  accountNumberMasked: string
+  cci?: string
+  phoneWallet?: string
+  isVerified: boolean
+  isPrimary: boolean
+  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_VERIFICATION'
+}
+
+export interface Customer {
+  id: string
+  personType: 'NATURAL' | 'JURIDICA'
+  docType: 'DNI' | 'CE' | 'RUC' | 'PASAPORTE'
+  docNumber: string
+  fullName: string
+  email: string
+  phone: string
+  address: string
+  district: string
+  birthDate: BusinessDate
+  monthlyNetIncome: Money
+  occupation: string
+  employerName: string
+  workSeniorityMonths: number
+  kycStatus: KycStatus
+  kycVerifiedAt?: Instant
+  kycNotes?: string
+  creditBalance: Money
+  createdAt: Instant
+}
+
+export interface CreateCustomerRequest {
+  personType?: Customer['personType']
+  docType: Customer['docType']
+  docNumber: string
+  fullName: string
+  email: string
+  phone: string
+  address?: string
+  district?: string
+  birthDate: BusinessDate
+  monthlyNetIncome: Money
+  occupation?: string
+  employerName?: string
+  workSeniorityMonths?: number
+}
+
+export interface Customer360 extends Customer {
+  bankAccounts: CustomerBankAccount[]
+  loans: LoanSummary[]
+  applications: ApplicationSummary[]
+  /** Capital + interés + mora pendientes de todos los préstamos. */
+  totalDebt: Money
+  maxDaysLate: number
+  hasActiveArrears: boolean
+}
+
+// ── Productos y simulación ───────────────────────────────────────────────────
+export interface LoanProduct {
+  id: string
+  name: string
+  description: string
+  currency: 'PEN' | 'USD'
+  minAmount: Money
+  maxAmount: Money
+  minTerm: number
+  maxTerm: number
+  allowedFrequencies: PaymentFrequency[]
+  amortizationMethod: AmortizationMethod
+  /** TEA como decimal: "0.300000" = 30 %. */
+  annualRate: string
+  openingFeeRate: string
+  openingFeeMode: 'DEDUCTIVA' | 'FINANCIADA'
+  periodicFee: Money
+  graceDays: number
+  moraRatePerDay: string
+  moraBase: 'SALDO_CAPITAL_VENCIDO' | 'CUOTA_TOTAL_VENCIDA'
+  prepaymentPenaltyRate: string
+  minAge: number
+  maxAge: number
+  minMonthlyIncome: Money
+  maxDtiAuto: string
+  maxDtiManual: string
+  status: 'ACTIVO' | 'INACTIVO'
+}
+
+export interface ScheduleRow {
+  number: number
+  dueDate: BusinessDate
+  principal: Money
+  interest: Money
+  fee: Money
+  totalDue: Money
+  /** Saldo de capital después de la cuota. */
+  balance: Money
+}
+
+export interface SimulateRequest {
+  productId: string
+  amount: Money
+  term: number
+  frequency?: PaymentFrequency
+  firstDueDate?: BusinessDate
+}
+
+export interface Simulation {
+  productId: string
+  summary: {
+    tea: string
+    tem: string
+    /** Tasa de costo efectivo anual (incluye comisiones y cargos). */
+    tcea: string
+    totalPrincipal: Money
+    totalInterest: Money
+    totalFees: Money
+    totalCost: Money
+    installmentAmount: Money
+  }
+  installments: ScheduleRow[]
+}
+
+// ── Solicitudes ──────────────────────────────────────────────────────────────
+export interface ApplicationSummary {
+  id: string
+  productName: string
+  requestedAmount: Money
+  status: ApplicationStatus
+  createdAt: Instant
+}
+
+export interface LoanApplication {
+  id: string
+  customerId: string
+  customerName: string
+  productId: string
+  productName: string
+  requestedAmount: Money
+  approvedAmount?: Money
+  term: number
+  frequency: PaymentFrequency
+  destination: string
+  status: ApplicationStatus
+  /** DTI en %, p. ej. "32.5000". */
+  dtiRatio?: string
+  systemRecommendation?: 'APROBABLE' | 'REVISION_MANUAL' | 'RECHAZO_SUGERIDO'
+  decisionNotes?: string
+  decidedBy?: string
+  decidedAt?: Instant
+  originatedFrom: 'BACKOFFICE' | 'PORTAL'
+  createdAt: Instant
+}
+
+export interface CreateApplicationRequest {
+  customerId?: string
+  productId: string
+  amount: Money
+  term: number
+  frequency: PaymentFrequency
+  destination?: string
+}
+
+export interface DecisionRequest {
+  decision: 'APROBADO' | 'APROBADO_CON_CONDICIONES' | 'RECHAZADO'
+  /** Obligatoria (422 si falta). */
+  notes: string
+  approvedAmount?: Money
+}
+
+// ── Préstamos ────────────────────────────────────────────────────────────────
+export interface LoanSummary {
+  id: string
+  productName: string
+  principal: Money
+  outstandingPrincipal: Money
+  status: LoanStatus
+  nextDueDate?: BusinessDate
+  daysLate: number
+}
+
+export interface Installment extends ScheduleRow {
+  paidPrincipal: Money
+  paidInterest: Money
+  paidFee: Money
+  lateFee: Money
+  paidLateFee: Money
+  status: InstallmentStatus
+  daysLate: number
+}
+
+export interface Loan {
+  id: string
+  applicationId: string
+  customerId: string
+  customerName: string
+  productId: string
+  productName: string
+  principal: Money
+  disbursedAmount: Money
+  annualRate: string
+  amortizationMethod: AmortizationMethod
+  frequency: PaymentFrequency
+  term: number
+  graceDays: number
+  moraRatePerDay: string
+  disbursementDate?: BusinessDate
+  firstDueDate?: BusinessDate
+  status: LoanStatus
+  outstandingPrincipal: Money
+  totalPaid: Money
+  scheduleVersion: number
+  disbursementId?: string
+  createdAt: Instant
+  assignedTo?: string
+}
+
+export interface Schedule {
+  loanId: string
+  version: number
+  installments: Installment[]
+}
+
+export interface CreateLoanRequest {
+  applicationId: string
+  customerBankAccountId: string
+  companyBankAccountId: string
+}
+
+export interface PrepaymentQuote {
+  loanId: string
+  asOfDate: BusinessDate
+  outstandingPrincipal: Money
+  accruedInterest: Money
+  accruedMora: Money
+  prepaymentPenalty: Money
+  totalToPay: Money
+  validUntil: BusinessDate
+}
+
+// ── Pagos ────────────────────────────────────────────────────────────────────
+export interface PaymentAllocation {
+  installmentId: string
+  installmentNumber: number
+  toMora: Money
+  toInterest: Money
+  toFee: Money
+  toPrincipal: Money
+}
+
+export interface Payment {
+  id: string
+  loanId: string
+  customerName: string
+  kind: 'NORMAL' | 'REVERSAL'
+  amount: Money
+  method: PaymentMethodType
+  status: PaymentStatus
+  gatewayReference?: string
+  externalReference?: string
+  receiptNumber?: string
+  reversalOfId?: string
+  reversalReason?: string
+  paidAt: Instant
+  allocations: PaymentAllocation[]
+  createdAt: Instant
+}
+
+export interface RegisterPaymentRequest {
+  amount: Money
+  method: PaymentMethodType
+  companyBankAccountId?: string
+  externalReference?: string
+  paidAt?: Instant
+}
+
+export interface ReversePaymentRequest {
+  reason: string
+}
+
+/** Intención de pago creada desde el portal (RF-29.1). */
+export interface PaymentIntent {
+  paymentId: string
+  loanId: string
+  amount: Money
+  method: PaymentMethodType
+  status: PaymentStatus
+  /** Texto del QR dinámico (Yape/Plin) o URL del checkout alojado de la pasarela. */
+  qrPayload?: string
+  checkoutUrl?: string
+  expiresAt: Instant
+}
+
+export interface ClientPaymentRequest {
+  loanId: string
+  amount: Money
+  method: PaymentMethodType
+  /** Transferencia con voucher: nombre del archivo subido. */
+  voucherFileName?: string
+}
+
+// ── Tesorería ────────────────────────────────────────────────────────────────
+export interface CompanyBankAccount {
+  id: string
+  bankName: string
+  accountNumberMasked: string
+  cci?: string
+  currency: 'PEN' | 'USD'
+  isDisbursement: boolean
+  isCollection: boolean
+  isActive: boolean
+}
+
+export interface Disbursement {
+  id: string
+  loanId: string
+  customerName: string
+  amount: Money
+  channel: 'TRANSFERENCIA_BANCARIA' | 'YAPE' | 'PLIN' | 'DEPOSITO_CCI'
+  status: DisbursementStatus
+  companyBankAccountId: string
+  customerBankAccountId: string
+  operationNumber?: string
+  bankResponseCode?: string
+  bankResponseMessage?: string
+  initiatedAt: Instant
+  confirmedAt?: Instant
+  failedAt?: Instant
+}
+
+export interface BankStatementLine {
+  id: string
+  companyBankAccountId: string
+  operationNumber: string
+  valueDate: BusinessDate
+  /** Positivo = abono, negativo = cargo. */
+  amount: Money
+  description: string
+  reconciliationStatus: 'CONCILIADO_AUTOMATICO' | 'PENDIENTE_CONCILIACION' | 'DESCUADRADO'
+  reconciledPaymentId?: string
+  reconciledDisbursementId?: string
+}
+
+export interface DailyBalance {
+  bankAccountId: string
+  date: BusinessDate
+  expectedBalance: Money
+  statementBalance: Money
+  difference: Money
+  result: 'CUADRADO' | 'DESCUADRADO'
+  issues: string[]
+}
+
+export interface IntegrationEvent {
+  id: string
+  provider: string
+  eventType: string
+  externalId: string
+  status: 'RECEIVED' | 'PROCESSED' | 'FAILED' | 'DEAD_LETTER' | 'FAILED_NEEDS_REVIEW'
+  retryCount: number
+  errorDetail?: string
+  createdAt: Instant
+}
+
+// ── Cobranza ─────────────────────────────────────────────────────────────────
+export type AgingBucket = 'PREVENTIVO' | 'TRAMO_1' | 'TRAMO_2' | 'TRAMO_3' | 'TRAMO_4'
+
+export interface AgingRow {
+  loanId: string
+  customerId: string
+  customerName: string
+  phone: string
+  productName: string
+  bucket: AgingBucket
+  daysLate: number
+  overdueInstallments: number
+  overduePrincipal: Money
+  totalDue: Money
+  assignedTo?: string
+  /** Hay al menos una promesa de pago vencida sin cumplimiento. */
+  hasBrokenPromise?: boolean
+}
+
+export interface ReceivableItem {
+  loanId: string
+  customerId: string
+  customerName: string
+  phone: string
+  productName: string
+  installmentNumber: number
+  dueDate: BusinessDate
+  daysLate: number
+  amount: Money
+  principalDue: Money
+  status: 'PENDIENTE' | 'VENCIDA'
+  outstandingPrincipal: Money
+}
+
+export interface CollectionAction {
+  id: string
+  loanId: string
+  actionType:
+    | 'LLAMADA_TELEFONICA'
+    | 'WHATSAPP'
+    | 'EMAIL'
+    | 'SMS'
+    | 'NOTIFICACION_PUSH'
+    | 'PROMESA_DE_PAGO'
+    | 'ACUERDO_DE_PAGO_DIGITAL'
+  note: string
+  status: 'ACTIVA' | 'CUMPLIDA' | 'PROMESA_INCUMPLIDA' | 'CERRADA'
+  nextActionAt?: Instant
+  promiseAmount?: Money
+  promiseDate?: BusinessDate
+  createdBy: string
+  createdAt: Instant
+}
+
+// ── Reportes ─────────────────────────────────────────────────────────────────
+export interface DashboardKpis {
+  portfolio: { total: Money; vigente: Money; enMora: Money; castigada: Money }
+  /** Porcentaje: "5.00". */
+  delinquencyRate: string
+  collections: { expectedToday: Money; collectedToday: Money }
+  disbursementsToday: { amount: Money; count: number }
+  bankBalances: { total: Money; inTransit: Money }
+  approvalRate: string
+  agingChart: { bucket: AgingBucket; amount: Money }[]
+  monthly: { month: string; disbursed: Money; collected: Money }[]
+}
+
+export interface CashflowReport {
+  from: BusinessDate
+  to: BusinessDate
+  inflows: { principal: Money; interest: Money; mora: Money; fees: Money }
+  outflows: { disbursements: Money; bankFees: Money }
+  net: Money
+}
+
+export interface AccountStatement {
+  loanId: string
+  customerName: string
+  principal: Money
+  disbursementDate?: BusinessDate
+  annualRate: string
+  term: number
+  totalPaid: Money
+  outstandingPrincipal: Money
+  nextDueDate?: BusinessDate
+  movements: { date: Instant; type: 'DESEMBOLSO' | 'PAGO' | 'REVERSO'; amount: Money; receiptNumber?: string }[]
+}
+
+// ── Auditoría y administración ───────────────────────────────────────────────
+export interface AuditLogEntry {
+  id: number
+  entityName: string
+  entityId: string
+  action: string
+  stateBefore: Record<string, unknown> | null
+  stateAfter: Record<string, unknown> | null
+  userName: string
+  userIp: string
+  createdAt: Instant
+}
+
+export interface Company {
+  legalName: string
+  tradeName: string
+  taxId: string
+  legalAddress: string
+  supportPhone: string
+  supportEmail: string
+  legalRepName: string
+  defaultCurrency: 'PEN' | 'USD'
+}
+
+export interface Holiday {
+  id: string
+  date: BusinessDate
+  name: string
+  isRecurring: boolean
+}
+
+export interface PaymentMethodConfig {
+  id: string
+  name: string
+  methodType: PaymentMethodType
+  webhookEnabled: boolean
+  isActive: boolean
+}

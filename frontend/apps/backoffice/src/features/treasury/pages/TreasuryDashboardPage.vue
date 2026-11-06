@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
-  Landmark,
   Building2,
   ArrowUpRight,
   UploadCloud,
@@ -11,22 +10,10 @@ import {
   RefreshCw,
   Clock,
   ArrowRightLeft,
-  Calendar,
-  Layers,
-  ChevronLeft,
-  ChevronRight,
   ShieldAlert,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type {
-  BankStatementLine,
-  CompanyBankAccount,
-  DailyBalance,
-  Disbursement,
-  Page,
-} from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
+import type { BankStatementLine } from '@prestamos/api-client'
 import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -37,139 +24,60 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 import CompanyAccountModal from '../components/CompanyAccountModal.vue'
 import ImportStatementModal from '../components/ImportStatementModal.vue'
+import InternalTransferModal from '../components/InternalTransferModal.vue'
 import ManualMatchModal from '../components/ManualMatchModal.vue'
 
-// FE-BO-27, FE-BO-28, FE-BO-29, FE-BO-30: Tesorería, desembolsos en tránsito, conciliación y cuadre.
+// FE-BO-27, FE-BO-28, FE-BO-29, FE-BO-30: Tesorería, fondeo entre cuentas propias, desembolsos en tránsito, conciliación y cuadre.
 
-const loading = ref(false)
-const activeTab = ref<'accounts' | 'disbursements' | 'reconciliation' | 'balance'>('accounts')
+const {
+  loading,
+  activeTab,
+  companyAccounts,
+  internalTransfers,
+  disbursements,
+  selectedDisbursementStatus,
+  retryingDisbursementId,
+  statements,
+  dailyBalance,
+  selectedBalanceAccId,
+  selectedBalanceDate,
+  loadingBalance,
+  loadCompanyAccounts,
+  loadInternalTransfers,
+  toggleAccountActive,
+  loadDisbursements,
+  retryDisbursement,
+  loadReconciliation,
+  loadDailyBalance,
+  switchTab,
+} = useTreasury()
 
-// Cuentas de la Fintech (FE-BO-27)
-const companyAccounts = ref<CompanyBankAccount[]>([])
 const isAccountModalOpen = ref(false)
-
-// Desembolsos en tránsito y fallidos (FE-BO-28)
-const disbursements = ref<Disbursement[]>([])
-const selectedDisbursementStatus = ref('PENDING,PROCESSING,FAILED')
-const retryingDisbursementId = ref<string | null>(null)
-
-// Conciliación de Extractos (FE-BO-29)
-const statements = ref<BankStatementLine[]>([])
+const isTransferModalOpen = ref(false)
 const isImportModalOpen = ref(false)
 const isMatchModalOpen = ref(false)
 const statementToMatch = ref<BankStatementLine | null>(null)
-
-// Cuadre Diario (FE-BO-30)
-const dailyBalance = ref<DailyBalance | null>(null)
-const selectedBalanceAccId = ref('bca-001')
-const selectedBalanceDate = ref(new Date().toISOString().slice(0, 10))
-const loadingBalance = ref(false)
-
-async function loadCompanyAccounts() {
-  try {
-    const { data } = await useApi().get<CompanyBankAccount[]>('/treasury/bank-accounts')
-    companyAccounts.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar cuentas corporativas', { description: apiError.detail })
-  }
-}
-
-async function toggleAccountActive(acc: CompanyBankAccount) {
-  try {
-    const { data } = await useApi().patch<CompanyBankAccount>(`/treasury/bank-accounts/${acc.id}`, {
-      isActive: !acc.isActive,
-    })
-    acc.isActive = data.isActive
-    toast.success(acc.isActive ? 'Cuenta activada' : 'Cuenta desactivada', {
-      description: `La cuenta ${acc.bankName} cambió de estado.`,
-    })
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('No se pudo actualizar cuenta', { description: apiError.detail })
-  }
-}
-
-async function loadDisbursements() {
-  try {
-    const params: Record<string, string> = {}
-    if (selectedDisbursementStatus.value) params.status = selectedDisbursementStatus.value
-    const { data } = await useApi().get<{ items: Disbursement[] }>('/treasury/disbursements', {
-      params,
-    })
-    disbursements.value = data.items
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar desembolsos', { description: apiError.detail })
-  }
-}
-
-async function retryDisbursement(disb: Disbursement) {
-  retryingDisbursementId.value = disb.id
-  try {
-    await useApi().post(`/disbursements/${disb.id}/retry`, {})
-    toast.success('Desembolso reintentado', {
-      description: `La orden de transferencia #${disb.id} volvió al estado PENDIENTE de transmisión.`,
-    })
-    void loadDisbursements()
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al reintentar desembolso', { description: apiError.detail })
-  } finally {
-    retryingDisbursementId.value = null
-  }
-}
-
-async function loadReconciliation() {
-  try {
-    const { data } = await useApi().get<{ items: BankStatementLine[] }>('/reconciliation')
-    statements.value = data.items
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar extractos', { description: apiError.detail })
-  }
-}
-
-async function loadDailyBalance() {
-  loadingBalance.value = true
-  try {
-    const { data } = await useApi().get<DailyBalance>('/treasury/daily-balance', {
-      params: {
-        bankAccountId: selectedBalanceAccId.value,
-        date: selectedBalanceDate.value,
-      },
-    })
-    dailyBalance.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al consultar cuadre diario', { description: apiError.detail })
-  } finally {
-    loadingBalance.value = false
-  }
-}
 
 function openMatch(line: BankStatementLine) {
   statementToMatch.value = line
   isMatchModalOpen.value = true
 }
 
-function switchTab(tab: typeof activeTab.value) {
-  activeTab.value = tab
-  if (tab === 'accounts') void loadCompanyAccounts()
-  if (tab === 'disbursements') void loadDisbursements()
-  if (tab === 'reconciliation') void loadReconciliation()
-  if (tab === 'balance') void loadDailyBalance()
+async function onInternalTransferSaved() {
+  await loadInternalTransfers()
+  await loadReconciliation()
+  await loadDailyBalance()
 }
 
 onMounted(async () => {
   loading.value = true
   await loadCompanyAccounts()
+  await loadInternalTransfers()
   await loadDisbursements()
   await loadReconciliation()
   await loadDailyBalance()
@@ -199,6 +107,22 @@ onMounted(async () => {
         Cuentas Propias (FE-BO-27)
         <Badge variant="outline" class="ml-1 text-[10px]">
           {{ companyAccounts.length }}
+        </Badge>
+      </button>
+
+      <button
+        class="px-4 py-2.5 font-semibold border-b-2 transition-all flex items-center gap-2"
+        :class="
+          activeTab === 'transfers'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground hover:text-foreground'
+        "
+        @click="switchTab('transfers')"
+      >
+        <ArrowRightLeft class="size-4" />
+        Transferencias / Fondeo Interno (RF-24.5)
+        <Badge variant="outline" class="ml-1 text-[10px]">
+          {{ internalTransfers.length }}
         </Badge>
       </button>
 
@@ -261,10 +185,16 @@ onMounted(async () => {
             prestatarios.
           </p>
         </div>
-        <Button size="sm" @click="isAccountModalOpen = true">
-          <Building2 class="size-4 mr-1.5" />
-          Nueva Cuenta Corporativa
-        </Button>
+        <div class="flex items-center gap-2">
+          <Button variant="outline" size="sm" @click="isTransferModalOpen = true">
+            <ArrowRightLeft class="size-4 mr-1.5" />
+            Fondeo entre Cuentas
+          </Button>
+          <Button size="sm" @click="isAccountModalOpen = true">
+            <Building2 class="size-4 mr-1.5" />
+            Nueva Cuenta Corporativa
+          </Button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -330,6 +260,82 @@ onMounted(async () => {
           </CardContent>
         </Card>
       </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- PESTAÑA 1.B: TRANSFERENCIAS INTERNAS / FONDEO (RF-24.5)    -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div v-if="activeTab === 'transfers'" class="space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-semibold">
+            Transferencias Internas entre Cuentas Propias (Fondeo / Barrido de Tesorería)
+          </h3>
+          <p class="text-xs text-muted-foreground">
+            Traspasos de liquidez entre cuentas recaudadoras y cuentas pagadoras de desembolsos
+            conciliados en ambos extractos sin afectar préstamos (RF-24.5, RF-24.6).
+          </p>
+        </div>
+        <Button size="sm" @click="isTransferModalOpen = true">
+          <ArrowRightLeft class="size-4 mr-1.5" />
+          Registrar Fondeo Interno
+        </Button>
+      </div>
+
+      <Card>
+        <CardContent class="p-0">
+          <div v-if="internalTransfers.length === 0" class="p-12">
+            <EmptyState
+              :icon="ArrowRightLeft"
+              title="Sin transferencias internas registradas"
+              description="Registra el fondeo desde tu cuenta recaudadora hacia la cuenta de desembolsos para cuadrar los extractos."
+            >
+              <Button size="sm" @click="isTransferModalOpen = true">
+                <ArrowRightLeft class="size-4 mr-1.5" />
+                Registrar Fondeo Interno
+              </Button>
+            </EmptyState>
+          </div>
+
+          <div v-else>
+            <TableGenerator
+              :columns="[
+                { key: 'id', label: 'ID Fondeo' },
+                { key: 'transferDate', label: 'Fecha Valor' },
+                { key: 'source', label: 'Cuenta Origen (Salida)' },
+                { key: 'destination', label: 'Cuenta Destino (Entrada)' },
+                { key: 'amount', label: 'Monto' },
+                { key: 'operationNumber', label: 'Nº Operación' },
+                { key: 'notes', label: 'Glosa / Registrado por' },
+              ]"
+              :rows="internalTransfers"
+              row-key="id"
+              body-class="divide-y divide-border text-xs"
+            >
+              <template #row="{ row: trf }">
+                <td class="px-4 py-3 font-mono font-bold">{{ trf.id }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">
+                  {{ formatBusinessDate(trf.transferDate) }}
+                </td>
+                <td class="px-4 py-3 font-medium text-destructive">
+                  - {{ trf.sourceBankName }}
+                </td>
+                <td class="px-4 py-3 font-medium text-success">
+                  + {{ trf.destinationBankName }}
+                </td>
+                <td class="px-4 py-3 font-mono font-bold text-foreground">
+                  <MoneyText :amount="trf.amount" :currency="trf.currency" />
+                </td>
+                <td class="px-4 py-3 font-mono">{{ trf.bankOperationNumber }}</td>
+                <td class="px-4 py-3 text-muted-foreground">
+                  <span class="block text-foreground">{{ trf.notes || 'Fondeo de tesorería' }}</span>
+                  <span class="text-[11px]">Por: {{ trf.createdBy }}</span>
+                </td>
+              </template>
+            </TableGenerator>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ -->
@@ -630,6 +636,17 @@ onMounted(async () => {
               <span class="text-xl font-bold text-foreground">
                 <MoneyText :amount="dailyBalance.expectedBalance" />
               </span>
+              <span
+                v-if="
+                  dailyBalance.internalTransfersIn &&
+                  (Number(dailyBalance.internalTransfersIn) > 0 ||
+                    Number(dailyBalance.internalTransfersOut ?? 0) > 0)
+                "
+                class="text-[11px] text-muted-foreground block pt-1"
+              >
+                Incluye Fondeos: +S/ {{ dailyBalance.internalTransfersIn }} / -S/
+                {{ dailyBalance.internalTransfersOut ?? '0.00' }}
+              </span>
             </div>
 
             <div class="p-4 rounded-xl border bg-card space-y-1">
@@ -679,6 +696,12 @@ onMounted(async () => {
 
     <!-- ── Modales de Tesorería ── -->
     <CompanyAccountModal v-model:open="isAccountModalOpen" @saved="loadCompanyAccounts" />
+
+    <InternalTransferModal
+      v-model:open="isTransferModalOpen"
+      :company-accounts="companyAccounts"
+      @saved="onInternalTransferSaved"
+    />
 
     <ImportStatementModal
       v-model:open="isImportModalOpen"

@@ -5,18 +5,21 @@ import type {
   Customer360,
   CustomerBankAccount,
   KycStatus,
+  RefundRequest,
 } from '@prestamos/api-client'
 
-import { db, nextId, nowIso, recordAudit } from '../db'
+import { db, nextId, nowIso, recordAudit, type PaymentRec } from '../db'
 import {
   activeInstallments,
+  applyPaymentCascade,
   customerLoans,
   maxDaysLate,
   toApplicationSummary,
   toLoanSummary,
+  toPaymentDto,
 } from '../domain'
 import { matches, notFound, paginate, problem, readJson, secured } from '../http-utils'
-import { fromCents, sum } from '../money'
+import { fromCents, sum, toCents } from '../money'
 
 const DOC_PATTERNS: Record<Customer['docType'], RegExp> = {
   DNI: /^\d{8}$/,
@@ -191,5 +194,180 @@ export const customerHandlers = [
       .filter((a) => a.customerId === account.customerId)
       .forEach((a) => { a.isPrimary = a.id === account.id })
     return HttpResponse.json(account)
+  })),
+
+  // ── Portal del Cliente (FE-CP-03 a FE-CP-05, FE-CP-18) ──────────────────────
+  http.get('*/api/client/profile', secured(null, ({ user }) => {
+    if (!user.customerId) return problem(403, 'Acceso denegado', 'Solo clientes del portal.')
+    const customer = db.customers.find((c) => c.id === user.customerId)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json(customer)
+  })),
+
+  http.post('*/api/client/onboarding/kyc', secured(null, async ({ request, user }) => {
+    if (!user.customerId) return problem(403, 'Acceso denegado', 'Solo clientes del portal.')
+    const customer = db.customers.find((c) => c.id === user.customerId)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ dniFrontUrl?: string; dniBackUrl?: string; selfieUrl?: string }>(request)
+    if (!body?.dniFrontUrl || !body?.selfieUrl) {
+      return problem(400, 'Documentos incompletos', 'Se requiere foto del DNI anverso y selfie con prueba de vida.')
+    }
+    customer.kycStatus = 'VERIFIED'
+    customer.kycVerifiedAt = nowIso()
+    customer.kycNotes = 'Verificación biométrica y OCR aprobada automáticamente.'
+    recordAudit({
+      entityName: 'customers',
+      entityId: customer.id,
+      action: 'KYC_VERIFIED',
+      userName: user.fullName,
+    })
+    return HttpResponse.json({ customer, message: 'Identidad verificada exitosamente.' })
+  })),
+
+  http.post('*/api/client/onboarding/consents', secured(null, async ({ request, user }) => {
+    const body = await readJson<{ dataProtection: boolean; creditBureau: boolean; marketing: boolean }>(request)
+    if (!body?.dataProtection || !body?.creditBureau) {
+      return problem(400, 'Consentimientos requeridos', 'Debes aceptar las cláusulas obligatorias de tratamiento de datos y consulta a centrales.')
+    }
+    recordAudit({
+      entityName: 'customers',
+      entityId: user.customerId || user.id,
+      action: 'CONSENTS_ACCEPTED',
+      userName: user.fullName,
+    })
+    return HttpResponse.json({ success: true, message: 'Consentimientos registrados.' })
+  })),
+
+  http.get('*/api/client/bank-accounts', secured(null, ({ user }) => {
+    if (!user.customerId) return HttpResponse.json([])
+    return HttpResponse.json(db.customerBankAccounts.filter((a) => a.customerId === user.customerId))
+  })),
+
+  http.post('*/api/client/bank-accounts', secured(null, async ({ request, user }) => {
+    if (!user.customerId) return problem(403, 'Acceso denegado', 'Solo clientes del portal.')
+    const body = await readJson<{ bankName: string; accountType?: string; cci?: string; phoneWallet?: string }>(request)
+    if (!body?.bankName) {
+      return problem(400, 'Datos inválidos', 'Indica el nombre de la entidad bancaria.')
+    }
+    if (body.cci && !/^\d{20}$/.test(body.cci)) {
+      return problem(400, 'CCI inválido', 'El Código de Cuenta Interbancario (CCI) debe contener 20 dígitos.')
+    }
+    const existingAccounts = db.customerBankAccounts.filter((a) => a.customerId === user.customerId)
+    const isFirst = existingAccounts.length === 0
+    const account: CustomerBankAccount = {
+      id: nextId('cba'),
+      customerId: user.customerId,
+      bankName: body.bankName,
+      accountType: (body.accountType as CustomerBankAccount['accountType']) || (body.phoneWallet ? 'BILLETERA_DIGITAL' : 'CUENTA_AHORRO'),
+      accountNumberMasked: body.phoneWallet ? `Billetera: ${body.phoneWallet}` : `**** ${(body.cci || '0000').slice(-4)}`,
+      cci: body.cci,
+      phoneWallet: body.phoneWallet,
+      isVerified: true,
+      isPrimary: isFirst,
+      status: 'ACTIVE',
+    }
+    db.customerBankAccounts.push(account)
+    recordAudit({
+      entityName: 'customer_bank_accounts',
+      entityId: account.id,
+      action: 'CREATE',
+      userName: user.fullName,
+    })
+    return HttpResponse.json(account, { status: 201 })
+  })),
+
+  // ── Gestión de Saldo a Favor en Backoffice (FE-BO-24 / US-17 / RF-17.3) ──────
+  http.post('*/api/customers/:id/credit-balance/apply', secured<{ id: string }>('payments.read', async ({ request, params, user }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ loanId: string; amount: string }>(request)
+    if (!body?.loanId || !body?.amount) {
+      return problem(400, 'Datos incompletos', 'Selecciona el préstamo de destino y el monto a aplicar.')
+    }
+    const loan = db.loans.find((l) => l.id === body.loanId && l.customerId === customer.id)
+    if (!loan) return notFound('El préstamo')
+    if (loan.status !== 'VIGENTE' && loan.status !== 'EN_MORA') {
+      return problem(422, 'Préstamo sin deuda exigible', 'Solo se aplica saldo a favor a préstamos vigentes o en mora.')
+    }
+    const creditCents = toCents(customer.creditBalance)
+    const applyCents = toCents(body.amount)
+    if (applyCents <= 0) {
+      return problem(400, 'Monto inválido', 'El monto debe ser mayor a cero.')
+    }
+    if (applyCents > creditCents) {
+      return problem(422, 'Saldo insuficiente', `El monto supera el saldo a favor disponible (S/ ${customer.creditBalance}).`)
+    }
+    customer.creditBalance = fromCents(creditCents - applyCents)
+    const payment: PaymentRec = {
+      id: nextId('pay'),
+      loanId: loan.id,
+      amount: applyCents,
+      method: 'TRANSFERENCIA_BANCARIA',
+      kind: 'NORMAL',
+      status: 'PENDING_CONFIRMATION',
+      externalReference: `SAF-${customer.id}-${Date.now()}`,
+      paidAt: nowIso(),
+      createdAt: nowIso(),
+      allocations: [],
+      creditToCustomer: 0,
+    }
+    db.payments.unshift(payment)
+    applyPaymentCascade(payment)
+    recordAudit({
+      entityName: 'customers',
+      entityId: customer.id,
+      action: 'CREDIT_BALANCE_APPLIED',
+      userName: user.fullName,
+      after: { loanId: loan.id, amount: body.amount, newCreditBalance: customer.creditBalance },
+    })
+    return HttpResponse.json({
+      payment: toPaymentDto(payment),
+      customer: to360(customer),
+    })
+  })),
+
+  http.post('*/api/customers/:id/credit-balance/refund', secured<{ id: string }>('payments.read', async ({ request, params, user }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ bankAccountId: string; amount: string }>(request)
+    if (!body?.bankAccountId || !body?.amount) {
+      return problem(400, 'Datos incompletos', 'Selecciona la cuenta bancaria verificada y el monto a devolver.')
+    }
+    const bankAccount = db.customerBankAccounts.find((a) => a.id === body.bankAccountId && a.customerId === customer.id)
+    if (!bankAccount) return notFound('La cuenta bancaria')
+    if (!bankAccount.isVerified) {
+      return problem(422, 'Cuenta no verificada', 'Solo se procesan devoluciones a cuentas bancarias verificadas.')
+    }
+    const creditCents = toCents(customer.creditBalance)
+    const refundCents = toCents(body.amount)
+    if (refundCents <= 0) {
+      return problem(400, 'Monto inválido', 'El monto debe ser mayor a cero.')
+    }
+    if (refundCents > creditCents) {
+      return problem(422, 'Saldo insuficiente', `El monto supera el saldo a favor disponible (S/ ${customer.creditBalance}).`)
+    }
+    customer.creditBalance = fromCents(creditCents - refundCents)
+    const refund: RefundRequest = {
+      id: nextId('ref'),
+      customerId: customer.id,
+      amount: body.amount,
+      customerBankAccountId: bankAccount.id,
+      status: 'DISBURSED',
+      requestedAt: nowIso(),
+      bankName: bankAccount.bankName,
+      accountNumberMasked: bankAccount.accountNumberMasked,
+    }
+    db.refundRequests.unshift(refund)
+    recordAudit({
+      entityName: 'refund_requests',
+      entityId: refund.id,
+      action: 'CREATE',
+      userName: user.fullName,
+      after: { amount: refund.amount, bankAccountId: bankAccount.id },
+    })
+    return HttpResponse.json({
+      refund,
+      customer: to360(customer),
+    }, { status: 201 })
   })),
 ]

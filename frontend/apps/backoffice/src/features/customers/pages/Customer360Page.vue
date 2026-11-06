@@ -44,16 +44,18 @@ import {
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 import CustomerFormSheet from '../components/CustomerFormSheet.vue'
 import KycDecisionDialog from '../components/KycDecisionDialog.vue'
 import AddBankAccountDialog from '../components/AddBankAccountDialog.vue'
+import CreditBalanceModal from '../components/CreditBalanceModal.vue'
 
-// FE-BO-08, FE-BO-09, FE-BO-10: Expediente KYC, cuentas bancarias y Ficha 360 del cliente.
+// FE-BO-08, FE-BO-09, FE-BO-10, FE-BO-24: Expediente KYC, cuentas bancarias, saldo a favor y Ficha 360 del cliente.
 
 const route = useRoute()
 const router = useRouter()
 const customerId = computed(() => route.params.id as string)
+const { getCustomer360, verifyBankAccount, makePrimaryBankAccount } = useCustomers()
 
 const loading = ref(true)
 const customer = ref<Customer360 | null>(null)
@@ -63,12 +65,12 @@ const activeTab = ref<'kyc' | 'accounts' | 'loans' | 'applications'>('kyc')
 const isEditOpen = ref(false)
 const isKycModalOpen = ref(false)
 const isAddAccountOpen = ref(false)
+const isCreditBalanceOpen = ref(false)
 
 async function loadCustomer() {
   loading.value = true
   try {
-    const { data } = await useApi().get<Customer360>(`/customers/${customerId.value}`)
-    customer.value = data
+    customer.value = await getCustomer360(customerId.value)
   } catch (error) {
     const apiError = toApiError(error)
     toast.error('Error al cargar ficha 360', { description: apiError.detail })
@@ -80,9 +82,7 @@ async function loadCustomer() {
 
 async function verifyAccount(account: CustomerBankAccount) {
   try {
-    const { data } = await useApi().post<CustomerBankAccount>(
-      `/customer-bank-accounts/${account.id}/verify`,
-    )
+    const data = await verifyBankAccount(account.id)
     toast.success('Cuenta verificada', {
       description: `La cuenta ${data.bankName} (${data.accountNumberMasked}) fue verificada contra el titular.`,
     })
@@ -95,7 +95,7 @@ async function verifyAccount(account: CustomerBankAccount) {
 
 async function makePrimaryAccount(account: CustomerBankAccount) {
   try {
-    await useApi().post(`/customer-bank-accounts/${account.id}/make-primary`)
+    await makePrimaryBankAccount(account.id)
     toast.success('Cuenta principal actualizada', {
       description: `Los desembolsos se realizarán por defecto a ${account.bankName} (${account.accountNumberMasked}).`,
     })
@@ -260,7 +260,18 @@ onMounted(() => {
         <!-- Saldo a Favor -->
         <Card>
           <CardHeader class="pb-2">
-            <CardDescription class="text-xs">Saldo a Favor</CardDescription>
+            <div class="flex items-center justify-between">
+              <CardDescription class="text-xs">Saldo a Favor (FE-BO-24)</CardDescription>
+              <Button
+                v-if="Number(customer.creditBalance) > 0"
+                variant="outline"
+                size="sm"
+                class="h-6 px-2 text-[11px]"
+                @click="isCreditBalanceOpen = true"
+              >
+                Disponer saldo
+              </Button>
+            </div>
             <CardTitle class="text-xl font-bold text-primary">
               <MoneyText :amount="customer.creditBalance" />
             </CardTitle>
@@ -733,6 +744,12 @@ onMounted(() => {
         :customer-id="customer.id"
         :customer-name="customer.fullName"
         @added="onAccountAdded"
+      />
+
+      <CreditBalanceModal
+        v-model:open="isCreditBalanceOpen"
+        :customer="customer"
+        @processed="loadCustomer"
       />
     </template>
   </div>

@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/sheet'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useProducts } from '../composables/useProducts'
 
 // FE-BO-11 y FE-BO-12: Alta y edición de productos con rangos, comisiones, mora, DTI y validaciones.
 
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'saved', product: LoanProduct): void
 }>()
 
+const { saveProduct } = useProducts()
 const isEditing = computed(() => !!props.productToEdit)
 const isSubmitting = ref(false)
 const rangeError = ref<string | null>(null)
@@ -58,6 +59,9 @@ const form = ref<Omit<LoanProduct, 'id'>>({
   minMonthlyIncome: '1200.00',
   maxDtiAuto: '0.350000', // 35% (FE-BO-12)
   maxDtiManual: '0.500000', // 50% (FE-BO-12)
+  paymentDay: 15,
+  allowAnatocism: false,
+  holidayAdjustment: 'NEXT_BUSINESS_DAY',
   status: 'ACTIVO',
 })
 
@@ -97,6 +101,9 @@ watch(
         minMonthlyIncome: p.minMonthlyIncome,
         maxDtiAuto: p.maxDtiAuto,
         maxDtiManual: p.maxDtiManual,
+        paymentDay: p.paymentDay ?? 15,
+        allowAnatocism: p.allowAnatocism ?? false,
+        holidayAdjustment: p.holidayAdjustment ?? 'NEXT_BUSINESS_DAY',
         status: p.status,
       }
     } else {
@@ -123,6 +130,9 @@ watch(
         minMonthlyIncome: '1200.00',
         maxDtiAuto: '0.350000',
         maxDtiManual: '0.500000',
+        paymentDay: 15,
+        allowAnatocism: false,
+        holidayAdjustment: 'NEXT_BUSINESS_DAY',
         status: 'ACTIVO',
       }
     }
@@ -193,17 +203,14 @@ async function onSubmit() {
 
   try {
     if (isEditing.value && props.productToEdit) {
-      const { data } = await useApi().put<LoanProduct>(
-        `/loan-products/${props.productToEdit.id}`,
-        form.value,
-      )
+      const data = await saveProduct(form.value, props.productToEdit.id)
       toast.success('Producto actualizado', {
         description: `Se guardaron las condiciones del producto ${data.name}.`,
       })
       emit('saved', data)
       emit('update:open', false)
     } else {
-      const { data } = await useApi().post<LoanProduct>('/loan-products', form.value)
+      const data = await saveProduct(form.value)
       toast.success('Producto creado', {
         description: `El producto ${data.name} ha sido configurado con éxito.`,
       })
@@ -460,16 +467,66 @@ async function onSubmit() {
             </div>
           </div>
 
-          <div class="space-y-1.5">
-            <label for="moraBase" class="text-xs font-medium">Base de Cálculo de Mora</label>
-            <select
-              id="moraBase"
-              v-model="form.moraBase"
-              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-            >
-              <option value="SALDO_CAPITAL_VENCIDO">Saldo de Capital Vencido</option>
-              <option value="CUOTA_TOTAL_VENCIDA">Cuota Total Vencida</option>
-            </select>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <label for="moraBase" class="text-xs font-medium">Base de Cálculo de Mora</label>
+              <select
+                id="moraBase"
+                v-model="form.moraBase"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="SALDO_CAPITAL_VENCIDO">Saldo de Capital Vencido</option>
+                <option value="CUOTA_TOTAL_VENCIDA">Cuota Total Vencida</option>
+              </select>
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="prepaymentPenaltyRate" class="text-xs font-medium">Penalidad Prepago (%)</label>
+              <Input
+                id="prepaymentPenaltyRate"
+                v-model="form.prepaymentPenaltyRate"
+                type="text"
+                placeholder="0.000000"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-3">
+            <div class="space-y-1.5">
+              <label for="paymentDay" class="text-xs font-medium">Día Fijo de Pago (1-28)</label>
+              <Input
+                id="paymentDay"
+                v-model.number="form.paymentDay"
+                type="number"
+                min="1"
+                max="28"
+              />
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="holidayAdjustment" class="text-xs font-medium">Ajuste por Feriados</label>
+              <select
+                id="holidayAdjustment"
+                v-model="form.holidayAdjustment"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="NEXT_BUSINESS_DAY">Día hábil siguiente</option>
+                <option value="PREVIOUS_BUSINESS_DAY">Día hábil anterior</option>
+                <option value="NONE">Sin ajuste</option>
+              </select>
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="allowAnatocism" class="text-xs font-medium">Anatocismo</label>
+              <select
+                id="allowAnatocism"
+                v-model="form.allowAnatocism"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-2.5 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option :value="false">No permitido</option>
+                <option :value="true">Capitalizar interés</option>
+              </select>
+            </div>
           </div>
         </div>
 

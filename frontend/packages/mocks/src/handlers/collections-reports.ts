@@ -281,6 +281,37 @@ export const collectionsReportHandlers = [
     const loan = db.loans.find((l) => l.id === params.loanId)
     return loan ? HttpResponse.json(statement(loan.id)) : notFound('El préstamo')
   })),
+
+  http.get('*/api/reports/productivity', secured('reports.read', () => {
+    const analysts = db.users
+      .filter((u) => u.role === 'ROLE_ANALYST' || u.role === 'ROLE_ADMIN')
+      .map((u) => {
+        const reviewed = db.applications.filter((a) => a.decidedBy === u.fullName)
+        const approved = reviewed.filter((a) => a.status === 'APROBADO' || a.status === 'DESEMBOLSADO')
+        return {
+          userId: u.id,
+          fullName: u.fullName,
+          role: 'Analista de Crédito',
+          decidedCount: reviewed.length,
+          approvedCount: approved.length,
+          rejectedCount: reviewed.length - approved.length,
+        }
+      })
+    const collectors = db.users
+      .filter((u) => u.role === 'ROLE_COLLECTOR' || u.role === 'ROLE_ADMIN')
+      .map((u) => {
+        const actions = db.actions.filter((a) => a.createdBy === u.fullName)
+        const promises = actions.filter((a) => a.actionType === 'PROMESA_DE_PAGO')
+        return {
+          userId: u.id,
+          fullName: u.fullName,
+          role: 'Gestor de Cobranza',
+          actionsCount: actions.length,
+          promisesCount: promises.length,
+        }
+      })
+    return HttpResponse.json({ analysts, collectors })
+  })),
 ]
 
 export function statement(loanId: string): AccountStatement {

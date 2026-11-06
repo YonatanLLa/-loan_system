@@ -1,50 +1,43 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   Users,
   Search,
   UserPlus,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Eye,
   Pencil,
   X,
-  ShieldCheck,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { Customer, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
+import type { Customer } from '@prestamos/api-client'
 import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 import CustomerFormSheet from '../components/CustomerFormSheet.vue'
 
 // FE-BO-06: Lista y búsqueda de clientes por documento o nombre; alta y edición.
 
-const loading = ref(false)
-const customersPage = ref<Page<Customer>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
-
-const searchQuery = ref('')
-const selectedKycStatus = ref('')
-const currentPage = ref(1)
+const {
+  loading,
+  customersPage,
+  searchQuery,
+  selectedKycStatus,
+  totalPages,
+  loadCustomers,
+  onSearch,
+  resetFilters,
+  goToPage,
+} = useCustomers()
 
 // Modal de Alta / Edición
 const isFormOpen = ref(false)
@@ -59,53 +52,6 @@ function openEdit(customer: Customer) {
   customerToEdit.value = customer
   isFormOpen.value = true
 }
-
-async function loadCustomers() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: customersPage.value.pageSize,
-    }
-    if (searchQuery.value.trim()) params.q = searchQuery.value.trim()
-    if (selectedKycStatus.value) params.kycStatus = selectedKycStatus.value
-
-    const { data } = await useApi().get<Page<Customer>>('/customers', { params })
-    customersPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar clientes', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  currentPage.value = 1
-  void loadCustomers()
-}
-
-function resetFilters() {
-  searchQuery.value = ''
-  selectedKycStatus.value = ''
-  currentPage.value = 1
-  void loadCustomers()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadCustomers()
-}
-
-const totalPages = ref(1)
-watch(
-  () => customersPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / customersPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 function onCustomerSaved() {
   void loadCustomers()

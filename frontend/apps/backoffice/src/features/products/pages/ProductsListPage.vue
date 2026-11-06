@@ -6,14 +6,9 @@ import {
   RefreshCw,
   Pencil,
   Percent,
-  Calendar,
-  Layers,
-  ShieldAlert,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
 import type { LoanProduct } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
 import { EmptyState, MoneyText, PageHeader } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -26,32 +21,15 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 
-import { useApi } from '@/app/api'
+import { useProducts } from '../composables/useProducts'
 import ProductFormSheet from '../components/ProductFormSheet.vue'
 
 // FE-BO-11 y FE-BO-12: Catálogo de productos de crédito y administración de condiciones.
 
-const loading = ref(false)
-const products = ref<LoanProduct[]>([])
-const filterStatus = ref('')
+const { loading, products, filterStatus, loadProducts } = useProducts()
 
 const isFormOpen = ref(false)
 const productToEdit = ref<LoanProduct | null>(null)
-
-async function loadProducts() {
-  loading.value = true
-  try {
-    const params: Record<string, string> = {}
-    if (filterStatus.value) params.status = filterStatus.value
-    const { data } = await useApi().get<LoanProduct[]>('/loan-products', { params })
-    products.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar productos', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
 
 function openCreate() {
   productToEdit.value = null

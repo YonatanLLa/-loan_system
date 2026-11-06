@@ -1,1 +1,5 @@
 export { adminRoutes } from './routes'
+export * from './services'
+export * from './composables'
+export { default as AddHolidayDialog } from './components/AddHolidayDialog.vue'
+export { default as AddUserDialog } from './components/AddUserDialog.vue'

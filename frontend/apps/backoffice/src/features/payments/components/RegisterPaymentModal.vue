@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { PlusCircle, CreditCard, LoaderCircle, AlertTriangle } from '@lucide/vue'
+import { ref, onMounted, watch } from 'vue'
+import { PlusCircle, LoaderCircle, AlertTriangle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { CompanyBankAccount, Loan, PaymentMethodType } from '@prestamos/api-client'
@@ -15,20 +15,24 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { usePayments } from '../composables/usePayments'
 
 // FE-BO-22: Registrar un pago identificado en el extracto (canal, cuenta, referencia, fecha).
 
 const props = defineProps<{
   open: boolean
+  initialLoanId?: string
+  initialAmount?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'registered'): void
 }>()
+
+const { getActiveLoans, getCollectionBankAccounts, registerPayment } = usePayments()
 
 const loans = ref<Loan[]>([])
 const companyAccounts = ref<CompanyBankAccount[]>([])
@@ -46,12 +50,12 @@ const errorMsg = ref<string | null>(null)
 
 async function loadData() {
   try {
-    const [loanRes, accRes] = await Promise.all([
-      useApi().get<{ items: Loan[] }>('/loans?status=VIGENTE,EN_MORA'),
-      useApi().get<CompanyBankAccount[]>('/treasury/bank-accounts'),
+    const [loanItems, accItems] = await Promise.all([
+      getActiveLoans(),
+      getCollectionBankAccounts(),
     ])
-    loans.value = loanRes.data.items
-    companyAccounts.value = accRes.data.filter((a) => a.isActive && a.isCollection)
+    loans.value = loanItems
+    companyAccounts.value = accItems
 
     if (companyAccounts.value.length > 0) {
       form.value.companyBankAccountId = companyAccounts.value[0]?.id ?? ''
@@ -72,8 +76,8 @@ const { run: submitPayment, isBusy } = useBusyAction(async () => {
 
   try {
     const idempotencyKey = newIdempotencyKey()
-    await useApi().post(
-      `/loans/${form.value.loanId}/payments`,
+    await registerPayment(
+      form.value.loanId,
       {
         amount: form.value.amount,
         method: form.value.method,
@@ -81,9 +85,7 @@ const { run: submitPayment, isBusy } = useBusyAction(async () => {
         externalReference: form.value.externalReference.trim(),
         paidAt: new Date(form.value.paidAt).toISOString(),
       },
-      {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      },
+      idempotencyKey,
     )
 
     toast.success('Pago registrado exitosamente', {
@@ -101,6 +103,17 @@ const { run: submitPayment, isBusy } = useBusyAction(async () => {
 onMounted(() => {
   void loadData()
 })
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      void loadData()
+      if (props.initialLoanId) form.value.loanId = props.initialLoanId
+      if (props.initialAmount) form.value.amount = props.initialAmount
+    }
+  },
+)
 </script>
 
 <template>

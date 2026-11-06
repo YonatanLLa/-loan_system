@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 
 // FE-BO-29: Conciliación manual de abonos no identificados con pagos pendientes.
 
@@ -30,16 +30,15 @@ const emit = defineEmits<{
   (e: 'matched'): void
 }>()
 
+const { getPendingConfirmationPayments, matchStatementLine } = useTreasury()
+
 const pendingPayments = ref<Payment[]>([])
 const selectedPaymentId = ref('')
 const errorMsg = ref<string | null>(null)
 
 async function loadPendingPayments() {
   try {
-    const { data } = await useApi().get<{ items: Payment[] }>(
-      '/payments?status=PENDING_CONFIRMATION',
-    )
-    pendingPayments.value = data.items
+    pendingPayments.value = await getPendingConfirmationPayments()
     if (pendingPayments.value.length > 0) {
       selectedPaymentId.value = pendingPayments.value[0]?.id ?? ''
     }
@@ -54,9 +53,7 @@ const { run: submitMatch, isBusy } = useBusyAction(async () => {
   errorMsg.value = null
 
   try {
-    await useApi().post(`/reconciliation/${props.statementLine.id}/match`, {
-      paymentId: selectedPaymentId.value,
-    })
+    await matchStatementLine(props.statementLine.id, selectedPaymentId.value)
 
     toast.success('Conciliación manual completada', {
       description: `El abono ${props.statementLine.operationNumber} fue emparejado con el pago exitosamente.`,

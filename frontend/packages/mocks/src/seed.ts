@@ -204,7 +204,7 @@ function seedCustomers(): void {
       kycStatus: seed.kyc,
       kycVerifiedAt: seed.kyc === 'VERIFIED' ? addDays(today(), -90 + index) + 'T14:00:00Z' : undefined,
       kycNotes: seed.kyc === 'REJECTED' ? 'Documento ilegible; la selfie no coincide con el DNI.' : undefined,
-      creditBalance: '0.00',
+      creditBalance: index === 0 ? '350.00' : '0.00',
       createdAt: addDays(today(), -120 + index * 3) + 'T10:00:00Z',
     })
     const account: CustomerBankAccount = {
@@ -462,7 +462,24 @@ function seedFlow(): void {
     { id: nextId('stm'), companyBankAccountId: 'bca-001', operationNumber: 'EXT-920001', valueDate: addDays(t, -1), amount: fromCents(nextInst.totalDue), description: 'TRANSF OP-445566 MARIA QUISPE', reconciliationStatus: 'PENDIENTE_CONCILIACION' },
     { id: nextId('stm'), companyBankAccountId: 'bca-001', operationNumber: 'EXT-920002', valueDate: addDays(t, -1), amount: '150.00', description: 'ABONO NO IDENTIFICADO J. PEREZ', reconciliationStatus: 'PENDIENTE_CONCILIACION' },
     { id: nextId('stm'), companyBankAccountId: 'bca-001', operationNumber: 'EXT-920003', valueDate: addDays(t, -2), amount: '-320.50', description: 'COMISION BANCARIA MENSUAL', reconciliationStatus: 'DESCUADRADO' },
+    { id: nextId('stm'), companyBankAccountId: 'bca-002', operationNumber: 'FND-880100', valueDate: addDays(t, -3), amount: '-15000.00', description: 'FONDEO INTERNO A CUENTA DESEMBOLSOS BCP', reconciliationStatus: 'CONCILIADO_AUTOMATICO' },
+    { id: nextId('stm'), companyBankAccountId: 'bca-001', operationNumber: 'FND-880100', valueDate: addDays(t, -3), amount: '15000.00', description: 'FONDEO RECIBIDO DESDE RECAUDADORA INTERBANK', reconciliationStatus: 'CONCILIADO_AUTOMATICO' },
   )
+
+  db.internalTransfers.push({
+    id: nextId('itr'),
+    sourceBankAccountId: 'bca-002',
+    sourceBankName: 'Interbank (**** 7782)',
+    destinationBankAccountId: 'bca-001',
+    destinationBankName: 'BCP (**** 4410)',
+    currency: 'PEN',
+    amount: '15000.00',
+    transferDate: addDays(t, -3),
+    bankOperationNumber: 'FND-880100',
+    notes: 'Barrido semanal de recaudación hacia cuenta pagadora de desembolsos',
+    createdBy: 'Diego Vargas (Operaciones)',
+    createdAt: `${addDays(t, -3)}T17:15:00Z`,
+  })
 
   db.events.push(
     { id: nextId('evt'), provider: 'yape', eventType: 'payment.confirmed', externalId: 'YP-558812', status: 'PROCESSED', retryCount: 0, createdAt: `${addDays(t, -1)}T14:02:00Z` },
@@ -470,6 +487,43 @@ function seedFlow(): void {
     { id: nextId('evt'), provider: 'bcp', eventType: 'transfer.received', externalId: 'BCP-993001', status: 'FAILED', retryCount: 2, errorDetail: 'Timeout al consultar la base de datos', createdAt: `${t}T07:10:00Z` },
     { id: nextId('evt'), provider: 'plin', eventType: 'payment.confirmed', externalId: 'PL-120044', status: 'RECEIVED', retryCount: 0, createdAt: nowIso() },
   )
+
+  db.notifications.push(
+    {
+      id: nextId('notif'),
+      customerId: 'cus-001',
+      title: 'Desembolso exitoso',
+      message: 'Tu préstamo ha sido desembolsado exitosamente en tu cuenta BCP por S/ 3,000.00.',
+      category: 'DISBURSEMENT',
+      read: true,
+      createdAt: `${addDays(t, -60)}T11:00:00Z`,
+    },
+    {
+      id: nextId('notif'),
+      customerId: 'cus-001',
+      title: 'Pago recibido',
+      message: 'Confirmamos la recepción de tu pago de S/ 250.00 mediante Yape. Tu cuota fue amortizada.',
+      category: 'PAYMENT',
+      read: false,
+      createdAt: `${addDays(t, -5)}T15:30:00Z`,
+    },
+    {
+      id: nextId('notif'),
+      customerId: 'cus-001',
+      title: 'Próximo vencimiento de cuota',
+      message: 'Te recordamos que tu cuota N° 4 vence en los próximos días. Paga a tiempo para evitar mora.',
+      category: 'LOAN',
+      read: false,
+      createdAt: `${t}T08:00:00Z`,
+    },
+  )
+
+  db.notificationPreferences.set('cus-001', {
+    emailEnabled: true,
+    whatsappEnabled: true,
+    smsEnabled: false,
+    notifyDaysBeforeDue: 3,
+  })
 }
 
 /** Vuelve a poblar la API simulada con los datos semilla (también la usan las pruebas). */

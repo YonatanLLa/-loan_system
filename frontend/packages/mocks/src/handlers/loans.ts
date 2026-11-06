@@ -124,7 +124,7 @@ export const loanHandlers = [
   http.post('*/api/loans/:id/restructure', secured<{ id: string }>('loans.read', async ({ request, params, user }) => {
     const loan = db.loans.find((l) => l.id === params.id)
     if (!loan) return notFound('El préstamo')
-    const body = await readJson<{ term: number; annualRate?: string }>(request)
+    const body = await readJson<{ term: number; annualRate?: string; graceDays?: number }>(request)
     if (!body?.term || body.term < 1) return problem(400, 'Datos inválidos', 'Indica el nuevo plazo.', { Term: ['El plazo es obligatorio'] })
     if (loan.status !== 'VIGENTE' && loan.status !== 'EN_MORA') {
       return problem(422, 'Préstamo no reestructurable', 'Solo se reestructuran préstamos vigentes o en mora.')
@@ -135,6 +135,9 @@ export const loanHandlers = [
     }
     const outstanding = outstandingPrincipal(loan)
     const rate = body.annualRate ? Number(body.annualRate) : loan.annualRate
+    if (typeof body.graceDays === 'number' && body.graceDays >= 0) {
+      loan.graceDays = body.graceDays
+    }
     const rows = buildSchedule({
       principal: outstanding,
       annualRate: rate,
@@ -172,8 +175,112 @@ export const loanHandlers = [
       })
     }
     loan.status = 'VIGENTE'
-    recordAudit({ entityName: 'loans', entityId: loan.id, action: 'RESTRUCTURE', before, after: { scheduleVersion: loan.scheduleVersion, term: body.term }, userName: user.fullName })
+    recordAudit({ entityName: 'loans', entityId: loan.id, action: 'RESTRUCTURE', before, after: { scheduleVersion: loan.scheduleVersion, term: body.term, graceDays: loan.graceDays }, userName: user.fullName })
     return HttpResponse.json(toLoanDto(loan))
+  })),
+
+  // Refinanciamiento y consolidación de varios préstamos (US-32 / FE-BO-26).
+  http.post('*/api/loans/refinance', secured('loans.read', async ({ request, user }) => {
+    const body = await readJson<{
+      customerId?: string
+      loanIds: string[]
+      term: number
+      annualRate?: string
+      graceDays?: number
+    }>(request)
+    if (!body || !Array.isArray(body.loanIds) || body.loanIds.length === 0 || !body.term || body.term < 1) {
+      return problem(400, 'Datos inválidos', 'Indica los préstamos a consolidar y el nuevo plazo.')
+    }
+    const targetLoans = db.loans.filter(
+      (l) => body.loanIds.includes(l.id) && (!body.customerId || l.customerId === body.customerId),
+    )
+    if (targetLoans.length !== body.loanIds.length) {
+      return notFound('Alguno de los préstamos seleccionados')
+    }
+    if (targetLoans.some((l) => l.status !== 'VIGENTE' && l.status !== 'EN_MORA')) {
+      return problem(422, 'Préstamo no refinanciable', 'Solo se refinancian préstamos vigentes o en mora.')
+    }
+
+    let consolidatedPrincipal = 0
+    for (const oldLoan of targetLoans) {
+      refreshLoan(oldLoan)
+      consolidatedPrincipal += outstandingPrincipal(oldLoan)
+      for (const inst of activeInstallments(oldLoan)) {
+        if (inst.status !== 'PAID') inst.status = 'CANCELLED_BY_PREPAYMENT'
+      }
+      oldLoan.status = 'PAGADO'
+    }
+
+    const baseLoan = targetLoans[0]!
+    const rate = body.annualRate ? Number(body.annualRate) : baseLoan.annualRate
+    const newLoanId = nextId('loan')
+    const newLoan = {
+      id: newLoanId,
+      applicationId: baseLoan.applicationId,
+      customerId: baseLoan.customerId,
+      productId: baseLoan.productId,
+      customerBankAccountId: baseLoan.customerBankAccountId,
+      principal: consolidatedPrincipal,
+      disbursed: consolidatedPrincipal,
+      annualRate: rate,
+      amortizationMethod: baseLoan.amortizationMethod,
+      frequency: baseLoan.frequency,
+      term: body.term,
+      graceDays: body.graceDays ?? baseLoan.graceDays,
+      periodicFee: baseLoan.periodicFee,
+      moraRatePerDay: baseLoan.moraRatePerDay,
+      moraBase: baseLoan.moraBase,
+      prepaymentPenaltyRate: baseLoan.prepaymentPenaltyRate,
+      status: 'VIGENTE' as const,
+      scheduleVersion: 1,
+      createdAt: nowIso(),
+    }
+    db.loans.unshift(newLoan)
+
+    const rows = buildSchedule({
+      principal: consolidatedPrincipal,
+      annualRate: rate,
+      term: body.term,
+      frequency: newLoan.frequency,
+      method: newLoan.amortizationMethod,
+      startDate: today(),
+      periodicFee: newLoan.periodicFee,
+      holidays: holidaySet(),
+    })
+    for (const row of rows) {
+      db.installments.push({
+        id: `${newLoan.id}-v1-${String(row.number).padStart(2, '0')}`,
+        loanId: newLoan.id,
+        scheduleVersion: 1,
+        number: row.number,
+        dueDate: row.dueDate,
+        principal: row.principal,
+        interest: row.interest,
+        fee: row.fee,
+        totalDue: row.totalDue,
+        paidPrincipal: 0,
+        paidInterest: 0,
+        paidFee: 0,
+        lateFee: 0,
+        paidLateFee: 0,
+        status: 'PENDING',
+      })
+    }
+
+    recordAudit({
+      entityName: 'loans',
+      entityId: newLoan.id,
+      action: 'CREATE',
+      after: { refinancedFrom: body.loanIds, principal: fromCents(consolidatedPrincipal), term: body.term },
+      userName: user.fullName,
+    })
+    return HttpResponse.json(
+      {
+        newLoan: toLoanDto(newLoan),
+        consolidatedLoans: body.loanIds,
+      },
+      { status: 201 },
+    )
   })),
 
   http.post('*/api/loans/:id/write-off', secured<{ id: string }>('collections.read', async ({ request, params, user }) => {

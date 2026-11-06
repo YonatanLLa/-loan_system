@@ -6,7 +6,7 @@ Implementa las rutas de `docs/REQUERIMIENTOS_BACKEND.md`. Los tipos de entrada y
 
 ## Activarla
 
-- **Desarrollo:** `VITE_USE_MOCKS=true` en `apps/*/.env.development` (ya viene activada). Con `false` las apps usan el proxy hacia el backend real (`VITE_API_PROXY_TARGET`).
+- **Desarrollo:** `VITE_USE_MOCKS=true` en `apps/*/.env.development` (ya viene activada). Con mocks activos, las rutas `/api/*` no configuradas en MSW responden `501` y nunca se reenvían al backend. Con `false` las apps usan el proxy hacia el backend real (`VITE_API_PROXY_TARGET`).
 - **Producción:** `VITE_USE_MOCKS=false`; el código de las mocks y el service worker **no entran** al build.
 - **Pruebas:** `import { server } from '@prestamos/mocks/node'` + `resetDb()` en `beforeEach` (ver `src/__tests__/api.spec.ts`).
 

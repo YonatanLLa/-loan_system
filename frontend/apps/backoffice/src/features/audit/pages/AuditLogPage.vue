@@ -16,7 +16,7 @@ import { toast } from 'vue-sonner'
 
 import type { AuditLogEntry, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, PageHeader } from '@prestamos/ui'
+import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -205,7 +205,10 @@ onMounted(async () => {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5" @submit.prevent="onSearch">
+        <form
+          class="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
+          @submit.prevent="onSearch"
+        >
           <!-- Entidad -->
           <div class="space-y-1.5">
             <label for="entity" class="text-xs font-medium text-muted-foreground">Entidad</label>
@@ -239,38 +242,25 @@ onMounted(async () => {
           <!-- Usuario -->
           <div class="space-y-1.5">
             <label for="user" class="text-xs font-medium text-muted-foreground">Usuario / IP</label>
-            <Input
-              id="user"
-              v-model="filters.user"
-              placeholder="Nombre o correo..."
-              class="h-9"
-            />
+            <Input id="user" v-model="filters.user" placeholder="Nombre o correo..." class="h-9" />
           </div>
 
           <!-- Fecha Desde -->
           <div class="space-y-1.5">
             <label for="from" class="text-xs font-medium text-muted-foreground">Desde</label>
-            <Input
-              id="from"
-              v-model="filters.from"
-              type="date"
-              class="h-9"
-            />
+            <Input id="from" v-model="filters.from" type="date" class="h-9" />
           </div>
 
           <!-- Fecha Hasta -->
           <div class="space-y-1.5">
             <label for="to" class="text-xs font-medium text-muted-foreground">Hasta</label>
-            <Input
-              id="to"
-              v-model="filters.to"
-              type="date"
-              class="h-9"
-            />
+            <Input id="to" v-model="filters.to" type="date" class="h-9" />
           </div>
 
           <!-- Botones de acción -->
-          <div class="flex items-center gap-2 sm:col-span-2 md:col-span-3 lg:col-span-5 justify-end pt-1">
+          <div
+            class="flex items-center gap-2 sm:col-span-2 md:col-span-3 lg:col-span-5 justify-end pt-1"
+          >
             <Button type="button" variant="ghost" size="sm" @click="resetFilters">
               <X class="size-4 mr-1" />
               Limpiar
@@ -302,72 +292,63 @@ onMounted(async () => {
             title="Sin eventos de auditoría"
             description="No se encontraron registros que coincidan con los criterios de búsqueda seleccionados."
           >
-            <Button variant="outline" size="sm" @click="resetFilters">
-              Restablecer filtros
-            </Button>
+            <Button variant="outline" size="sm" @click="resetFilters"> Restablecer filtros </Button>
           </EmptyState>
         </div>
 
         <!-- Lista de registros -->
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">ID</th>
-                <th class="px-4 py-3">Fecha y Hora</th>
-                <th class="px-4 py-3">Usuario / IP</th>
-                <th class="px-4 py-3">Entidad</th>
-                <th class="px-4 py-3">ID Entidad</th>
-                <th class="px-4 py-3">Acción</th>
-                <th class="px-4 py-3 text-right">Comparar</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="entry in auditPage.items"
-                :key="entry.id"
-                class="hover:bg-muted/40 transition-colors"
-              >
-                <td class="px-4 py-3 font-mono text-xs text-muted-foreground">
-                  #{{ entry.id }}
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap text-xs">
-                  {{ formatInstant(entry.createdAt) }}
-                </td>
-                <td class="px-4 py-3">
-                  <div class="font-medium text-foreground leading-tight">{{ entry.userName }}</div>
-                  <div class="text-xs font-mono text-muted-foreground">{{ entry.userIp }}</div>
-                </td>
-                <td class="px-4 py-3 font-medium">
-                  <Badge variant="outline" class="font-mono text-xs">
-                    {{ entry.entityName }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3 font-mono text-xs text-muted-foreground">
-                  {{ entry.entityId }}
-                </td>
-                <td class="px-4 py-3">
-                  <span
-                    class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold"
-                    :class="getActionBadgeVariant(entry.action)"
-                  >
-                    {{ entry.action }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="h-8 gap-1.5 text-xs"
-                    @click="openDetail(entry)"
-                  >
-                    <Eye class="size-3.5" />
-                    <span>Ver cambio</span>
-                  </Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else>
+          <TableGenerator
+            :columns="[
+              { key: 'id', label: 'ID' },
+              { key: 'createdAt', label: 'Fecha y Hora' },
+              { key: 'user', label: 'Usuario / IP' },
+              { key: 'entity', label: 'Entidad' },
+              { key: 'entityId', label: 'ID Entidad' },
+              { key: 'action', label: 'Acción' },
+              { key: 'compare', label: 'Comparar', headerClass: 'text-right' },
+            ]"
+            :rows="auditPage.items"
+            row-key="id"
+          >
+            <template #row="{ row: entry }">
+              <td class="px-4 py-3 font-mono text-xs text-muted-foreground">#{{ entry.id }}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-xs">
+                {{ formatInstant(entry.createdAt) }}
+              </td>
+              <td class="px-4 py-3">
+                <div class="font-medium text-foreground leading-tight">{{ entry.userName }}</div>
+                <div class="text-xs font-mono text-muted-foreground">{{ entry.userIp }}</div>
+              </td>
+              <td class="px-4 py-3 font-medium">
+                <Badge variant="outline" class="font-mono text-xs">
+                  {{ entry.entityName }}
+                </Badge>
+              </td>
+              <td class="px-4 py-3 font-mono text-xs text-muted-foreground">
+                {{ entry.entityId }}
+              </td>
+              <td class="px-4 py-3">
+                <span
+                  class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold"
+                  :class="getActionBadgeVariant(entry.action)"
+                >
+                  {{ entry.action }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-right">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-8 gap-1.5 text-xs"
+                  @click="openDetail(entry)"
+                >
+                  <Eye class="size-3.5" />
+                  <span>Ver cambio</span>
+                </Button>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- ── Paginación ── -->
@@ -436,7 +417,8 @@ onMounted(async () => {
           <SheetDescription class="text-xs">
             Registrado por
             <strong class="text-foreground">{{ selectedEntry?.userName }}</strong>
-            el {{ selectedEntry ? formatInstant(selectedEntry.createdAt) : '' }} desde la IP {{ selectedEntry?.userIp }}.
+            el {{ selectedEntry ? formatInstant(selectedEntry.createdAt) : '' }} desde la IP
+            {{ selectedEntry?.userIp }}.
           </SheetDescription>
         </SheetHeader>
 
@@ -472,7 +454,9 @@ onMounted(async () => {
               <!-- Estado Antes -->
               <div class="space-y-2 rounded-lg border border-border/80 bg-background p-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <span
+                    class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+                  >
                     <span class="size-2 rounded-full bg-destructive"></span>
                     Estado Anterior
                   </span>
@@ -480,13 +464,17 @@ onMounted(async () => {
                     Sin estado previo (Creación)
                   </Badge>
                 </div>
-                <pre class="max-h-80 overflow-auto rounded bg-muted/60 p-2.5 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap">{{ formatJson(selectedEntry.stateBefore) }}</pre>
+                <pre
+                  class="max-h-80 overflow-auto rounded bg-muted/60 p-2.5 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap"
+                  >{{ formatJson(selectedEntry.stateBefore) }}</pre>
               </div>
 
               <!-- Estado Después -->
               <div class="space-y-2 rounded-lg border border-border/80 bg-background p-3">
                 <div class="flex items-center justify-between">
-                  <span class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <span
+                    class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+                  >
                     <span class="size-2 rounded-full bg-success"></span>
                     Estado Posterior
                   </span>
@@ -494,15 +482,15 @@ onMounted(async () => {
                     Sin estado posterior (Eliminación)
                   </Badge>
                 </div>
-                <pre class="max-h-80 overflow-auto rounded bg-muted/60 p-2.5 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap">{{ formatJson(selectedEntry.stateAfter) }}</pre>
+                <pre
+                  class="max-h-80 overflow-auto rounded bg-muted/60 p-2.5 font-mono text-[11px] leading-relaxed text-foreground/90 whitespace-pre-wrap"
+                  >{{ formatJson(selectedEntry.stateAfter) }}</pre>
               </div>
             </div>
           </div>
 
           <div class="pt-4 border-t flex justify-end">
-            <Button variant="outline" size="sm" @click="closeDetail">
-              Cerrar visor
-            </Button>
+            <Button variant="outline" size="sm" @click="closeDetail"> Cerrar visor </Button>
           </div>
         </div>
       </SheetContent>

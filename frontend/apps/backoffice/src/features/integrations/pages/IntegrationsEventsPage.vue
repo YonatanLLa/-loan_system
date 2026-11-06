@@ -18,7 +18,7 @@ import { toast } from 'vue-sonner'
 
 import type { IntegrationEvent, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, PageHeader } from '@prestamos/ui'
+import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -95,7 +95,10 @@ function getStatusBadge(status: string) {
     case 'FAILED':
       return { label: 'Fallido', class: 'border-warning text-warning bg-warning/10' }
     case 'DEAD_LETTER':
-      return { label: 'Dead Letter (DLQ)', class: 'border-destructive text-destructive bg-destructive/10' }
+      return {
+        label: 'Dead Letter (DLQ)',
+        class: 'border-destructive text-destructive bg-destructive/10',
+      }
     default:
       return { label: status, class: 'border-border text-muted-foreground' }
   }
@@ -140,11 +143,18 @@ onMounted(() => {
       <CardContent class="p-4">
         <div class="flex flex-col sm:flex-row items-center gap-3">
           <div class="w-full sm:w-60">
-            <label class="text-[11px] font-medium text-muted-foreground block mb-1">Estado del Evento</label>
+            <label class="text-[11px] font-medium text-muted-foreground block mb-1"
+              >Estado del Evento</label
+            >
             <select
               v-model="selectedStatus"
               class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
-              @change="() => { currentPage = 1; loadEvents(); }"
+              @change="
+                () => {
+                  currentPage = 1
+                  loadEvents()
+                }
+              "
             >
               <option value="">Todos los estados</option>
               <option value="DEAD_LETTER">Solo Dead Letter (DLQ)</option>
@@ -174,84 +184,91 @@ onMounted(() => {
           />
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">ID Evento</th>
-                <th class="px-4 py-3">Proveedor</th>
-                <th class="px-4 py-3">Tipo de Evento</th>
-                <th class="px-4 py-3">External ID</th>
-                <th class="px-4 py-3">Reintentos</th>
-                <th class="px-4 py-3">Fecha</th>
-                <th class="px-4 py-3">Error / Causa en DLQ</th>
-                <th class="px-4 py-3">Estado</th>
-                <th class="px-4 py-3 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border text-xs">
-              <tr
-                v-for="ev in eventsPage.items"
-                :key="ev.id"
-                class="hover:bg-muted/40 transition-colors"
-                :class="{ 'bg-destructive/5': ev.status === 'DEAD_LETTER' }"
-              >
-                <td class="px-4 py-3 font-mono font-bold">{{ ev.id }}</td>
-                <td class="px-4 py-3 font-bold uppercase text-foreground">
-                  <Badge variant="outline" class="font-mono text-[10px]">
-                    {{ ev.provider }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3 font-mono text-muted-foreground">
-                  {{ ev.eventType }}
-                </td>
-                <td class="px-4 py-3 font-mono text-foreground font-semibold">
-                  {{ ev.externalId }}
-                </td>
-                <td class="px-4 py-3 font-mono">
-                  <span :class="ev.retryCount > 0 ? 'text-warning font-bold' : 'text-muted-foreground'">
-                    {{ ev.retryCount }} veces
-                  </span>
-                </td>
-                <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                  {{ formatInstant(ev.createdAt) }}
-                </td>
+        <div v-else>
+          <TableGenerator
+            :columns="[
+              { key: 'id', label: 'ID Evento' },
+              { key: 'provider', label: 'Proveedor' },
+              { key: 'eventType', label: 'Tipo de Evento' },
+              { key: 'externalId', label: 'External ID' },
+              { key: 'retryCount', label: 'Reintentos' },
+              { key: 'createdAt', label: 'Fecha' },
+              { key: 'error', label: 'Error / Causa en DLQ' },
+              { key: 'status', label: 'Estado' },
+              { key: 'action', label: 'Acción', headerClass: 'text-right' },
+            ]"
+            :rows="eventsPage.items"
+            row-key="id"
+            body-class="divide-y divide-border text-xs"
+            :row-class="
+              (row) => ({
+                'hover:bg-muted/40 transition-colors': true,
+                'bg-destructive/5': row.status === 'DEAD_LETTER',
+              })
+            "
+          >
+            <template #row="{ row: ev }">
+              <td class="px-4 py-3 font-mono font-bold">{{ ev.id }}</td>
+              <td class="px-4 py-3 font-bold uppercase text-foreground">
+                <Badge variant="outline" class="font-mono text-[10px]">
+                  {{ ev.provider }}
+                </Badge>
+              </td>
+              <td class="px-4 py-3 font-mono text-muted-foreground">
+                {{ ev.eventType }}
+              </td>
+              <td class="px-4 py-3 font-mono text-foreground font-semibold">
+                {{ ev.externalId }}
+              </td>
+              <td class="px-4 py-3 font-mono">
+                <span
+                  :class="ev.retryCount > 0 ? 'text-warning font-bold' : 'text-muted-foreground'"
+                >
+                  {{ ev.retryCount }} veces
+                </span>
+              </td>
+              <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                {{ formatInstant(ev.createdAt) }}
+              </td>
 
-                <!-- Detalle del Error (FE-BO-31) -->
-                <td class="px-4 py-3 max-w-xs">
-                  <div v-if="ev.errorDetail" class="text-destructive font-medium truncate" :title="ev.errorDetail">
-                    {{ ev.errorDetail }}
-                  </div>
-                  <span v-else class="text-muted-foreground italic">Sin errores reportados</span>
-                </td>
+              <!-- Detalle del Error (FE-BO-31) -->
+              <td class="px-4 py-3 max-w-xs">
+                <div
+                  v-if="ev.errorDetail"
+                  class="text-destructive font-medium truncate"
+                  :title="ev.errorDetail"
+                >
+                  {{ ev.errorDetail }}
+                </div>
+                <span v-else class="text-muted-foreground italic">Sin errores reportados</span>
+              </td>
 
-                <td class="px-4 py-3">
-                  <Badge
-                    variant="outline"
-                    class="text-[10px]"
-                    :class="getStatusBadge(ev.status).class"
-                  >
-                    {{ getStatusBadge(ev.status).label }}
-                  </Badge>
-                </td>
+              <td class="px-4 py-3">
+                <Badge
+                  variant="outline"
+                  class="text-[10px]"
+                  :class="getStatusBadge(ev.status).class"
+                >
+                  {{ getStatusBadge(ev.status).label }}
+                </Badge>
+              </td>
 
-                <td class="px-4 py-3 text-right">
-                  <!-- Botón Reintentar (FE-BO-31) -->
-                  <Button
-                    v-if="ev.status === 'DEAD_LETTER' || ev.status === 'FAILED'"
-                    size="sm"
-                    variant="outline"
-                    class="h-8 gap-1 text-xs"
-                    :disabled="retryingId === ev.id"
-                    @click="retryEvent(ev)"
-                  >
-                    <RotateCcw class="size-3.5" />
-                    <span>Reintentar</span>
-                  </Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <td class="px-4 py-3 text-right">
+                <!-- Botón Reintentar (FE-BO-31) -->
+                <Button
+                  v-if="ev.status === 'DEAD_LETTER' || ev.status === 'FAILED'"
+                  size="sm"
+                  variant="outline"
+                  class="h-8 gap-1 text-xs"
+                  :disabled="retryingId === ev.id"
+                  @click="retryEvent(ev)"
+                >
+                  <RotateCcw class="size-3.5" />
+                  <span>Reintentar</span>
+                </Button>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- Paginación -->

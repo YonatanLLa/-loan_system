@@ -16,7 +16,7 @@ import { toast } from 'vue-sonner'
 
 import type { Customer, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
@@ -204,73 +204,65 @@ onMounted(() => {
         </div>
 
         <!-- Lista -->
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">Documento</th>
-                <th class="px-4 py-3">Cliente</th>
-                <th class="px-4 py-3">Contacto</th>
-                <th class="px-4 py-3">Ingreso Neto</th>
-                <th class="px-4 py-3">Estado KYC</th>
-                <th class="px-4 py-3">Registro</th>
-                <th class="px-4 py-3 text-right">Acciones</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="customer in customersPage.items"
-                :key="customer.id"
-                class="hover:bg-muted/40 transition-colors"
-              >
-                <td class="px-4 py-3 font-mono text-xs">
-                  <span class="font-semibold text-foreground">{{ customer.docType }}:</span>
-                  {{ customer.docNumber }}
-                </td>
-                <td class="px-4 py-3">
-                  <div class="font-medium text-foreground">{{ customer.fullName }}</div>
-                  <div class="text-xs text-muted-foreground">{{ customer.occupation || customer.personType }}</div>
-                </td>
-                <td class="px-4 py-3 text-xs">
-                  <div>{{ customer.phone }}</div>
-                  <div class="text-muted-foreground truncate max-w-[180px]">{{ customer.email }}</div>
-                </td>
-                <td class="px-4 py-3 text-xs font-medium">
-                  <MoneyText :amount="customer.monthlyNetIncome" />
-                </td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="kyc" :status="customer.kycStatus" />
-                </td>
-                <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                  {{ formatInstant(customer.createdAt) }}
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <div class="flex items-center justify-end gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      class="h-8 gap-1 text-xs"
-                      as-child
-                    >
-                      <RouterLink :to="{ name: 'customer-detail', params: { id: customer.id } }">
-                        <Eye class="size-3.5" />
-                        <span>Ficha 360</span>
-                      </RouterLink>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      class="size-8 text-muted-foreground hover:text-foreground"
-                      title="Editar datos del cliente"
-                      @click="openEdit(customer)"
-                    >
-                      <Pencil class="size-3.5" />
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else>
+          <TableGenerator
+            :columns="[
+              { key: 'document', label: 'Documento' },
+              { key: 'customer', label: 'Cliente' },
+              { key: 'contact', label: 'Contacto' },
+              { key: 'income', label: 'Ingreso Neto' },
+              { key: 'kyc', label: 'Estado KYC' },
+              { key: 'createdAt', label: 'Registro' },
+              { key: 'actions', label: 'Acciones', headerClass: 'text-right' },
+            ]"
+            :rows="customersPage.items"
+            row-key="id"
+          >
+            <template #row="{ row: customer }">
+              <td class="px-4 py-3 font-mono text-xs">
+                <span class="font-semibold text-foreground">{{ customer.docType }}:</span>
+                {{ customer.docNumber }}
+              </td>
+              <td class="px-4 py-3">
+                <div class="font-medium text-foreground">{{ customer.fullName }}</div>
+                <div class="text-xs text-muted-foreground">
+                  {{ customer.occupation || customer.personType }}
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs">
+                <div>{{ customer.phone }}</div>
+                <div class="text-muted-foreground truncate max-w-[180px]">{{ customer.email }}</div>
+              </td>
+              <td class="px-4 py-3 text-xs font-medium">
+                <MoneyText :amount="customer.monthlyNetIncome" />
+              </td>
+              <td class="px-4 py-3">
+                <StatusBadge kind="kyc" :status="customer.kycStatus" />
+              </td>
+              <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                {{ formatInstant(customer.createdAt) }}
+              </td>
+              <td class="px-4 py-3 text-right">
+                <div class="flex items-center justify-end gap-1">
+                  <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
+                    <RouterLink :to="{ name: 'customer-detail', params: { id: customer.id } }">
+                      <Eye class="size-3.5" />
+                      <span>Ficha 360</span>
+                    </RouterLink>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    class="size-8 text-muted-foreground hover:text-foreground"
+                    title="Editar datos del cliente"
+                    @click="openEdit(customer)"
+                  >
+                    <Pencil class="size-3.5" />
+                  </Button>
+                </div>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- Paginación -->

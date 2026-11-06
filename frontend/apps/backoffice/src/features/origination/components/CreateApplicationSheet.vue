@@ -13,14 +13,9 @@ import {
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
-import type {
-  Customer,
-  LoanProduct,
-  PaymentFrequency,
-  Simulation,
-} from '@prestamos/api-client'
+import type { Customer, LoanProduct, PaymentFrequency, Simulation } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText } from '@prestamos/ui'
+import { MoneyText, TableGenerator } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Badge } from '@prestamos/ui/components/ui/badge'
@@ -124,7 +119,12 @@ async function runSimulation() {
 }
 
 watch(
-  [() => form.value.productId, () => form.value.amount, () => form.value.term, () => form.value.frequency],
+  [
+    () => form.value.productId,
+    () => form.value.amount,
+    () => form.value.term,
+    () => form.value.frequency,
+  ],
   () => {
     void runSimulation()
   },
@@ -176,7 +176,8 @@ onMounted(() => {
           <SheetTitle>Nueva Solicitud de Crédito</SheetTitle>
         </div>
         <SheetDescription>
-          Registro de solicitud con simulación en tiempo real y cálculo de TCEA (FE-BO-13 a FE-BO-15).
+          Registro de solicitud con simulación en tiempo real y cálculo de TCEA (FE-BO-13 a
+          FE-BO-15).
         </SheetDescription>
       </SheetHeader>
 
@@ -206,7 +207,9 @@ onMounted(() => {
                 {{ c.fullName }} ({{ c.docType }}: {{ c.docNumber }}) - KYC: {{ c.kycStatus }}
               </option>
             </select>
-            <p v-if="fieldErrors.customerid" class="text-xs text-destructive">{{ fieldErrors.customerid }}</p>
+            <p v-if="fieldErrors.customerid" class="text-xs text-destructive">
+              {{ fieldErrors.customerid }}
+            </p>
           </div>
 
           <!-- Resumen rápido del cliente seleccionado -->
@@ -274,7 +277,9 @@ onMounted(() => {
                 placeholder="3000.00"
                 :class="{ 'border-destructive': fieldErrors.amount }"
               />
-              <p v-if="fieldErrors.amount" class="text-xs text-destructive">{{ fieldErrors.amount }}</p>
+              <p v-if="fieldErrors.amount" class="text-xs text-destructive">
+                {{ fieldErrors.amount }}
+              </p>
             </div>
 
             <div class="space-y-1.5">
@@ -308,7 +313,9 @@ onMounted(() => {
         <!-- 3. Resultados del Simulador en Tiempo Real (FE-BO-13 y FE-BO-14) -->
         <div class="space-y-3 pt-4 border-t">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <h4
+              class="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"
+            >
               <Calculator class="size-4 text-primary" />
               Simulación de Cuota y Tasas
             </h4>
@@ -317,7 +324,10 @@ onMounted(() => {
             </span>
           </div>
 
-          <div v-if="simulation" class="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-4">
+          <div
+            v-if="simulation"
+            class="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-4"
+          >
             <!-- Cuota y TCEA Destacada -->
             <div class="grid grid-cols-2 gap-4 border-b border-primary/20 pb-3">
               <div>
@@ -339,7 +349,8 @@ onMounted(() => {
                   {{ (Number(simulation.summary.tcea) * 100).toFixed(2) }}%
                 </span>
                 <span class="text-[11px] text-muted-foreground block">
-                  TEA: {{ (Number(simulation.summary.tea) * 100).toFixed(2) }}% · TEM: {{ (Number(simulation.summary.tem) * 100).toFixed(2) }}%
+                  TEA: {{ (Number(simulation.summary.tea) * 100).toFixed(2) }}% · TEM:
+                  {{ (Number(simulation.summary.tem) * 100).toFixed(2) }}%
                 </span>
               </div>
             </div>
@@ -380,29 +391,36 @@ onMounted(() => {
             </div>
 
             <!-- Tabla de Cronograma Proyectado -->
-            <div v-if="showScheduleModal" class="mt-3 max-h-56 overflow-y-auto rounded-lg border bg-background text-xs">
-              <table class="w-full text-left">
-                <thead class="bg-muted/80 text-[11px] text-muted-foreground border-b sticky top-0">
-                  <tr>
-                    <th class="p-2">#</th>
-                    <th class="p-2">Vencimiento</th>
-                    <th class="p-2">Capital</th>
-                    <th class="p-2">Interés</th>
-                    <th class="p-2">Cuota</th>
-                    <th class="p-2">Saldo</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y">
-                  <tr v-for="inst in simulation.installments" :key="inst.number">
-                    <td class="p-2 font-mono">{{ inst.number }}</td>
-                    <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
-                    <td class="p-2"><MoneyText :amount="inst.principal" /></td>
-                    <td class="p-2"><MoneyText :amount="inst.interest" /></td>
-                    <td class="p-2 font-semibold"><MoneyText :amount="inst.totalDue" /></td>
-                    <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
-                  </tr>
-                </tbody>
-              </table>
+            <div
+              v-if="showScheduleModal"
+              class="mt-3 max-h-56 overflow-y-auto rounded-lg border bg-background text-xs"
+            >
+              <TableGenerator
+                :columns="[
+                  { key: 'number', label: '#' },
+                  { key: 'dueDate', label: 'Vencimiento' },
+                  { key: 'principal', label: 'Capital' },
+                  { key: 'interest', label: 'Interés' },
+                  { key: 'totalDue', label: 'Cuota' },
+                  { key: 'balance', label: 'Saldo' },
+                ]"
+                :rows="simulation.installments"
+                row-key="number"
+                table-class="w-full text-xs text-left"
+                head-class="bg-muted/80 text-[11px] text-muted-foreground border-b sticky top-0"
+                header-cell-class="p-2"
+                body-class="divide-y"
+                row-class=""
+              >
+                <template #row="{ row: inst }">
+                  <td class="p-2 font-mono">{{ inst.number }}</td>
+                  <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
+                  <td class="p-2"><MoneyText :amount="inst.principal" /></td>
+                  <td class="p-2"><MoneyText :amount="inst.interest" /></td>
+                  <td class="p-2 font-semibold"><MoneyText :amount="inst.totalDue" /></td>
+                  <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
+                </template>
+              </TableGenerator>
             </div>
           </div>
         </div>

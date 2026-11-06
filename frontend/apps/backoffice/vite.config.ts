@@ -25,12 +25,16 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
-      proxy: {
-        '/api': {
-          target: env.VITE_API_PROXY_TARGET || 'http://localhost:5000',
-          changeOrigin: true,
-        },
-      },
+      ...(env.VITE_USE_MOCKS === 'true'
+        ? {}
+        : {
+            proxy: {
+              '/api': {
+                target: env.VITE_API_PROXY_TARGET || 'http://localhost:5000',
+                changeOrigin: true,
+              },
+            },
+          }),
     },
     preview: {
       port: 4173,

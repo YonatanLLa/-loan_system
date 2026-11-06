@@ -22,15 +22,9 @@ import {
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
-import type {
-  Disbursement,
-  Installment,
-  Loan,
-  Payment,
-  Schedule,
-} from '@prestamos/api-client'
+import type { Disbursement, Installment, Loan, Payment, Schedule } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -185,7 +179,10 @@ onMounted(() => {
                 >
                   {{ loan.customerName }}
                 </RouterLink>
-                · Desembolsado el {{ loan.disbursementDate ? formatBusinessDate(loan.disbursementDate) : 'Pendiente' }}
+                · Desembolsado el
+                {{
+                  loan.disbursementDate ? formatBusinessDate(loan.disbursementDate) : 'Pendiente'
+                }}
               </p>
             </div>
 
@@ -218,15 +215,21 @@ onMounted(() => {
       <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="p-3 rounded-lg border bg-muted/30 text-xs">
           <span class="text-muted-foreground block text-[11px]">Capital Aprobado:</span>
-          <span class="font-bold text-foreground text-sm"><MoneyText :amount="loan.principal" /></span>
+          <span class="font-bold text-foreground text-sm"
+            ><MoneyText :amount="loan.principal"
+          /></span>
         </div>
         <div class="p-3 rounded-lg border bg-muted/30 text-xs">
           <span class="text-muted-foreground block text-[11px]">Monto Desembolsado:</span>
-          <span class="font-bold text-foreground text-sm"><MoneyText :amount="loan.disbursedAmount" /></span>
+          <span class="font-bold text-foreground text-sm"
+            ><MoneyText :amount="loan.disbursedAmount"
+          /></span>
         </div>
         <div class="p-3 rounded-lg border bg-muted/30 text-xs">
           <span class="text-muted-foreground block text-[11px]">Saldo Insoluto:</span>
-          <span class="font-bold text-primary text-sm"><MoneyText :amount="loan.outstandingPrincipal" /></span>
+          <span class="font-bold text-primary text-sm"
+            ><MoneyText :amount="loan.outstandingPrincipal"
+          /></span>
         </div>
         <div class="p-3 rounded-lg border bg-muted/30 text-xs">
           <span class="text-muted-foreground block text-[11px]">Total Amortizado:</span>
@@ -327,53 +330,70 @@ onMounted(() => {
 
           <Card>
             <CardContent class="p-0">
-              <div v-if="!schedule || schedule.installments.length === 0" class="p-8 text-center text-xs text-muted-foreground">
+              <div
+                v-if="!schedule || schedule.installments.length === 0"
+                class="p-8 text-center text-xs text-muted-foreground"
+              >
                 No hay cronograma disponible para esta versión.
               </div>
-              <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                  <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                    <tr>
-                      <th class="px-3 py-2.5">#</th>
-                      <th class="px-3 py-2.5">Vencimiento</th>
-                      <th class="px-3 py-2.5">Capital</th>
-                      <th class="px-3 py-2.5">Interés</th>
-                      <th class="px-3 py-2.5">Cargos</th>
-                      <th class="px-3 py-2.5">Total Cuota</th>
-                      <th class="px-3 py-2.5">Pagado</th>
-                      <th class="px-3 py-2.5">Mora</th>
-                      <th class="px-3 py-2.5">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border text-xs">
-                    <tr
-                      v-for="inst in schedule.installments"
-                      :key="inst.number"
-                      class="hover:bg-muted/40 transition-colors"
-                      :class="{ 'bg-destructive/5': inst.status === 'OVERDUE' }"
-                    >
-                      <td class="px-3 py-2.5 font-mono font-semibold">{{ inst.number }}</td>
-                      <td class="px-3 py-2.5 whitespace-nowrap">{{ formatBusinessDate(inst.dueDate) }}</td>
-                      <td class="px-3 py-2.5 font-mono"><MoneyText :amount="inst.principal" /></td>
-                      <td class="px-3 py-2.5 font-mono"><MoneyText :amount="inst.interest" /></td>
-                      <td class="px-3 py-2.5 font-mono text-muted-foreground"><MoneyText :amount="inst.fee" /></td>
-                      <td class="px-3 py-2.5 font-mono font-bold text-foreground">
-                        <MoneyText :amount="inst.totalDue" />
-                      </td>
-                      <td class="px-3 py-2.5 font-mono text-success">
-                        <MoneyText :amount="inst.paidPrincipal" />
-                      </td>
-                      <td class="px-3 py-2.5 font-mono">
-                        <span :class="Number(inst.lateFee) > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'">
-                          <MoneyText :amount="inst.lateFee" />
-                        </span>
-                      </td>
-                      <td class="px-3 py-2.5">
-                        <StatusBadge kind="installment" :status="inst.status" />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div v-else>
+                <TableGenerator
+                  :columns="[
+                    { key: 'number', label: '#' },
+                    { key: 'dueDate', label: 'Vencimiento' },
+                    { key: 'principal', label: 'Capital' },
+                    { key: 'interest', label: 'Interés' },
+                    { key: 'fee', label: 'Cargos' },
+                    { key: 'totalDue', label: 'Total Cuota' },
+                    { key: 'paid', label: 'Pagado' },
+                    { key: 'lateFee', label: 'Mora' },
+                    { key: 'status', label: 'Estado' },
+                  ]"
+                  :rows="schedule.installments"
+                  row-key="number"
+                  table-class="w-full text-xs text-left"
+                  head-class="border-b bg-muted/60 text-xs font-medium text-muted-foreground"
+                  header-cell-class="px-3 py-2.5"
+                  body-class="divide-y divide-border text-xs"
+                  :row-class="
+                    (row) => ({
+                      'hover:bg-muted/40 transition-colors': true,
+                      'bg-destructive/5': row.status === 'OVERDUE',
+                    })
+                  "
+                >
+                  <template #row="{ row: inst }">
+                    <td class="px-3 py-2.5 font-mono font-semibold">{{ inst.number }}</td>
+                    <td class="px-3 py-2.5 whitespace-nowrap">
+                      {{ formatBusinessDate(inst.dueDate) }}
+                    </td>
+                    <td class="px-3 py-2.5 font-mono"><MoneyText :amount="inst.principal" /></td>
+                    <td class="px-3 py-2.5 font-mono"><MoneyText :amount="inst.interest" /></td>
+                    <td class="px-3 py-2.5 font-mono text-muted-foreground">
+                      <MoneyText :amount="inst.fee" />
+                    </td>
+                    <td class="px-3 py-2.5 font-mono font-bold text-foreground">
+                      <MoneyText :amount="inst.totalDue" />
+                    </td>
+                    <td class="px-3 py-2.5 font-mono text-success">
+                      <MoneyText :amount="inst.paidPrincipal" />
+                    </td>
+                    <td class="px-3 py-2.5 font-mono">
+                      <span
+                        :class="
+                          Number(inst.lateFee) > 0
+                            ? 'text-destructive font-bold'
+                            : 'text-muted-foreground'
+                        "
+                      >
+                        <MoneyText :amount="inst.lateFee" />
+                      </span>
+                    </td>
+                    <td class="px-3 py-2.5">
+                      <StatusBadge kind="installment" :status="inst.status" />
+                    </td>
+                  </template>
+                </TableGenerator>
               </div>
             </CardContent>
           </Card>
@@ -391,57 +411,70 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div v-if="payments.length === 0" class="p-8 text-center text-xs text-muted-foreground">
+              <div
+                v-if="payments.length === 0"
+                class="p-8 text-center text-xs text-muted-foreground"
+              >
                 No se han registrado pagos para este préstamo.
               </div>
-              <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                  <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                    <tr>
-                      <th class="px-4 py-3">ID Pago</th>
-                      <th class="px-4 py-3">Fecha Efectiva</th>
-                      <th class="px-4 py-3">Monto Total</th>
-                      <th class="px-4 py-3">Medio de Pago</th>
-                      <th class="px-4 py-3">Referencia / Recibo</th>
-                      <th class="px-4 py-3">Imputación a Cuotas</th>
-                      <th class="px-4 py-3">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border text-xs">
-                    <tr v-for="pay in payments" :key="pay.id" class="hover:bg-muted/40">
-                      <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
-                      <td class="px-4 py-3 whitespace-nowrap">{{ formatInstant(pay.paidAt) }}</td>
-                      <td class="px-4 py-3 font-mono font-bold text-foreground">
-                        <MoneyText :amount="pay.amount" />
-                      </td>
-                      <td class="px-4 py-3 font-medium">{{ pay.method }}</td>
-                      <td class="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-                        {{ pay.receiptNumber || pay.externalReference || '—' }}
-                      </td>
-                      <!-- Desglose de imputación en cascada -->
-                      <td class="px-4 py-3">
-                        <div v-if="pay.allocations.length === 0" class="text-muted-foreground">
-                          Sin imputaciones
-                        </div>
-                        <div v-else class="space-y-1">
-                          <div
-                            v-for="alloc in pay.allocations"
-                            :key="alloc.installmentId"
-                            class="text-[11px] font-mono text-muted-foreground"
+              <div v-else>
+                <TableGenerator
+                  :columns="[
+                    { key: 'id', label: 'ID Pago' },
+                    { key: 'paidAt', label: 'Fecha Efectiva' },
+                    { key: 'amount', label: 'Monto Total' },
+                    { key: 'method', label: 'Medio de Pago' },
+                    { key: 'reference', label: 'Referencia / Recibo' },
+                    { key: 'allocations', label: 'Imputación a Cuotas' },
+                    { key: 'status', label: 'Estado' },
+                  ]"
+                  :rows="payments"
+                  row-key="id"
+                  body-class="divide-y divide-border text-xs"
+                >
+                  <template #row="{ row: pay }">
+                    <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
+                    <td class="px-4 py-3 whitespace-nowrap">{{ formatInstant(pay.paidAt) }}</td>
+                    <td class="px-4 py-3 font-mono font-bold text-foreground">
+                      <MoneyText :amount="pay.amount" />
+                    </td>
+                    <td class="px-4 py-3 font-medium">{{ pay.method }}</td>
+                    <td class="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+                      {{ pay.receiptNumber || pay.externalReference || '—' }}
+                    </td>
+                    <!-- Desglose de imputación en cascada -->
+                    <td class="px-4 py-3">
+                      <div v-if="pay.allocations.length === 0" class="text-muted-foreground">
+                        Sin imputaciones
+                      </div>
+                      <div v-else class="space-y-1">
+                        <div
+                          v-for="alloc in pay.allocations"
+                          :key="alloc.installmentId"
+                          class="text-[11px] font-mono text-muted-foreground"
+                        >
+                          Cuota #{{ alloc.installmentNumber }}:
+                          <span
+                            v-if="Number(alloc.toMora) > 0"
+                            class="text-destructive font-semibold"
+                            >Mora S/ {{ alloc.toMora }} ·</span
                           >
-                            Cuota #{{ alloc.installmentNumber }}:
-                            <span v-if="Number(alloc.toMora) > 0" class="text-destructive font-semibold">Mora S/ {{ alloc.toMora }} ·</span>
-                            <span v-if="Number(alloc.toInterest) > 0">Int S/ {{ alloc.toInterest }} ·</span>
-                            <span v-if="Number(alloc.toPrincipal) > 0" class="text-foreground font-semibold">Cap S/ {{ alloc.toPrincipal }}</span>
-                          </div>
+                          <span v-if="Number(alloc.toInterest) > 0"
+                            >Int S/ {{ alloc.toInterest }} ·</span
+                          >
+                          <span
+                            v-if="Number(alloc.toPrincipal) > 0"
+                            class="text-foreground font-semibold"
+                            >Cap S/ {{ alloc.toPrincipal }}</span
+                          >
                         </div>
-                      </td>
-                      <td class="px-4 py-3">
-                        <StatusBadge kind="payment" :status="pay.status" />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3">
+                      <StatusBadge kind="payment" :status="pay.status" />
+                    </td>
+                  </template>
+                </TableGenerator>
               </div>
             </CardContent>
           </Card>
@@ -459,11 +492,14 @@ onMounted(() => {
                   <FileCheck2 class="size-4 text-primary" />
                   Estado de Transferencia Bancaria
                 </CardTitle>
-                <CardDescription>Seguimiento de la orden de desembolso interbancario.</CardDescription>
+                <CardDescription
+                  >Seguimiento de la orden de desembolso interbancario.</CardDescription
+                >
               </CardHeader>
               <CardContent class="space-y-4 text-xs">
                 <div v-if="!disbursement" class="p-4 rounded-lg bg-muted/40 text-muted-foreground">
-                  El desembolso se encuentra en proceso o la transferencia fue ejecutada de forma directa.
+                  El desembolso se encuentra en proceso o la transferencia fue ejecutada de forma
+                  directa.
                 </div>
                 <div v-else class="space-y-3">
                   <div class="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
@@ -471,19 +507,28 @@ onMounted(() => {
                     <StatusBadge kind="disbursement" :status="disbursement.status" />
                   </div>
 
-                  <div v-if="disbursement.status === 'FAILED'" class="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive space-y-1">
+                  <div
+                    v-if="disbursement.status === 'FAILED'"
+                    class="p-3 rounded-lg border border-destructive/40 bg-destructive/10 text-destructive space-y-1"
+                  >
                     <span class="font-bold flex items-center gap-1.5">
                       <AlertTriangle class="size-4" /> Motivo del Rechazo Bancario:
                     </span>
                     <p class="text-xs">
-                      [{{ disbursement.bankResponseCode }}] {{ disbursement.bankResponseMessage || 'Cuenta destino bloqueada o inexistente.' }}
+                      [{{ disbursement.bankResponseCode }}]
+                      {{
+                        disbursement.bankResponseMessage ||
+                        'Cuenta destino bloqueada o inexistente.'
+                      }}
                     </p>
                   </div>
 
                   <div class="space-y-2 text-muted-foreground">
                     <div class="flex justify-between">
                       <span>Monto Transferido:</span>
-                      <span class="font-bold text-foreground"><MoneyText :amount="disbursement.amount" /></span>
+                      <span class="font-bold text-foreground"
+                        ><MoneyText :amount="disbursement.amount"
+                      /></span>
                     </div>
                     <div class="flex justify-between">
                       <span>Canal:</span>
@@ -491,11 +536,15 @@ onMounted(() => {
                     </div>
                     <div class="flex justify-between">
                       <span>Nº de Operación:</span>
-                      <span class="font-mono text-foreground">{{ disbursement.operationNumber || 'Generando...' }}</span>
+                      <span class="font-mono text-foreground">{{
+                        disbursement.operationNumber || 'Generando...'
+                      }}</span>
                     </div>
                     <div class="flex justify-between">
                       <span>Iniciado:</span>
-                      <span class="text-foreground">{{ formatInstant(disbursement.initiatedAt) }}</span>
+                      <span class="text-foreground">{{
+                        formatInstant(disbursement.initiatedAt)
+                      }}</span>
                     </div>
                   </div>
                 </div>
@@ -509,7 +558,9 @@ onMounted(() => {
                   <Lock class="size-4 text-primary" />
                   Evidencia de Aceptación Digital
                 </CardTitle>
-                <CardDescription>Auditoría de consentimiento y firma electrónica del contrato.</CardDescription>
+                <CardDescription
+                  >Auditoría de consentimiento y firma electrónica del contrato.</CardDescription
+                >
               </CardHeader>
               <CardContent class="space-y-4 text-xs">
                 <div class="p-3 rounded-lg border bg-success/5 border-success/30 space-y-2">
@@ -518,18 +569,23 @@ onMounted(() => {
                     Contrato y Pagaré Aceptados Electrónicamente
                   </div>
                   <p class="text-[11px] text-muted-foreground">
-                    El cliente validó y aceptó las cláusulas contractuales mediante código de verificación OTP antes del desembolso (Ley 27269).
+                    El cliente validó y aceptó las cláusulas contractuales mediante código de
+                    verificación OTP antes del desembolso (Ley 27269).
                   </p>
                 </div>
 
                 <div class="space-y-2 text-muted-foreground">
                   <div class="flex justify-between py-1 border-b">
                     <span>Método de Firma:</span>
-                    <span class="font-semibold text-foreground">OTP SMS / WhatsApp con PIN Digital</span>
+                    <span class="font-semibold text-foreground"
+                      >OTP SMS / WhatsApp con PIN Digital</span
+                    >
                   </div>
                   <div class="flex justify-between py-1 border-b">
                     <span>Fecha y Hora de Firma:</span>
-                    <span class="font-medium text-foreground">{{ formatInstant(loan.createdAt) }}</span>
+                    <span class="font-medium text-foreground">{{
+                      formatInstant(loan.createdAt)
+                    }}</span>
                   </div>
                   <div class="flex justify-between py-1 border-b">
                     <span>Dirección IP:</span>

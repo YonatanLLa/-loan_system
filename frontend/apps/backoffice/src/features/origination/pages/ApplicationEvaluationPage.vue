@@ -25,7 +25,7 @@ import type {
   Simulation,
 } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -124,7 +124,8 @@ async function submitDecision() {
       return
     }
     if (appAmt >= reqAmt) {
-      dictamenError.value = 'En aprobación con condiciones, el monto aprobado debe ser menor al solicitado.'
+      dictamenError.value =
+        'En aprobación con condiciones, el monto aprobado debe ser menor al solicitado.'
       return
     }
   }
@@ -197,7 +198,8 @@ onMounted(() => {
               </div>
               <p class="text-xs text-muted-foreground">
                 Ingresada el {{ formatInstant(application.createdAt) }} vía canal
-                <strong class="text-foreground">{{ application.originatedFrom }}</strong>.
+                <strong class="text-foreground">{{ application.originatedFrom }}</strong
+                >.
               </p>
             </div>
 
@@ -281,7 +283,9 @@ onMounted(() => {
 
                 <!-- Dictamen Motor -->
                 <div class="rounded-lg border p-4 bg-muted/20 space-y-1">
-                  <span class="text-xs text-muted-foreground block">Recomendación del Algoritmo:</span>
+                  <span class="text-xs text-muted-foreground block"
+                    >Recomendación del Algoritmo:</span
+                  >
                   <div class="pt-1">
                     <Badge
                       variant="outline"
@@ -317,7 +321,9 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="space-y-4">
-              <div class="rounded-xl border border-primary/40 bg-primary/5 p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
+              <div
+                class="rounded-xl border border-primary/40 bg-primary/5 p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center"
+              >
                 <div>
                   <span class="text-xs text-muted-foreground block">Cuota Mensual:</span>
                   <span class="text-lg font-bold text-foreground">
@@ -347,28 +353,32 @@ onMounted(() => {
 
               <!-- Cronograma Proyectado de Cuotas -->
               <div class="border rounded-lg max-h-56 overflow-y-auto text-xs">
-                <table class="w-full text-left">
-                  <thead class="bg-muted text-[11px] text-muted-foreground border-b sticky top-0">
-                    <tr>
-                      <th class="p-2">#</th>
-                      <th class="p-2">Vencimiento</th>
-                      <th class="p-2">Capital</th>
-                      <th class="p-2">Interés</th>
-                      <th class="p-2">Cuota</th>
-                      <th class="p-2">Saldo</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y">
-                    <tr v-for="inst in simulation.installments" :key="inst.number">
-                      <td class="p-2 font-mono">{{ inst.number }}</td>
-                      <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
-                      <td class="p-2"><MoneyText :amount="inst.principal" /></td>
-                      <td class="p-2"><MoneyText :amount="inst.interest" /></td>
-                      <td class="p-2 font-bold"><MoneyText :amount="inst.totalDue" /></td>
-                      <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
-                    </tr>
-                  </tbody>
-                </table>
+                <TableGenerator
+                  :columns="[
+                    { key: 'number', label: '#' },
+                    { key: 'dueDate', label: 'Vencimiento' },
+                    { key: 'principal', label: 'Capital' },
+                    { key: 'interest', label: 'Interés' },
+                    { key: 'totalDue', label: 'Cuota' },
+                    { key: 'balance', label: 'Saldo' },
+                  ]"
+                  :rows="simulation.installments"
+                  row-key="number"
+                  table-class="w-full text-xs text-left"
+                  head-class="bg-muted text-[11px] text-muted-foreground border-b sticky top-0"
+                  header-cell-class="p-2"
+                  body-class="divide-y"
+                  row-class=""
+                >
+                  <template #row="{ row: inst }">
+                    <td class="p-2 font-mono">{{ inst.number }}</td>
+                    <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
+                    <td class="p-2"><MoneyText :amount="inst.principal" /></td>
+                    <td class="p-2"><MoneyText :amount="inst.interest" /></td>
+                    <td class="p-2 font-bold"><MoneyText :amount="inst.totalDue" /></td>
+                    <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
+                  </template>
+                </TableGenerator>
               </div>
             </CardContent>
           </Card>
@@ -444,13 +454,16 @@ onMounted(() => {
                   </span>
                 </div>
                 <div class="pt-2 border-t">
-                  <span class="text-muted-foreground block text-[11px] mb-1">Notas del Dictamen:</span>
+                  <span class="text-muted-foreground block text-[11px] mb-1"
+                    >Notas del Dictamen:</span
+                  >
                   <p class="font-medium text-foreground bg-background p-2 rounded border">
                     {{ application.decisionNotes || 'Sin notas registradas.' }}
                   </p>
                 </div>
                 <div class="text-[11px] text-muted-foreground pt-1">
-                  Dictaminado por {{ application.decidedBy }} el {{ application.decidedAt ? formatInstant(application.decidedAt) : '' }}
+                  Dictaminado por {{ application.decidedBy }} el
+                  {{ application.decidedAt ? formatInstant(application.decidedAt) : '' }}
                 </div>
               </div>
             </CardContent>
@@ -469,25 +482,52 @@ onMounted(() => {
                   <div class="space-y-1.5">
                     <label
                       class="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium"
-                      :class="decision === 'APROBADO' ? 'border-success bg-success/10 text-success' : 'hover:bg-muted'"
+                      :class="
+                        decision === 'APROBADO'
+                          ? 'border-success bg-success/10 text-success'
+                          : 'hover:bg-muted'
+                      "
                     >
-                      <input v-model="decision" type="radio" value="APROBADO" class="size-4 text-success" />
+                      <input
+                        v-model="decision"
+                        type="radio"
+                        value="APROBADO"
+                        class="size-4 text-success"
+                      />
                       Aprobar Solicitud (100% del monto)
                     </label>
 
                     <label
                       class="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium"
-                      :class="decision === 'APROBADO_CON_CONDICIONES' ? 'border-warning bg-warning/10 text-warning' : 'hover:bg-muted'"
+                      :class="
+                        decision === 'APROBADO_CON_CONDICIONES'
+                          ? 'border-warning bg-warning/10 text-warning'
+                          : 'hover:bg-muted'
+                      "
                     >
-                      <input v-model="decision" type="radio" value="APROBADO_CON_CONDICIONES" class="size-4 text-warning" />
+                      <input
+                        v-model="decision"
+                        type="radio"
+                        value="APROBADO_CON_CONDICIONES"
+                        class="size-4 text-warning"
+                      />
                       Aprobar con Condiciones (Monto Reducido)
                     </label>
 
                     <label
                       class="flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs font-medium"
-                      :class="decision === 'RECHAZADO' ? 'border-destructive bg-destructive/10 text-destructive' : 'hover:bg-muted'"
+                      :class="
+                        decision === 'RECHAZADO'
+                          ? 'border-destructive bg-destructive/10 text-destructive'
+                          : 'hover:bg-muted'
+                      "
                     >
-                      <input v-model="decision" type="radio" value="RECHAZADO" class="size-4 text-destructive" />
+                      <input
+                        v-model="decision"
+                        type="radio"
+                        value="RECHAZADO"
+                        class="size-4 text-destructive"
+                      />
                       Rechazar Solicitud
                     </label>
                   </div>
@@ -495,14 +535,14 @@ onMounted(() => {
 
                 <!-- Monto Aprobado si es con condiciones -->
                 <div v-if="decision === 'APROBADO_CON_CONDICIONES'" class="space-y-1.5 pt-2">
-                  <label for="approvedAmount" class="text-xs font-medium">Monto Aprobado (S/)</label>
-                  <Input
-                    id="approvedAmount"
-                    v-model="approvedAmount"
-                    placeholder="Ej. 2500.00"
-                  />
+                  <label for="approvedAmount" class="text-xs font-medium"
+                    >Monto Aprobado (S/)</label
+                  >
+                  <Input id="approvedAmount" v-model="approvedAmount" placeholder="Ej. 2500.00" />
                   <p class="text-[11px] text-muted-foreground">
-                    Debe ser estrictamente menor al solicitado (<MoneyText :amount="application.requestedAmount" />).
+                    Debe ser estrictamente menor al solicitado (<MoneyText
+                      :amount="application.requestedAmount"
+                    />).
                   </p>
                 </div>
 

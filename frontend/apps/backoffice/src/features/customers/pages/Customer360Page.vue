@@ -30,7 +30,7 @@ import { toast } from 'vue-sonner'
 
 import type { Customer360, CustomerBankAccount, KycStatus } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -157,8 +157,9 @@ onMounted(() => {
         </AlertTitle>
         <AlertDescription class="text-xs mt-1">
           El cliente presenta préstamos con cuotas vencidas y un atraso máximo de
-          <strong class="font-bold underline">{{ customer.maxDaysLate }} días</strong>.
-          La originación de nuevos créditos se encuentra bloqueada por política de riesgo hasta regularizar la cartera.
+          <strong class="font-bold underline">{{ customer.maxDaysLate }} días</strong>. La
+          originación de nuevos créditos se encuentra bloqueada por política de riesgo hasta
+          regularizar la cartera.
         </AlertDescription>
       </Alert>
 
@@ -195,7 +196,9 @@ onMounted(() => {
           </div>
 
           <!-- Metadatos de contacto y empleo -->
-          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t text-xs">
+          <div
+            class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-4 border-t text-xs"
+          >
             <div class="flex items-center gap-2 text-muted-foreground">
               <Phone class="size-4 text-primary shrink-0" />
               <span class="text-foreground font-medium">{{ customer.phone }}</span>
@@ -212,7 +215,12 @@ onMounted(() => {
             </div>
             <div class="flex items-center gap-2 text-muted-foreground">
               <Calendar class="size-4 text-primary shrink-0" />
-              <span>Nac: <strong class="text-foreground">{{ formatBusinessDate(customer.birthDate) }}</strong></span>
+              <span
+                >Nac:
+                <strong class="text-foreground">{{
+                  formatBusinessDate(customer.birthDate)
+                }}</strong></span
+              >
             </div>
           </div>
         </CardContent>
@@ -360,7 +368,9 @@ onMounted(() => {
               <CardContent class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <!-- DNI Anverso -->
                 <div class="border rounded-lg p-3 text-center space-y-2 bg-muted/20">
-                  <div class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono">
+                  <div
+                    class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono"
+                  >
                     [ DNI ANVERSO ]
                   </div>
                   <span class="text-xs font-semibold block">DNI Frontal</span>
@@ -369,7 +379,9 @@ onMounted(() => {
 
                 <!-- DNI Reverso -->
                 <div class="border rounded-lg p-3 text-center space-y-2 bg-muted/20">
-                  <div class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono">
+                  <div
+                    class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono"
+                  >
                     [ DNI REVERSO ]
                   </div>
                   <span class="text-xs font-semibold block">DNI Reverso</span>
@@ -378,7 +390,9 @@ onMounted(() => {
 
                 <!-- Selfie con prueba de vida -->
                 <div class="border rounded-lg p-3 text-center space-y-2 bg-muted/20">
-                  <div class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono">
+                  <div
+                    class="h-32 bg-muted rounded flex items-center justify-center border border-dashed text-muted-foreground text-xs font-mono"
+                  >
                     [ SELFIE LIVENESS ]
                   </div>
                   <span class="text-xs font-semibold block">Selfie con Prueba de Vida</span>
@@ -398,34 +412,53 @@ onMounted(() => {
               </CardHeader>
               <CardContent class="space-y-4 text-xs">
                 <!-- Check 1: Reniec -->
-                <div class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20">
+                <div
+                  class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20"
+                >
                   <div>
-                    <span class="font-semibold text-foreground block">Validación Reniec / Identidad</span>
+                    <span class="font-semibold text-foreground block"
+                      >Validación Reniec / Identidad</span
+                    >
                     <span class="text-muted-foreground">Nombres y DNI coincidentes</span>
                   </div>
-                  <Badge variant="outline" class="border-success text-success bg-success/10 text-[10px]">
+                  <Badge
+                    variant="outline"
+                    class="border-success text-success bg-success/10 text-[10px]"
+                  >
                     APROBADO
                   </Badge>
                 </div>
 
                 <!-- Check 2: Biometría -->
-                <div class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20">
+                <div
+                  class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20"
+                >
                   <div>
                     <span class="font-semibold text-foreground block">Biometría Facial</span>
                     <span class="text-muted-foreground">Coincidencia DNI vs Selfie: 98.4%</span>
                   </div>
-                  <Badge variant="outline" class="border-success text-success bg-success/10 text-[10px]">
+                  <Badge
+                    variant="outline"
+                    class="border-success text-success bg-success/10 text-[10px]"
+                  >
                     APROBADO
                   </Badge>
                 </div>
 
                 <!-- Check 3: PEP / AML -->
-                <div class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20">
+                <div
+                  class="flex items-start justify-between gap-2 p-2.5 rounded-lg border bg-success/5 border-success/20"
+                >
                   <div>
-                    <span class="font-semibold text-foreground block">Listas PEP & AML / Lavado</span>
+                    <span class="font-semibold text-foreground block"
+                      >Listas PEP & AML / Lavado</span
+                    >
                     <span class="text-muted-foreground">Búsqueda en listas OFAC y SBS</span>
                   </div>
-                  <Badge variant="outline" class="border-success text-success bg-success/10 text-[10px]">
+                  <Badge
+                    variant="outline"
+                    class="border-success text-success bg-success/10 text-[10px]"
+                  >
                     SIN RIESGO
                   </Badge>
                 </div>
@@ -436,8 +469,13 @@ onMounted(() => {
                     <span class="text-muted-foreground">Estado del Expediente:</span>
                     <StatusBadge kind="kyc" :status="customer.kycStatus" />
                   </div>
-                  <div v-if="customer.kycNotes" class="p-2.5 bg-muted rounded text-xs text-foreground">
-                    <span class="font-semibold block text-[11px] text-muted-foreground">Observaciones:</span>
+                  <div
+                    v-if="customer.kycNotes"
+                    class="p-2.5 bg-muted rounded text-xs text-foreground"
+                  >
+                    <span class="font-semibold block text-[11px] text-muted-foreground"
+                      >Observaciones:</span
+                    >
                     {{ customer.kycNotes }}
                   </div>
                   <Button size="sm" class="w-full mt-2" @click="isKycModalOpen = true">
@@ -476,18 +514,29 @@ onMounted(() => {
               <CardHeader class="pb-2">
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2">
-                    <Building2 v-if="acc.accountType !== 'BILLETERA_DIGITAL'" class="size-4 text-primary" />
+                    <Building2
+                      v-if="acc.accountType !== 'BILLETERA_DIGITAL'"
+                      class="size-4 text-primary"
+                    />
                     <Smartphone v-else class="size-4 text-primary" />
                     <CardTitle class="text-sm font-semibold">{{ acc.bankName }}</CardTitle>
                   </div>
                   <div class="flex items-center gap-1.5">
-                    <Badge v-if="acc.isPrimary" variant="outline" class="border-primary text-primary bg-primary/10 text-[10px]">
+                    <Badge
+                      v-if="acc.isPrimary"
+                      variant="outline"
+                      class="border-primary text-primary bg-primary/10 text-[10px]"
+                    >
                       <Star class="size-2.5 mr-1 fill-primary" />
                       Primaria
                     </Badge>
                     <Badge
                       variant="outline"
-                      :class="acc.isVerified ? 'border-success text-success bg-success/10' : 'border-warning text-warning bg-warning/10'"
+                      :class="
+                        acc.isVerified
+                          ? 'border-success text-success bg-success/10'
+                          : 'border-warning text-warning bg-warning/10'
+                      "
                       class="text-[10px]"
                     >
                       {{ acc.isVerified ? 'Verificada' : 'Por Verificar' }}
@@ -499,11 +548,15 @@ onMounted(() => {
                 </CardDescription>
               </CardHeader>
               <CardContent class="space-y-3 pt-1">
-                <div class="rounded bg-muted/40 p-2.5 font-mono text-xs flex justify-between items-center">
+                <div
+                  class="rounded bg-muted/40 p-2.5 font-mono text-xs flex justify-between items-center"
+                >
                   <span class="text-muted-foreground">Identificador:</span>
                   <span class="font-bold text-foreground">
                     {{ acc.accountNumberMasked }}
-                    <span v-if="acc.phoneWallet" class="text-xs font-normal text-muted-foreground">({{ acc.phoneWallet }})</span>
+                    <span v-if="acc.phoneWallet" class="text-xs font-normal text-muted-foreground"
+                      >({{ acc.phoneWallet }})</span
+                    >
                   </span>
                 </div>
 
@@ -549,56 +602,62 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div v-if="customer.loans.length === 0" class="p-8 text-center text-xs text-muted-foreground">
+              <div
+                v-if="customer.loans.length === 0"
+                class="p-8 text-center text-xs text-muted-foreground"
+              >
                 El cliente no cuenta con préstamos registrados.
               </div>
-              <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                  <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-                    <tr>
-                      <th class="px-4 py-3">Código</th>
-                      <th class="px-4 py-3">Producto</th>
-                      <th class="px-4 py-3">Monto Capital</th>
-                      <th class="px-4 py-3">Saldo Insoluto</th>
-                      <th class="px-4 py-3">Próximo Vencimiento</th>
-                      <th class="px-4 py-3">Días Atraso</th>
-                      <th class="px-4 py-3">Estado</th>
-                      <th class="px-4 py-3 text-right">Ver</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border">
-                    <tr v-for="loan in customer.loans" :key="loan.id" class="hover:bg-muted/40">
-                      <td class="px-4 py-3 font-mono text-xs font-semibold">
-                        {{ loan.id }}
-                      </td>
-                      <td class="px-4 py-3 font-medium">{{ loan.productName }}</td>
-                      <td class="px-4 py-3 font-mono text-xs">
-                        <MoneyText :amount="loan.principal" />
-                      </td>
-                      <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                        <MoneyText :amount="loan.outstandingPrincipal" />
-                      </td>
-                      <td class="px-4 py-3 text-xs text-muted-foreground">
-                        {{ loan.nextDueDate ? formatBusinessDate(loan.nextDueDate) : '—' }}
-                      </td>
-                      <td class="px-4 py-3 text-xs font-semibold">
-                        <span :class="loan.daysLate > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'">
-                          {{ loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día' }}
-                        </span>
-                      </td>
-                      <td class="px-4 py-3">
-                        <StatusBadge kind="loan" :status="loan.status" />
-                      </td>
-                      <td class="px-4 py-3 text-right">
-                        <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
-                          <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
-                            Detalle
-                          </RouterLink>
-                        </Button>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div v-else>
+                <TableGenerator
+                  :columns="[
+                    { key: 'id', label: 'Código' },
+                    { key: 'product', label: 'Producto' },
+                    { key: 'principal', label: 'Monto Capital' },
+                    { key: 'outstanding', label: 'Saldo Insoluto' },
+                    { key: 'nextDueDate', label: 'Próximo Vencimiento' },
+                    { key: 'daysLate', label: 'Días Atraso' },
+                    { key: 'status', label: 'Estado' },
+                    { key: 'action', label: 'Ver', headerClass: 'text-right' },
+                  ]"
+                  :rows="customer.loans"
+                  row-key="id"
+                >
+                  <template #row="{ row: loan }">
+                    <td class="px-4 py-3 font-mono text-xs font-semibold">
+                      {{ loan.id }}
+                    </td>
+                    <td class="px-4 py-3 font-medium">{{ loan.productName }}</td>
+                    <td class="px-4 py-3 font-mono text-xs">
+                      <MoneyText :amount="loan.principal" />
+                    </td>
+                    <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
+                      <MoneyText :amount="loan.outstandingPrincipal" />
+                    </td>
+                    <td class="px-4 py-3 text-xs text-muted-foreground">
+                      {{ loan.nextDueDate ? formatBusinessDate(loan.nextDueDate) : '—' }}
+                    </td>
+                    <td class="px-4 py-3 text-xs font-semibold">
+                      <span
+                        :class="
+                          loan.daysLate > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'
+                        "
+                      >
+                        {{ loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día' }}
+                      </span>
+                    </td>
+                    <td class="px-4 py-3">
+                      <StatusBadge kind="loan" :status="loan.status" />
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                      <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
+                        <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
+                          Detalle
+                        </RouterLink>
+                      </Button>
+                    </td>
+                  </template>
+                </TableGenerator>
               </div>
             </CardContent>
           </Card>
@@ -616,36 +675,38 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div v-if="customer.applications.length === 0" class="p-8 text-center text-xs text-muted-foreground">
+              <div
+                v-if="customer.applications.length === 0"
+                class="p-8 text-center text-xs text-muted-foreground"
+              >
                 No hay solicitudes de crédito registradas para este cliente.
               </div>
-              <div v-else class="overflow-x-auto">
-                <table class="w-full text-sm text-left">
-                  <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-                    <tr>
-                      <th class="px-4 py-3">ID Solicitud</th>
-                      <th class="px-4 py-3">Producto</th>
-                      <th class="px-4 py-3">Monto Solicitado</th>
-                      <th class="px-4 py-3">Fecha Solicitud</th>
-                      <th class="px-4 py-3">Estado</th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-border">
-                    <tr v-for="app in customer.applications" :key="app.id" class="hover:bg-muted/40">
-                      <td class="px-4 py-3 font-mono text-xs font-medium">{{ app.id }}</td>
-                      <td class="px-4 py-3">{{ app.productName }}</td>
-                      <td class="px-4 py-3 font-mono text-xs font-semibold">
-                        <MoneyText :amount="app.requestedAmount" />
-                      </td>
-                      <td class="px-4 py-3 text-xs text-muted-foreground">
-                        {{ formatInstant(app.createdAt) }}
-                      </td>
-                      <td class="px-4 py-3">
-                        <StatusBadge kind="application" :status="app.status" />
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+              <div v-else>
+                <TableGenerator
+                  :columns="[
+                    { key: 'id', label: 'ID Solicitud' },
+                    { key: 'product', label: 'Producto' },
+                    { key: 'amount', label: 'Monto Solicitado' },
+                    { key: 'createdAt', label: 'Fecha Solicitud' },
+                    { key: 'status', label: 'Estado' },
+                  ]"
+                  :rows="customer.applications"
+                  row-key="id"
+                >
+                  <template #row="{ row: app }">
+                    <td class="px-4 py-3 font-mono text-xs font-medium">{{ app.id }}</td>
+                    <td class="px-4 py-3">{{ app.productName }}</td>
+                    <td class="px-4 py-3 font-mono text-xs font-semibold">
+                      <MoneyText :amount="app.requestedAmount" />
+                    </td>
+                    <td class="px-4 py-3 text-xs text-muted-foreground">
+                      {{ formatInstant(app.createdAt) }}
+                    </td>
+                    <td class="px-4 py-3">
+                      <StatusBadge kind="application" :status="app.status" />
+                    </td>
+                  </template>
+                </TableGenerator>
               </div>
             </CardContent>
           </Card>

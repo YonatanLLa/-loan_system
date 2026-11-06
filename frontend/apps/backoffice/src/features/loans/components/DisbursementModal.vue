@@ -51,7 +51,7 @@ async function loadData() {
   try {
     const [appRes, compRes] = await Promise.all([
       useApi().get<{ items: LoanApplication[] }>('/loan-applications?status=APROBADO,APROBADO_CON_CONDICIONES'),
-      useApi().get<CompanyBankAccount[]>('/treasury/company-accounts'),
+      useApi().get<CompanyBankAccount[]>('/treasury/bank-accounts'),
     ])
     applications.value = appRes.data.items
     companyAccounts.value = compRes.data.filter((a) => a.isActive && a.isDisbursement)

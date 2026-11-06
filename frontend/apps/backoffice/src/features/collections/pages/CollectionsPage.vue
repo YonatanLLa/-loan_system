@@ -13,9 +13,15 @@ import {
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
-import type { AgingBucket, AgingRow, LoanProduct, Page, ReceivableItem } from '@prestamos/api-client'
+import type {
+  AgingBucket,
+  AgingRow,
+  LoanProduct,
+  Page,
+  ReceivableItem,
+} from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Card, CardContent } from '@prestamos/ui/components/ui/card'
@@ -24,7 +30,9 @@ import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate } from '@prestamos/utils'
 
 import { useApi } from '@/app/api'
-import AssignCollectorDialog, { type CollectorOption } from '../components/AssignCollectorDialog.vue'
+import AssignCollectorDialog, {
+  type CollectorOption,
+} from '../components/AssignCollectorDialog.vue'
 import CollectionActionDialog from '../components/CollectionActionDialog.vue'
 import WriteOffDialog from '../components/WriteOffDialog.vue'
 
@@ -140,7 +148,9 @@ async function loadReceivables() {
     }
     if (receivableType.value) params.type = receivableType.value
     if (receivableQuery.value.trim()) params.q = receivableQuery.value.trim()
-    const { data } = await useApi().get<Page<ReceivableItem>>('/collections/receivables', { params })
+    const { data } = await useApi().get<Page<ReceivableItem>>('/collections/receivables', {
+      params,
+    })
     receivablesPage.value = data
   } catch (error) {
     toast.error('Error al cargar cuentas por cobrar', { description: toApiError(error).detail })
@@ -202,7 +212,11 @@ onMounted(() => {
       <button
         type="button"
         class="flex items-center gap-2 border-b-2 px-4 py-2.5 font-semibold transition-all"
-        :class="activeTab === 'aging' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+        :class="
+          activeTab === 'aging'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground'
+        "
         @click="activeTab = 'aging'"
       >
         <PhoneCall class="size-4" />
@@ -211,7 +225,11 @@ onMounted(() => {
       <button
         type="button"
         class="flex items-center gap-2 border-b-2 px-4 py-2.5 font-semibold transition-all"
-        :class="activeTab === 'receivables' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
+        :class="
+          activeTab === 'receivables'
+            ? 'border-primary text-primary'
+            : 'border-transparent text-muted-foreground'
+        "
         @click="activeTab = 'receivables'"
       >
         <Receipt class="size-4" />
@@ -240,8 +258,14 @@ onMounted(() => {
         <CardContent class="p-4">
           <form class="grid gap-3 md:grid-cols-6" @submit.prevent="applyAgingFilters">
             <div class="relative md:col-span-2">
-              <Search class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input v-model="agingQuery" class="h-9 pl-9" placeholder="Cliente, teléfono o préstamo" />
+              <Search
+                class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                v-model="agingQuery"
+                class="h-9 pl-9"
+                placeholder="Cliente, teléfono o préstamo"
+              />
             </div>
             <select v-model="assignedTo" :class="selectClass" aria-label="Gestor">
               <option value="">Todos los gestores</option>
@@ -278,83 +302,89 @@ onMounted(() => {
               description="No hay préstamos que coincidan con el tramo, el gestor, el producto o el monto."
             />
           </div>
-          <div v-else class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-              <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th class="px-4 py-3">Cliente</th>
-                  <th class="px-4 py-3">Tramo</th>
-                  <th class="px-4 py-3">Atraso</th>
-                  <th class="px-4 py-3">Cuotas vencidas</th>
-                  <th class="px-4 py-3">Capital impago</th>
-                  <th class="px-4 py-3">Total exigible</th>
-                  <th class="px-4 py-3">Gestor</th>
-                  <th class="px-4 py-3 text-right">Acciones</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y text-xs">
-                <tr
-                  v-for="row in agingPage.items"
-                  :key="row.loanId"
-                  class="hover:bg-muted/40"
-                  :class="row.hasBrokenPromise ? 'bg-destructive/5' : ''"
-                >
-                  <td class="px-4 py-3">
+          <div v-else>
+            <TableGenerator
+              :columns="[
+                { key: 'customer', label: 'Cliente' },
+                { key: 'bucket', label: 'Tramo' },
+                { key: 'daysLate', label: 'Atraso' },
+                { key: 'overdueInstallments', label: 'Cuotas vencidas' },
+                { key: 'overduePrincipal', label: 'Capital impago' },
+                { key: 'totalDue', label: 'Total exigible' },
+                { key: 'assignedTo', label: 'Gestor' },
+                { key: 'actions', label: 'Acciones', headerClass: 'text-right' },
+              ]"
+              :rows="agingPage.items"
+              row-key="loanId"
+              body-class="divide-y text-xs"
+              :row-class="
+                (row) => ({
+                  'hover:bg-muted/40': true,
+                  'bg-destructive/5': row.hasBrokenPromise === true,
+                })
+              "
+            >
+              <template #row="{ row }">
+                <td class="px-4 py-3">
+                  <RouterLink
+                    :to="{ name: 'customer-detail', params: { id: row.customerId } }"
+                    class="font-medium text-foreground hover:underline"
+                  >
+                    {{ row.customerName }}
+                  </RouterLink>
+                  <span class="block text-[11px] text-muted-foreground">
+                    {{ row.phone }} ·
                     <RouterLink
-                      :to="{ name: 'customer-detail', params: { id: row.customerId } }"
-                      class="font-medium text-foreground hover:underline"
+                      :to="{ name: 'loan-detail', params: { id: row.loanId } }"
+                      class="hover:underline"
                     >
-                      {{ row.customerName }}
+                      {{ row.loanId }}
                     </RouterLink>
-                    <span class="block text-[11px] text-muted-foreground">
-                      {{ row.phone }} ·
-                      <RouterLink :to="{ name: 'loan-detail', params: { id: row.loanId } }" class="hover:underline">
-                        {{ row.loanId }}
-                      </RouterLink>
-                    </span>
-                    <span class="mt-1 block text-[11px] text-muted-foreground">{{ row.productName }}</span>
-                    <Badge
-                      v-if="row.hasBrokenPromise"
+                  </span>
+                  <span class="mt-1 block text-[11px] text-muted-foreground">{{
+                    row.productName
+                  }}</span>
+                  <Badge
+                    v-if="row.hasBrokenPromise"
+                    variant="outline"
+                    class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                  >
+                    <AlertTriangle class="mr-1 size-3" />
+                    Promesa incumplida
+                  </Badge>
+                </td>
+                <td class="px-4 py-3">
+                  <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
+                </td>
+                <td class="px-4 py-3 font-medium">{{ row.daysLate }} días</td>
+                <td class="px-4 py-3">{{ row.overdueInstallments }}</td>
+                <td class="px-4 py-3"><MoneyText :amount="row.overduePrincipal" /></td>
+                <td class="px-4 py-3 font-semibold"><MoneyText :amount="row.totalDue" /></td>
+                <td class="px-4 py-3">{{ row.assignedTo || 'Sin asignar' }}</td>
+                <td class="px-4 py-3">
+                  <div class="flex justify-end gap-1">
+                    <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
+                      <MessageSquarePlus class="size-3.5" />
+                      <span class="sr-only">Registrar gestión</span>
+                    </Button>
+                    <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
+                      <UserPlus class="size-3.5" />
+                      <span class="sr-only">Asignar gestor</span>
+                    </Button>
+                    <Button
+                      v-if="row.daysLate > 90"
+                      size="sm"
                       variant="outline"
-                      class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                      class="h-8 text-destructive"
+                      @click="openWriteOff(row)"
                     >
-                      <AlertTriangle class="mr-1 size-3" />
-                      Promesa incumplida
-                    </Badge>
-                  </td>
-                  <td class="px-4 py-3">
-                    <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
-                  </td>
-                  <td class="px-4 py-3 font-medium">{{ row.daysLate }} días</td>
-                  <td class="px-4 py-3">{{ row.overdueInstallments }}</td>
-                  <td class="px-4 py-3"><MoneyText :amount="row.overduePrincipal" /></td>
-                  <td class="px-4 py-3 font-semibold"><MoneyText :amount="row.totalDue" /></td>
-                  <td class="px-4 py-3">{{ row.assignedTo || 'Sin asignar' }}</td>
-                  <td class="px-4 py-3">
-                    <div class="flex justify-end gap-1">
-                      <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
-                        <MessageSquarePlus class="size-3.5" />
-                        <span class="sr-only">Registrar gestión</span>
-                      </Button>
-                      <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
-                        <UserPlus class="size-3.5" />
-                        <span class="sr-only">Asignar gestor</span>
-                      </Button>
-                      <Button
-                        v-if="row.daysLate > 90"
-                        size="sm"
-                        variant="outline"
-                        class="h-8 text-destructive"
-                        @click="openWriteOff(row)"
-                      >
-                        <ShieldAlert class="size-3.5" />
-                        <span class="sr-only">Castigar</span>
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                      <ShieldAlert class="size-3.5" />
+                      <span class="sr-only">Castigar</span>
+                    </Button>
+                  </div>
+                </td>
+              </template>
+            </TableGenerator>
           </div>
           <div
             v-if="agingPage.total > 0"
@@ -367,7 +397,10 @@ onMounted(() => {
                 size="sm"
                 class="h-8"
                 :disabled="agingPage.page <= 1 || loading"
-                @click="agingPageNumber = agingPage.page - 1; loadAging()"
+                @click="
+                  agingPageNumber = agingPage.page - 1;
+                  loadAging();
+                "
               >
                 <ChevronLeft class="size-4" />
               </Button>
@@ -377,7 +410,10 @@ onMounted(() => {
                 size="sm"
                 class="h-8"
                 :disabled="agingPage.page >= agingPages || loading"
-                @click="agingPageNumber = agingPage.page + 1; loadAging()"
+                @click="
+                  agingPageNumber = agingPage.page + 1;
+                  loadAging();
+                "
               >
                 <ChevronRight class="size-4" />
               </Button>
@@ -392,10 +428,20 @@ onMounted(() => {
         <CardContent class="p-4">
           <form class="flex flex-wrap items-center gap-2" @submit.prevent="applyReceivableFilters">
             <div class="relative min-w-64 flex-1">
-              <Search class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input v-model="receivableQuery" class="h-9 pl-9" placeholder="Cliente, préstamo o producto" />
+              <Search
+                class="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                v-model="receivableQuery"
+                class="h-9 pl-9"
+                placeholder="Cliente, préstamo o producto"
+              />
             </div>
-            <select v-model="receivableType" :class="selectClass + ' w-auto'" aria-label="Estado de la cuota">
+            <select
+              v-model="receivableType"
+              :class="selectClass + ' w-auto'"
+              aria-label="Estado de la cuota"
+            >
               <option value="">Próximos vencimientos y vencidas</option>
               <option value="VENCIDA">Solo cuotas vencidas</option>
               <option value="PENDIENTE">Solo por vencer</option>
@@ -418,38 +464,39 @@ onMounted(() => {
               description="No hay vencimientos ni saldos pendientes con ese criterio."
             />
           </div>
-          <div v-else class="overflow-x-auto">
-            <table class="w-full text-left text-sm">
-              <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th class="px-4 py-3">Cliente</th>
-                  <th class="px-4 py-3">Cuota</th>
-                  <th class="px-4 py-3">Vencimiento</th>
-                  <th class="px-4 py-3">Atraso</th>
-                  <th class="px-4 py-3">Saldo de la cuota</th>
-                  <th class="px-4 py-3">Capital pendiente del préstamo</th>
-                  <th class="px-4 py-3">Estado</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y text-xs">
-                <tr v-for="item in receivablesPage.items" :key="`${item.loanId}-${item.installmentNumber}`">
-                  <td class="px-4 py-3">
-                    <span class="font-medium text-foreground">{{ item.customerName }}</span>
-                    <span class="block text-[11px] text-muted-foreground">
-                      {{ item.phone }} · {{ item.loanId }} · {{ item.productName }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3">N.º {{ item.installmentNumber }}</td>
-                  <td class="px-4 py-3">{{ formatBusinessDate(item.dueDate) }}</td>
-                  <td class="px-4 py-3">{{ item.daysLate > 0 ? `${item.daysLate} días` : '—' }}</td>
-                  <td class="px-4 py-3 font-semibold"><MoneyText :amount="item.amount" /></td>
-                  <td class="px-4 py-3"><MoneyText :amount="item.outstandingPrincipal" /></td>
-                  <td class="px-4 py-3">
-                    <StatusBadge kind="receivable" :status="item.status" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div v-else>
+            <TableGenerator
+              :columns="[
+                { key: 'customer', label: 'Cliente' },
+                { key: 'installment', label: 'Cuota' },
+                { key: 'dueDate', label: 'Vencimiento' },
+                { key: 'daysLate', label: 'Atraso' },
+                { key: 'amount', label: 'Saldo de la cuota' },
+                { key: 'outstandingPrincipal', label: 'Capital pendiente del préstamo' },
+                { key: 'status', label: 'Estado' },
+              ]"
+              :rows="receivablesPage.items"
+              :row-key="(item) => `${item.loanId}-${item.installmentNumber}`"
+              body-class="divide-y text-xs"
+              :row-class="''"
+            >
+              <template #row="{ row: item }">
+                <td class="px-4 py-3">
+                  <span class="font-medium text-foreground">{{ item.customerName }}</span>
+                  <span class="block text-[11px] text-muted-foreground">
+                    {{ item.phone }} · {{ item.loanId }} · {{ item.productName }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">N.º {{ item.installmentNumber }}</td>
+                <td class="px-4 py-3">{{ formatBusinessDate(item.dueDate) }}</td>
+                <td class="px-4 py-3">{{ item.daysLate > 0 ? `${item.daysLate} días` : '—' }}</td>
+                <td class="px-4 py-3 font-semibold"><MoneyText :amount="item.amount" /></td>
+                <td class="px-4 py-3"><MoneyText :amount="item.outstandingPrincipal" /></td>
+                <td class="px-4 py-3">
+                  <StatusBadge kind="receivable" :status="item.status" />
+                </td>
+              </template>
+            </TableGenerator>
           </div>
           <div
             v-if="receivablesPage.total > 0"
@@ -462,7 +509,10 @@ onMounted(() => {
                 size="sm"
                 class="h-8"
                 :disabled="receivablesPage.page <= 1 || loading"
-                @click="receivablePageNumber = receivablesPage.page - 1; loadReceivables()"
+                @click="
+                  receivablePageNumber = receivablesPage.page - 1;
+                  loadReceivables();
+                "
               >
                 <ChevronLeft class="size-4" />
               </Button>
@@ -472,7 +522,10 @@ onMounted(() => {
                 size="sm"
                 class="h-8"
                 :disabled="receivablesPage.page >= receivablePages || loading"
-                @click="receivablePageNumber = receivablesPage.page + 1; loadReceivables()"
+                @click="
+                  receivablePageNumber = receivablesPage.page + 1;
+                  loadReceivables();
+                "
               >
                 <ChevronRight class="size-4" />
               </Button>
@@ -482,7 +535,11 @@ onMounted(() => {
       </Card>
     </template>
 
-    <CollectionActionDialog v-model:open="actionOpen" :row="selected" @saved="refreshAfterMutation" />
+    <CollectionActionDialog
+      v-model:open="actionOpen"
+      :row="selected"
+      @saved="refreshAfterMutation"
+    />
     <AssignCollectorDialog
       v-model:open="assignOpen"
       :row="selected"

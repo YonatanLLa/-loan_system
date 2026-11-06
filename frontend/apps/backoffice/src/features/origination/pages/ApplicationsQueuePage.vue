@@ -18,7 +18,7 @@ import { toast } from 'vue-sonner'
 
 import type { LoanApplication, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -104,7 +104,10 @@ function getRecommendationBadge(rec?: string) {
     case 'REVISION_MANUAL':
       return { label: 'Revisión Manual', class: 'border-warning text-warning bg-warning/10' }
     case 'RECHAZO_SUGERIDO':
-      return { label: 'Rechazo Sugerido', class: 'border-destructive text-destructive bg-destructive/10' }
+      return {
+        label: 'Rechazo Sugerido',
+        class: 'border-destructive text-destructive bg-destructive/10',
+      }
     default:
       return { label: 'Sin evaluar', class: 'border-border text-muted-foreground' }
   }
@@ -149,7 +152,7 @@ onMounted(() => {
             "
             @click="
               selectedStatus = 'SOLICITADO,EN_EVALUACION';
-              onSearch()
+              onSearch();
             "
           >
             <Clock class="size-3.5" />
@@ -164,7 +167,7 @@ onMounted(() => {
             "
             @click="
               selectedStatus = '';
-              onSearch()
+              onSearch();
             "
           >
             Todas las Solicitudes
@@ -178,7 +181,7 @@ onMounted(() => {
             "
             @click="
               selectedStatus = 'APROBADO,APROBADO_CON_CONDICIONES';
-              onSearch()
+              onSearch();
             "
           >
             Aprobadas
@@ -192,7 +195,7 @@ onMounted(() => {
             "
             @click="
               selectedStatus = 'RECHAZADO';
-              onSearch()
+              onSearch();
             "
           >
             Rechazadas
@@ -209,9 +212,7 @@ onMounted(() => {
               class="pl-9 h-9"
             />
           </div>
-          <Button type="submit" size="sm" class="h-9" :disabled="loading">
-            Buscar
-          </Button>
+          <Button type="submit" size="sm" class="h-9" :disabled="loading"> Buscar </Button>
           <Button
             v-if="searchQuery"
             type="button"
@@ -249,91 +250,86 @@ onMounted(() => {
           </EmptyState>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">ID</th>
-                <th class="px-4 py-3">Fecha y Hora</th>
-                <th class="px-4 py-3">Cliente</th>
-                <th class="px-4 py-3">Producto</th>
-                <th class="px-4 py-3">Monto / Plazo</th>
-                <th class="px-4 py-3">DTI Motor</th>
-                <th class="px-4 py-3">Recomendación</th>
-                <th class="px-4 py-3">Estado</th>
-                <th class="px-4 py-3 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="app in applicationsPage.items"
-                :key="app.id"
-                class="hover:bg-muted/40 transition-colors"
-              >
-                <td class="px-4 py-3 font-mono text-xs font-bold">
-                  {{ app.id }}
-                </td>
-                <td class="px-4 py-3 text-xs whitespace-nowrap text-muted-foreground">
-                  {{ formatInstant(app.createdAt) }}
-                </td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  <RouterLink
-                    :to="{ name: 'customer-detail', params: { id: app.customerId } }"
-                    class="hover:underline flex items-center gap-1 text-primary"
-                  >
-                    {{ app.customerName }}
+        <div v-else>
+          <TableGenerator
+            :columns="[
+              { key: 'id', label: 'ID' },
+              { key: 'createdAt', label: 'Fecha y Hora' },
+              { key: 'customer', label: 'Cliente' },
+              { key: 'product', label: 'Producto' },
+              { key: 'amount', label: 'Monto / Plazo' },
+              { key: 'dti', label: 'DTI Motor' },
+              { key: 'recommendation', label: 'Recomendación' },
+              { key: 'status', label: 'Estado' },
+              { key: 'action', label: 'Acción', headerClass: 'text-right' },
+            ]"
+            :rows="applicationsPage.items"
+            row-key="id"
+          >
+            <template #row="{ row: app }">
+              <td class="px-4 py-3 font-mono text-xs font-bold">
+                {{ app.id }}
+              </td>
+              <td class="px-4 py-3 text-xs whitespace-nowrap text-muted-foreground">
+                {{ formatInstant(app.createdAt) }}
+              </td>
+              <td class="px-4 py-3 font-medium text-foreground">
+                <RouterLink
+                  :to="{ name: 'customer-detail', params: { id: app.customerId } }"
+                  class="hover:underline flex items-center gap-1 text-primary"
+                >
+                  {{ app.customerName }}
+                </RouterLink>
+                <span class="text-[11px] text-muted-foreground block font-normal">
+                  Canal: {{ app.originatedFrom }}
+                </span>
+              </td>
+              <td class="px-4 py-3 text-xs font-medium">
+                {{ app.productName }}
+              </td>
+              <td class="px-4 py-3 text-xs font-mono">
+                <div class="font-bold text-foreground">
+                  <MoneyText :amount="app.requestedAmount" />
+                </div>
+                <div class="text-[11px] text-muted-foreground">
+                  {{ app.term }} cuotas {{ app.frequency.toLowerCase() }}
+                </div>
+              </td>
+              <td class="px-4 py-3 text-xs font-mono font-semibold">
+                <span
+                  :class="
+                    Number(app.dtiRatio ?? 0) > 0.5
+                      ? 'text-destructive font-bold'
+                      : Number(app.dtiRatio ?? 0) > 0.35
+                        ? 'text-warning font-bold'
+                        : 'text-success'
+                  "
+                >
+                  {{ formatDti(app.dtiRatio) }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <Badge
+                  variant="outline"
+                  class="text-[10px]"
+                  :class="getRecommendationBadge(app.systemRecommendation).class"
+                >
+                  {{ getRecommendationBadge(app.systemRecommendation).label }}
+                </Badge>
+              </td>
+              <td class="px-4 py-3">
+                <StatusBadge kind="application" :status="app.status" />
+              </td>
+              <td class="px-4 py-3 text-right">
+                <Button variant="outline" size="sm" class="h-8 gap-1 text-xs" as-child>
+                  <RouterLink :to="{ name: 'application-detail', params: { id: app.id } }">
+                    <Eye class="size-3.5" />
+                    <span>Evaluar</span>
                   </RouterLink>
-                  <span class="text-[11px] text-muted-foreground block font-normal">
-                    Canal: {{ app.originatedFrom }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-xs font-medium">
-                  {{ app.productName }}
-                </td>
-                <td class="px-4 py-3 text-xs font-mono">
-                  <div class="font-bold text-foreground">
-                    <MoneyText :amount="app.requestedAmount" />
-                  </div>
-                  <div class="text-[11px] text-muted-foreground">
-                    {{ app.term }} cuotas {{ app.frequency.toLowerCase() }}
-                  </div>
-                </td>
-                <td class="px-4 py-3 text-xs font-mono font-semibold">
-                  <span
-                    :class="
-                      Number(app.dtiRatio ?? 0) > 0.5
-                        ? 'text-destructive font-bold'
-                        : Number(app.dtiRatio ?? 0) > 0.35
-                          ? 'text-warning font-bold'
-                          : 'text-success'
-                    "
-                  >
-                    {{ formatDti(app.dtiRatio) }}
-                  </span>
-                </td>
-                <td class="px-4 py-3">
-                  <Badge
-                    variant="outline"
-                    class="text-[10px]"
-                    :class="getRecommendationBadge(app.systemRecommendation).class"
-                  >
-                    {{ getRecommendationBadge(app.systemRecommendation).label }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="application" :status="app.status" />
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <Button variant="outline" size="sm" class="h-8 gap-1 text-xs" as-child>
-                    <RouterLink :to="{ name: 'application-detail', params: { id: app.id } }">
-                      <Eye class="size-3.5" />
-                      <span>Evaluar</span>
-                    </RouterLink>
-                  </Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </Button>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- Paginación -->
@@ -348,7 +344,9 @@ onMounted(() => {
             </span>
             a
             <span class="font-medium text-foreground">
-              {{ Math.min(applicationsPage.page * applicationsPage.pageSize, applicationsPage.total) }}
+              {{
+                Math.min(applicationsPage.page * applicationsPage.pageSize, applicationsPage.total)
+              }}
             </span>
             de
             <span class="font-medium text-foreground">{{ applicationsPage.total }}</span>
@@ -385,9 +383,6 @@ onMounted(() => {
     </Card>
 
     <!-- ── Sheet para crear solicitud con simulador ── -->
-    <CreateApplicationSheet
-      v-model:open="isCreateOpen"
-      @created="loadApplications"
-    />
+    <CreateApplicationSheet v-model:open="isCreateOpen" @created="loadApplications" />
   </div>
 </template>

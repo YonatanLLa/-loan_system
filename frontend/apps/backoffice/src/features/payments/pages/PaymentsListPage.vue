@@ -19,7 +19,7 @@ import { toast } from 'vue-sonner'
 
 import type { Payment, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -192,9 +192,7 @@ onMounted(() => {
               class="pl-9 h-9"
             />
           </div>
-          <Button type="submit" size="sm" class="h-9" :disabled="loading">
-            Buscar
-          </Button>
+          <Button type="submit" size="sm" class="h-9" :disabled="loading"> Buscar </Button>
         </form>
       </CardContent>
     </Card>
@@ -211,7 +209,9 @@ onMounted(() => {
         <div v-else-if="paymentsPage.items.length === 0" class="p-12">
           <EmptyState
             :icon="activeTab === 'pending' ? CheckCircle2 : CreditCard"
-            :title="activeTab === 'pending' ? 'No hay vouchers pendientes' : 'No se encontraron pagos'"
+            :title="
+              activeTab === 'pending' ? 'No hay vouchers pendientes' : 'No se encontraron pagos'
+            "
             :description="
               activeTab === 'pending'
                 ? 'Todos los comprobantes reportados por clientes han sido conciliados y aplicados.'
@@ -223,143 +223,158 @@ onMounted(() => {
         <!-- ══════════════════════════════════════════════════════════ -->
         <!-- BANDEJA DE VOUCHERS PENDIENTES CON MATCH SUGERIDO (FE-BO-21) -->
         <!-- ══════════════════════════════════════════════════════════ -->
-        <div v-else-if="activeTab === 'pending'" class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">ID Pago</th>
-                <th class="px-4 py-3">Prestatario</th>
-                <th class="px-4 py-3">Monto Reportado</th>
-                <th class="px-4 py-3">Canal / Referencia</th>
-                <th class="px-4 py-3">Movimiento de Extracto Sugerido para Emparejar (FE-BO-21)</th>
-                <th class="px-4 py-3">Estado</th>
-                <th class="px-4 py-3 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border text-xs">
-              <tr
-                v-for="pay in paymentsPage.items"
-                :key="pay.id"
-                class="hover:bg-muted/40 transition-colors"
-              >
-                <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  {{ pay.customerName }}
-                  <span class="text-[11px] text-muted-foreground block font-normal">
-                    Préstamo: {{ pay.loanId }}
+        <div v-else-if="activeTab === 'pending'">
+          <TableGenerator
+            :columns="[
+              { key: 'id', label: 'ID Pago' },
+              { key: 'borrower', label: 'Prestatario' },
+              { key: 'amount', label: 'Monto Reportado' },
+              { key: 'channel', label: 'Canal / Referencia' },
+              {
+                key: 'suggestion',
+                label: 'Movimiento de Extracto Sugerido para Emparejar (FE-BO-21)',
+              },
+              { key: 'status', label: 'Estado' },
+              { key: 'action', label: 'Acción', headerClass: 'text-right' },
+            ]"
+            :rows="paymentsPage.items"
+            row-key="id"
+            body-class="divide-y divide-border text-xs"
+          >
+            <template #row="{ row: pay }">
+              <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
+              <td class="px-4 py-3 font-medium text-foreground">
+                {{ pay.customerName }}
+                <span class="text-[11px] text-muted-foreground block font-normal">
+                  Préstamo: {{ pay.loanId }}
+                </span>
+              </td>
+              <td class="px-4 py-3 font-mono text-sm font-bold text-foreground">
+                <MoneyText :amount="pay.amount" />
+              </td>
+              <td class="px-4 py-3">
+                <Badge variant="outline" class="font-medium text-[10px]">
+                  {{ pay.method }}
+                </Badge>
+                <span class="text-[11px] font-mono text-muted-foreground block mt-0.5">
+                  {{ pay.externalReference || 'Sin ref' }}
+                </span>
+              </td>
+
+              <!-- Emparejamiento inteligente sugerido del extracto (FE-BO-21) -->
+              <td class="px-4 py-3">
+                <div class="rounded-lg border border-primary/30 bg-primary/5 p-2 space-y-1">
+                  <span class="text-[11px] font-bold text-primary flex items-center gap-1">
+                    <FileCheck2 class="size-3" /> Abono Detectado en Extracto BCP
                   </span>
-                </td>
-                <td class="px-4 py-3 font-mono text-sm font-bold text-foreground">
-                  <MoneyText :amount="pay.amount" />
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="outline" class="font-medium text-[10px]">
-                    {{ pay.method }}
-                  </Badge>
-                  <span class="text-[11px] font-mono text-muted-foreground block mt-0.5">
-                    {{ pay.externalReference || 'Sin ref' }}
+                  <p class="font-mono text-[11px] text-foreground font-medium">
+                    EXT-920001 · TRANSF {{ pay.externalReference }} · S/ {{ pay.amount }}
+                  </p>
+                  <span class="text-[10px] text-muted-foreground block">
+                    Coincidencia exacta de monto y referencia con el extracto bancario.
                   </span>
-                </td>
+                </div>
+              </td>
 
-                <!-- Emparejamiento inteligente sugerido del extracto (FE-BO-21) -->
-                <td class="px-4 py-3">
-                  <div class="rounded-lg border border-primary/30 bg-primary/5 p-2 space-y-1">
-                    <span class="text-[11px] font-bold text-primary flex items-center gap-1">
-                      <FileCheck2 class="size-3" /> Abono Detectado en Extracto BCP
-                    </span>
-                    <p class="font-mono text-[11px] text-foreground font-medium">
-                      EXT-920001 · TRANSF {{ pay.externalReference }} · S/ {{ pay.amount }}
-                    </p>
-                    <span class="text-[10px] text-muted-foreground block">
-                      Coincidencia exacta de monto y referencia con el extracto bancario.
-                    </span>
-                  </div>
-                </td>
+              <td class="px-4 py-3">
+                <StatusBadge kind="payment" :status="pay.status" />
+              </td>
 
-                <td class="px-4 py-3">
-                  <StatusBadge kind="payment" :status="pay.status" />
-                </td>
-
-                <td class="px-4 py-3 text-right">
-                  <Button
-                    size="sm"
-                    class="h-8 gap-1.5 text-xs"
-                    :disabled="confirmingId === pay.id"
-                    @click="confirmVoucher(pay)"
-                  >
-                    <CheckCircle2 class="size-3.5" />
-                    <span>Confirmar Pago</span>
-                  </Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <td class="px-4 py-3 text-right">
+                <Button
+                  size="sm"
+                  class="h-8 gap-1.5 text-xs"
+                  :disabled="confirmingId === pay.id"
+                  @click="confirmVoucher(pay)"
+                >
+                  <CheckCircle2 class="size-3.5" />
+                  <span>Confirmar Pago</span>
+                </Button>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- ══════════════════════════════════════════════════════════ -->
         <!-- BANDEJA DE TODOS LOS PAGOS / APLICADOS CON REVERSO (FE-BO-23) -->
         <!-- ══════════════════════════════════════════════════════════ -->
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">ID Pago</th>
-                <th class="px-4 py-3">Fecha y Hora</th>
-                <th class="px-4 py-3">Prestatario</th>
-                <th class="px-4 py-3">Monto</th>
-                <th class="px-4 py-3">Canal</th>
-                <th class="px-4 py-3">Referencia / Recibo</th>
-                <th class="px-4 py-3">Estado</th>
-                <th v-if="canReverse" class="px-4 py-3 text-right">Reverso</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border text-xs">
-              <tr
-                v-for="pay in paymentsPage.items"
-                :key="pay.id"
-                class="hover:bg-muted/40 transition-colors"
-                :class="{ 'opacity-60 bg-muted/20': pay.status === 'REVERSED' }"
-              >
-                <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                  {{ formatInstant(pay.paidAt) }}
-                </td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  {{ pay.customerName }}
-                  <span class="text-[11px] text-muted-foreground block font-normal">
-                    Préstamo: {{ pay.loanId }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 font-mono font-bold text-foreground">
-                  <MoneyText :amount="pay.amount" />
-                </td>
-                <td class="px-4 py-3 font-medium">{{ pay.method }}</td>
-                <td class="px-4 py-3 font-mono text-[11px] text-muted-foreground">
-                  {{ pay.receiptNumber || pay.externalReference || '—' }}
-                </td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="payment" :status="pay.status" />
-                </td>
+        <div v-else>
+          <TableGenerator
+            :columns="
+              canReverse
+                ? [
+                    { key: 'id', label: 'ID Pago' },
+                    { key: 'paidAt', label: 'Fecha y Hora' },
+                    { key: 'borrower', label: 'Prestatario' },
+                    { key: 'amount', label: 'Monto' },
+                    { key: 'method', label: 'Canal' },
+                    { key: 'reference', label: 'Referencia / Recibo' },
+                    { key: 'status', label: 'Estado' },
+                    { key: 'reverse', label: 'Reverso', headerClass: 'text-right' },
+                  ]
+                : [
+                    { key: 'id', label: 'ID Pago' },
+                    { key: 'paidAt', label: 'Fecha y Hora' },
+                    { key: 'borrower', label: 'Prestatario' },
+                    { key: 'amount', label: 'Monto' },
+                    { key: 'method', label: 'Canal' },
+                    { key: 'reference', label: 'Referencia / Recibo' },
+                    { key: 'status', label: 'Estado' },
+                  ]
+            "
+            :rows="paymentsPage.items"
+            row-key="id"
+            body-class="divide-y divide-border text-xs"
+            :row-class="
+              (row) => ({
+                'hover:bg-muted/40 transition-colors': true,
+                'opacity-60 bg-muted/20': row.status === 'REVERSED',
+              })
+            "
+          >
+            <template #row="{ row: pay }">
+              <td class="px-4 py-3 font-mono font-bold">{{ pay.id }}</td>
+              <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                {{ formatInstant(pay.paidAt) }}
+              </td>
+              <td class="px-4 py-3 font-medium text-foreground">
+                {{ pay.customerName }}
+                <span class="text-[11px] text-muted-foreground block font-normal">
+                  Préstamo: {{ pay.loanId }}
+                </span>
+              </td>
+              <td class="px-4 py-3 font-mono font-bold text-foreground">
+                <MoneyText :amount="pay.amount" />
+              </td>
+              <td class="px-4 py-3 font-medium">{{ pay.method }}</td>
+              <td class="px-4 py-3 font-mono text-[11px] text-muted-foreground">
+                {{ pay.receiptNumber || pay.externalReference || '—' }}
+              </td>
+              <td class="px-4 py-3">
+                <StatusBadge kind="payment" :status="pay.status" />
+              </td>
 
-                <!-- Botón Reverso (FE-BO-23) protegido por permiso -->
-                <td v-if="canReverse" class="px-4 py-3 text-right">
-                  <Button
-                    v-if="pay.status === 'APPLIED'"
-                    variant="ghost"
-                    size="sm"
-                    class="h-8 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
-                    @click="openReverse(pay)"
-                  >
-                    <RotateCcw class="size-3.5" />
-                    <span>Revertir</span>
-                  </Button>
-                  <span v-else-if="pay.status === 'REVERSED'" class="text-[11px] text-destructive italic">
-                    Revertido
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+              <!-- Botón Reverso (FE-BO-23) protegido por permiso -->
+              <td v-if="canReverse" class="px-4 py-3 text-right">
+                <Button
+                  v-if="pay.status === 'APPLIED'"
+                  variant="ghost"
+                  size="sm"
+                  class="h-8 gap-1 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                  @click="openReverse(pay)"
+                >
+                  <RotateCcw class="size-3.5" />
+                  <span>Revertir</span>
+                </Button>
+                <span
+                  v-else-if="pay.status === 'REVERSED'"
+                  class="text-[11px] text-destructive italic"
+                >
+                  Revertido
+                </span>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- Paginación -->
@@ -411,10 +426,7 @@ onMounted(() => {
     </Card>
 
     <!-- ── Modales de Registro y Reverso ── -->
-    <RegisterPaymentModal
-      v-model:open="isRegisterOpen"
-      @registered="loadPayments"
-    />
+    <RegisterPaymentModal v-model:open="isRegisterOpen" @registered="loadPayments" />
 
     <ReversePaymentModal
       v-model:open="isReverseOpen"

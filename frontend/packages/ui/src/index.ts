@@ -6,6 +6,8 @@ export { default as PageHeader } from './components/PageHeader.vue'
 export { default as EmptyState } from './components/EmptyState.vue'
 export { default as ChartCanvas } from './components/ChartCanvas.vue'
 export { default as WelcomeCard } from './components/WelcomeCard.vue'
+export { default as TableGenerator } from './components/TableGenerator.vue'
+export type { TableColumn, TableRowKey } from './generator'
 export { useBusyAction } from './composables/useBusyAction'
 export { cn } from './lib/utils'
 export {

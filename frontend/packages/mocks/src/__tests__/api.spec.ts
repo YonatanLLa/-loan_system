@@ -26,6 +26,11 @@ async function failure(promise: Promise<unknown>): Promise<ApiError> {
 }
 
 describe('sesión', () => {
+  it('responde 501 para endpoints API sin mock en vez de enviarlos a la red', async () => {
+    const api = await admin()
+    expect((await failure(api.get('/endpoint-sin-mock'))).status).toBe(501)
+  })
+
   it('rechaza una contraseña incorrecta con 401 y bloquea tras 5 intentos (423)', async () => {
     const attempt = () =>
       client().post(

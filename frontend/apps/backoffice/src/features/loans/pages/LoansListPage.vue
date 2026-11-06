@@ -15,7 +15,7 @@ import { toast } from 'vue-sonner'
 
 import type { Loan, Page } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
@@ -184,67 +184,62 @@ onMounted(() => {
           </EmptyState>
         </div>
 
-        <div v-else class="overflow-x-auto">
-          <table class="w-full text-sm text-left">
-            <thead class="border-b bg-muted/50 text-xs font-medium text-muted-foreground">
-              <tr>
-                <th class="px-4 py-3">Código</th>
-                <th class="px-4 py-3">Prestatario</th>
-                <th class="px-4 py-3">Producto</th>
-                <th class="px-4 py-3">Capital Otorgado</th>
-                <th class="px-4 py-3">Saldo Insoluto</th>
-                <th class="px-4 py-3">Total Pagado</th>
-                <th class="px-4 py-3">Primer Vencimiento</th>
-                <th class="px-4 py-3">Estado</th>
-                <th class="px-4 py-3 text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-border">
-              <tr
-                v-for="loan in loansPage.items"
-                :key="loan.id"
-                class="hover:bg-muted/40 transition-colors"
-              >
-                <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                  {{ loan.id }}
-                </td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  <RouterLink
-                    :to="{ name: 'customer-detail', params: { id: loan.customerId } }"
-                    class="hover:underline flex items-center gap-1 text-primary"
-                  >
-                    {{ loan.customerName }}
+        <div v-else>
+          <TableGenerator
+            :columns="[
+              { key: 'code', label: 'Código' },
+              { key: 'borrower', label: 'Prestatario' },
+              { key: 'product', label: 'Producto' },
+              { key: 'principal', label: 'Capital Otorgado' },
+              { key: 'outstanding', label: 'Saldo Insoluto' },
+              { key: 'paid', label: 'Total Pagado' },
+              { key: 'dueDate', label: 'Primer Vencimiento' },
+              { key: 'status', label: 'Estado' },
+              { key: 'action', label: 'Acción', headerClass: 'text-right' },
+            ]"
+            :rows="loansPage.items"
+            row-key="id"
+          >
+            <template #row="{ row: loan }">
+              <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
+                {{ loan.id }}
+              </td>
+              <td class="px-4 py-3 font-medium text-foreground">
+                <RouterLink
+                  :to="{ name: 'customer-detail', params: { id: loan.customerId } }"
+                  class="hover:underline flex items-center gap-1 text-primary"
+                >
+                  {{ loan.customerName }}
+                </RouterLink>
+              </td>
+              <td class="px-4 py-3 text-xs text-muted-foreground font-medium">
+                {{ loan.productName }}
+              </td>
+              <td class="px-4 py-3 text-xs font-mono">
+                <MoneyText :amount="loan.principal" />
+              </td>
+              <td class="px-4 py-3 text-xs font-mono font-bold text-foreground">
+                <MoneyText :amount="loan.outstandingPrincipal" />
+              </td>
+              <td class="px-4 py-3 text-xs font-mono text-success">
+                <MoneyText :amount="loan.totalPaid" />
+              </td>
+              <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                {{ loan.firstDueDate ? formatBusinessDate(loan.firstDueDate) : '—' }}
+              </td>
+              <td class="px-4 py-3">
+                <StatusBadge kind="loan" :status="loan.status" />
+              </td>
+              <td class="px-4 py-3 text-right">
+                <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
+                  <RouterLink :to="{ name: 'loan-detail', params: { id: loan.id } }">
+                    <Eye class="size-3.5" />
+                    <span>Ver Detalle</span>
                   </RouterLink>
-                </td>
-                <td class="px-4 py-3 text-xs text-muted-foreground font-medium">
-                  {{ loan.productName }}
-                </td>
-                <td class="px-4 py-3 text-xs font-mono">
-                  <MoneyText :amount="loan.principal" />
-                </td>
-                <td class="px-4 py-3 text-xs font-mono font-bold text-foreground">
-                  <MoneyText :amount="loan.outstandingPrincipal" />
-                </td>
-                <td class="px-4 py-3 text-xs font-mono text-success">
-                  <MoneyText :amount="loan.totalPaid" />
-                </td>
-                <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                  {{ loan.firstDueDate ? formatBusinessDate(loan.firstDueDate) : '—' }}
-                </td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="loan" :status="loan.status" />
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
-                    <RouterLink :to="{ name: 'loan-detail', params: { id: loan.id } }">
-                      <Eye class="size-3.5" />
-                      <span>Ver Detalle</span>
-                    </RouterLink>
-                  </Button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                </Button>
+              </td>
+            </template>
+          </TableGenerator>
         </div>
 
         <!-- Paginación -->
@@ -296,9 +291,6 @@ onMounted(() => {
     </Card>
 
     <!-- ── Modal para Ejecutar Desembolso ── -->
-    <DisbursementModal
-      v-model:open="isDisburseOpen"
-      @disbursed="loadLoans"
-    />
+    <DisbursementModal v-model:open="isDisburseOpen" @disbursed="loadLoans" />
   </div>
 </template>

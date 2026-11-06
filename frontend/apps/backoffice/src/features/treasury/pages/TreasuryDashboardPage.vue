@@ -27,7 +27,7 @@ import type {
   Page,
 } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -83,15 +83,13 @@ async function loadCompanyAccounts() {
 
 async function toggleAccountActive(acc: CompanyBankAccount) {
   try {
-    const { data } = await useApi().patch<CompanyBankAccount>(
-      `/treasury/bank-accounts/${acc.id}`,
-      { isActive: !acc.isActive },
-    )
+    const { data } = await useApi().patch<CompanyBankAccount>(`/treasury/bank-accounts/${acc.id}`, {
+      isActive: !acc.isActive,
+    })
     acc.isActive = data.isActive
-    toast.success(
-      acc.isActive ? 'Cuenta activada' : 'Cuenta desactivada',
-      { description: `La cuenta ${acc.bankName} cambió de estado.` },
-    )
+    toast.success(acc.isActive ? 'Cuenta activada' : 'Cuenta desactivada', {
+      description: `La cuenta ${acc.bankName} cambió de estado.`,
+    })
   } catch (error) {
     const apiError = toApiError(error)
     toast.error('No se pudo actualizar cuenta', { description: apiError.detail })
@@ -259,7 +257,8 @@ onMounted(async () => {
         <div>
           <h3 class="text-base font-semibold">Cuentas Bancarias de la Empresa</h3>
           <p class="text-xs text-muted-foreground">
-            Cuentas habilitadas para emitir transferencias de desembolso y/o recibir pagos de prestatarios.
+            Cuentas habilitadas para emitir transferencias de desembolso y/o recibir pagos de
+            prestatarios.
           </p>
         </div>
         <Button size="sm" @click="isAccountModalOpen = true">
@@ -285,7 +284,11 @@ onMounted(async () => {
               </div>
               <Badge
                 variant="outline"
-                :class="acc.isActive ? 'border-success text-success bg-success/10' : 'border-border text-muted-foreground'"
+                :class="
+                  acc.isActive
+                    ? 'border-success text-success bg-success/10'
+                    : 'border-border text-muted-foreground'
+                "
                 class="text-[10px]"
               >
                 {{ acc.isActive ? 'Activa' : 'Inactiva' }}
@@ -298,10 +301,18 @@ onMounted(async () => {
           <CardContent class="space-y-3 pt-0 text-xs">
             <!-- Finalidades activas -->
             <div class="flex flex-wrap gap-1.5 pt-1">
-              <Badge v-if="acc.isDisbursement" variant="outline" class="border-primary/50 text-primary bg-primary/5 text-[10px]">
+              <Badge
+                v-if="acc.isDisbursement"
+                variant="outline"
+                class="border-primary/50 text-primary bg-primary/5 text-[10px]"
+              >
                 Desembolsos
               </Badge>
-              <Badge v-if="acc.isCollection" variant="outline" class="border-success/50 text-success bg-success/5 text-[10px]">
+              <Badge
+                v-if="acc.isCollection"
+                variant="outline"
+                class="border-success/50 text-success bg-success/5 text-[10px]"
+              >
                 Recaudación / Cobro
               </Badge>
             </div>
@@ -362,76 +373,89 @@ onMounted(async () => {
             />
           </div>
 
-          <div v-else class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th class="px-4 py-3">ID Orden</th>
-                  <th class="px-4 py-3">Iniciado</th>
-                  <th class="px-4 py-3">Destinatario</th>
-                  <th class="px-4 py-3">Importe</th>
-                  <th class="px-4 py-3">Canal</th>
-                  <th class="px-4 py-3">Estado Bancario</th>
-                  <th class="px-4 py-3">Detalle / Error Banco</th>
-                  <th class="px-4 py-3 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border text-xs">
-                <tr
-                  v-for="d in disbursements"
-                  :key="d.id"
-                  class="hover:bg-muted/40 transition-colors"
-                  :class="{ 'bg-destructive/5': d.status === 'FAILED' }"
-                >
-                  <td class="px-4 py-3 font-mono font-bold">{{ d.id }}</td>
-                  <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                    {{ formatInstant(d.initiatedAt) }}
-                  </td>
-                  <td class="px-4 py-3 font-medium text-foreground">
-                    {{ d.customerName }}
-                    <span class="text-[11px] text-muted-foreground block font-normal">
-                      Préstamo: {{ d.loanId }}
-                    </span>
-                  </td>
-                  <td class="px-4 py-3 font-mono font-bold text-foreground">
-                    <MoneyText :amount="d.amount" />
-                  </td>
-                  <td class="px-4 py-3 font-medium">{{ d.channel }}</td>
-                  <td class="px-4 py-3">
-                    <StatusBadge kind="disbursement" :status="d.status" />
-                  </td>
+          <div v-else>
+            <TableGenerator
+              :columns="[
+                { key: 'id', label: 'ID Orden' },
+                { key: 'initiatedAt', label: 'Iniciado' },
+                { key: 'recipient', label: 'Destinatario' },
+                { key: 'amount', label: 'Importe' },
+                { key: 'channel', label: 'Canal' },
+                { key: 'status', label: 'Estado Bancario' },
+                { key: 'error', label: 'Detalle / Error Banco' },
+                { key: 'action', label: 'Acción', headerClass: 'text-right' },
+              ]"
+              :rows="disbursements"
+              row-key="id"
+              body-class="divide-y divide-border text-xs"
+              :row-class="
+                (row) => ({
+                  'hover:bg-muted/40 transition-colors': true,
+                  'bg-destructive/5': row.status === 'FAILED',
+                })
+              "
+            >
+              <template #row="{ row: d }">
+                <td class="px-4 py-3 font-mono font-bold">{{ d.id }}</td>
+                <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                  {{ formatInstant(d.initiatedAt) }}
+                </td>
+                <td class="px-4 py-3 font-medium text-foreground">
+                  {{ d.customerName }}
+                  <span class="text-[11px] text-muted-foreground block font-normal">
+                    Préstamo: {{ d.loanId }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 font-mono font-bold text-foreground">
+                  <MoneyText :amount="d.amount" />
+                </td>
+                <td class="px-4 py-3 font-medium">{{ d.channel }}</td>
+                <td class="px-4 py-3">
+                  <StatusBadge kind="disbursement" :status="d.status" />
+                </td>
 
-                  <!-- Alertas y Motivo de Rechazo (FE-BO-28) -->
-                  <td class="px-4 py-3">
-                    <div v-if="d.status === 'FAILED'" class="text-destructive font-medium flex items-center gap-1.5">
-                      <AlertTriangle class="size-3.5 shrink-0" />
-                      <span>[{{ d.bankResponseCode }}] {{ d.bankResponseMessage || 'Cuenta rechazada por el banco' }}</span>
-                    </div>
-                    <div v-else-if="d.status === 'PROCESSING'" class="text-info flex items-center gap-1">
-                      <Clock class="size-3.5" /> Enrutando con cámara de compensación
-                    </div>
-                    <div v-else-if="d.status === 'COMPLETED'" class="text-success flex items-center gap-1">
-                      <CheckCircle2 class="size-3.5" /> Op: {{ d.operationNumber }}
-                    </div>
-                  </td>
-
-                  <td class="px-4 py-3 text-right">
-                    <!-- Reintento si falló (FE-BO-28) -->
-                    <Button
-                      v-if="d.status === 'FAILED'"
-                      size="sm"
-                      variant="outline"
-                      class="h-8 gap-1 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
-                      :disabled="retryingDisbursementId === d.id"
-                      @click="retryDisbursement(d)"
+                <!-- Alertas y Motivo de Rechazo (FE-BO-28) -->
+                <td class="px-4 py-3">
+                  <div
+                    v-if="d.status === 'FAILED'"
+                    class="text-destructive font-medium flex items-center gap-1.5"
+                  >
+                    <AlertTriangle class="size-3.5 shrink-0" />
+                    <span
+                      >[{{ d.bankResponseCode }}]
+                      {{ d.bankResponseMessage || 'Cuenta rechazada por el banco' }}</span
                     >
-                      <RotateCcw class="size-3.5" />
-                      <span>Reintentar</span>
-                    </Button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                  </div>
+                  <div
+                    v-else-if="d.status === 'PROCESSING'"
+                    class="text-info flex items-center gap-1"
+                  >
+                    <Clock class="size-3.5" /> Enrutando con cámara de compensación
+                  </div>
+                  <div
+                    v-else-if="d.status === 'COMPLETED'"
+                    class="text-success flex items-center gap-1"
+                  >
+                    <CheckCircle2 class="size-3.5" /> Op: {{ d.operationNumber }}
+                  </div>
+                </td>
+
+                <td class="px-4 py-3 text-right">
+                  <!-- Reintento si falló (FE-BO-28) -->
+                  <Button
+                    v-if="d.status === 'FAILED'"
+                    size="sm"
+                    variant="outline"
+                    class="h-8 gap-1 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
+                    :disabled="retryingDisbursementId === d.id"
+                    @click="retryDisbursement(d)"
+                  >
+                    <RotateCcw class="size-3.5" />
+                    <span>Reintentar</span>
+                  </Button>
+                </td>
+              </template>
+            </TableGenerator>
           </div>
         </CardContent>
       </Card>
@@ -469,66 +493,62 @@ onMounted(async () => {
             </EmptyState>
           </div>
 
-          <div v-else class="overflow-x-auto">
-            <table class="w-full text-sm text-left">
-              <thead class="border-b bg-muted/60 text-xs font-medium text-muted-foreground">
-                <tr>
-                  <th class="px-4 py-3">Nº Operación</th>
-                  <th class="px-4 py-3">Fecha Valor</th>
-                  <th class="px-4 py-3">Importe Abono / Cargo</th>
-                  <th class="px-4 py-3">Descripción en Extracto</th>
-                  <th class="px-4 py-3">Estado de Conciliación</th>
-                  <th class="px-4 py-3 text-right">Acción</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border text-xs">
-                <tr
-                  v-for="s in statements"
-                  :key="s.id"
-                  class="hover:bg-muted/40 transition-colors"
+          <div v-else>
+            <TableGenerator
+              :columns="[
+                { key: 'operationNumber', label: 'Nº Operación' },
+                { key: 'valueDate', label: 'Fecha Valor' },
+                { key: 'amount', label: 'Importe Abono / Cargo' },
+                { key: 'description', label: 'Descripción en Extracto' },
+                { key: 'status', label: 'Estado de Conciliación' },
+                { key: 'action', label: 'Acción', headerClass: 'text-right' },
+              ]"
+              :rows="statements"
+              row-key="id"
+              body-class="divide-y divide-border text-xs"
+            >
+              <template #row="{ row: s }">
+                <td class="px-4 py-3 font-mono font-bold">{{ s.operationNumber }}</td>
+                <td class="px-4 py-3 whitespace-nowrap">{{ formatBusinessDate(s.valueDate) }}</td>
+                <td
+                  class="px-4 py-3 font-mono font-bold"
+                  :class="Number(s.amount) > 0 ? 'text-success' : 'text-destructive'"
                 >
-                  <td class="px-4 py-3 font-mono font-bold">{{ s.operationNumber }}</td>
-                  <td class="px-4 py-3 whitespace-nowrap">{{ formatBusinessDate(s.valueDate) }}</td>
-                  <td
-                    class="px-4 py-3 font-mono font-bold"
-                    :class="Number(s.amount) > 0 ? 'text-success' : 'text-destructive'"
+                  <MoneyText :amount="s.amount" />
+                </td>
+                <td class="px-4 py-3 text-foreground font-medium max-w-xs truncate">
+                  {{ s.description }}
+                </td>
+                <td class="px-4 py-3">
+                  <Badge
+                    variant="outline"
+                    class="text-[10px]"
+                    :class="
+                      s.reconciliationStatus === 'CONCILIADO_AUTOMATICO'
+                        ? 'border-success text-success bg-success/10'
+                        : s.reconciliationStatus === 'PENDIENTE_CONCILIACION'
+                          ? 'border-warning text-warning bg-warning/10'
+                          : 'border-destructive text-destructive bg-destructive/10'
+                    "
                   >
-                    <MoneyText :amount="s.amount" />
-                  </td>
-                  <td class="px-4 py-3 text-foreground font-medium max-w-xs truncate">
-                    {{ s.description }}
-                  </td>
-                  <td class="px-4 py-3">
-                    <Badge
-                      variant="outline"
-                      class="text-[10px]"
-                      :class="
-                        s.reconciliationStatus === 'CONCILIADO_AUTOMATICO'
-                          ? 'border-success text-success bg-success/10'
-                          : s.reconciliationStatus === 'PENDIENTE_CONCILIACION'
-                            ? 'border-warning text-warning bg-warning/10'
-                            : 'border-destructive text-destructive bg-destructive/10'
-                      "
-                    >
-                      {{ s.reconciliationStatus }}
-                    </Badge>
-                  </td>
-                  <td class="px-4 py-3 text-right">
-                    <!-- Conciliación manual para no identificados (FE-BO-29) -->
-                    <Button
-                      v-if="s.reconciliationStatus === 'PENDIENTE_CONCILIACION'"
-                      size="sm"
-                      variant="outline"
-                      class="h-8 gap-1 text-xs"
-                      @click="openMatch(s)"
-                    >
-                      <ArrowRightLeft class="size-3.5" />
-                      <span>Conciliar Manual</span>
-                    </Button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+                    {{ s.reconciliationStatus }}
+                  </Badge>
+                </td>
+                <td class="px-4 py-3 text-right">
+                  <!-- Conciliación manual para no identificados (FE-BO-29) -->
+                  <Button
+                    v-if="s.reconciliationStatus === 'PENDIENTE_CONCILIACION'"
+                    size="sm"
+                    variant="outline"
+                    class="h-8 gap-1 text-xs"
+                    @click="openMatch(s)"
+                  >
+                    <ArrowRightLeft class="size-3.5" />
+                    <span>Conciliar Manual</span>
+                  </Button>
+                </td>
+              </template>
+            </TableGenerator>
           </div>
         </CardContent>
       </Card>
@@ -556,7 +576,8 @@ onMounted(async () => {
             </Badge>
           </CardTitle>
           <CardDescription>
-            Comparación automática entre el libro mayor financiero y el saldo reportado por el extracto.
+            Comparación automática entre el libro mayor financiero y el saldo reportado por el
+            extracto.
           </CardDescription>
         </CardHeader>
         <CardContent class="space-y-6">
@@ -588,7 +609,12 @@ onMounted(async () => {
             </div>
 
             <div class="flex items-end">
-              <Button size="sm" class="h-9 w-full" :disabled="loadingBalance" @click="loadDailyBalance">
+              <Button
+                size="sm"
+                class="h-9 w-full"
+                :disabled="loadingBalance"
+                @click="loadDailyBalance"
+              >
                 <RefreshCw class="size-3.5 mr-1.5" :class="{ 'animate-spin': loadingBalance }" />
                 Calcular Cuadre
               </Button>
@@ -598,14 +624,18 @@ onMounted(async () => {
           <!-- Indicadores de Balance -->
           <div v-if="dailyBalance" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div class="p-4 rounded-xl border bg-card space-y-1">
-              <span class="text-xs text-muted-foreground block">Flujo Neto Esperado (Libro Mayor):</span>
+              <span class="text-xs text-muted-foreground block"
+                >Flujo Neto Esperado (Libro Mayor):</span
+              >
               <span class="text-xl font-bold text-foreground">
                 <MoneyText :amount="dailyBalance.expectedBalance" />
               </span>
             </div>
 
             <div class="p-4 rounded-xl border bg-card space-y-1">
-              <span class="text-xs text-muted-foreground block">Saldo Neto en Extracto Bancario:</span>
+              <span class="text-xs text-muted-foreground block"
+                >Saldo Neto en Extracto Bancario:</span
+              >
               <span class="text-xl font-bold text-foreground">
                 <MoneyText :amount="dailyBalance.statementBalance" />
               </span>
@@ -630,7 +660,10 @@ onMounted(async () => {
           </div>
 
           <!-- Detalle de incidencias si está descuadrado -->
-          <div v-if="dailyBalance && dailyBalance.issues.length > 0" class="rounded-lg border border-destructive/40 bg-destructive/5 p-4 space-y-2">
+          <div
+            v-if="dailyBalance && dailyBalance.issues.length > 0"
+            class="rounded-lg border border-destructive/40 bg-destructive/5 p-4 space-y-2"
+          >
             <span class="text-xs font-bold text-destructive flex items-center gap-1.5">
               <ShieldAlert class="size-4" /> Partidas Pendientes que originan el descuadre:
             </span>
@@ -645,10 +678,7 @@ onMounted(async () => {
     </div>
 
     <!-- ── Modales de Tesorería ── -->
-    <CompanyAccountModal
-      v-model:open="isAccountModalOpen"
-      @saved="loadCompanyAccounts"
-    />
+    <CompanyAccountModal v-model:open="isAccountModalOpen" @saved="loadCompanyAccounts" />
 
     <ImportStatementModal
       v-model:open="isImportModalOpen"

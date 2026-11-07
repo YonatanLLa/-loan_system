@@ -6,4 +6,8 @@
     <ProjectReference Include="..\LoanSystem.Modules.Security.Core\LoanSystem.Modules.Security.Core.csproj" />
     <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
 </Project>

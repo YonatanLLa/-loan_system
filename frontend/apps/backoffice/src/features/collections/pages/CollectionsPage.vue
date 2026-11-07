@@ -15,18 +15,18 @@ import {
 } from '@lucide/vue'
 
 import type { AgingBucket, AgingRow } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Card, CardContent } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate } from '@prestamos/utils'
 
 import AssignCollectorDialog from '../components/AssignCollectorDialog.vue'
 import CollectionActionDialog from '../components/CollectionActionDialog.vue'
 import WriteOffDialog from '../components/WriteOffDialog.vue'
 import { useAging, useCollectionsCatalogs, useReceivables } from '../composables'
+import { BUCKET_LABEL, agingColumns, receivableColumns } from '../utils/collectionsColumns'
 
 // FE-BO-32 a FE-BO-36: aging, gestiones, asignación, castigo y cuentas por cobrar.
 
@@ -38,14 +38,6 @@ const BUCKETS: { id: AgingBucket | ''; label: string }[] = [
   { id: 'TRAMO_3', label: '61–90' },
   { id: 'TRAMO_4', label: '> 90' },
 ]
-
-const BUCKET_LABEL: Record<AgingBucket, string> = {
-  PREVENTIVO: 'Preventivo',
-  TRAMO_1: '1–30 días',
-  TRAMO_2: '31–60 días',
-  TRAMO_3: '61–90 días',
-  TRAMO_4: 'Más de 90 días',
-}
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
@@ -223,16 +215,7 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'customer', label: 'Cliente' },
-                { key: 'bucket', label: 'Tramo' },
-                { key: 'daysLate', label: 'Atraso' },
-                { key: 'overdueInstallments', label: 'Cuotas vencidas' },
-                { key: 'overduePrincipal', label: 'Capital impago' },
-                { key: 'totalDue', label: 'Total exigible' },
-                { key: 'assignedTo', label: 'Gestor' },
-                { key: 'actions', label: 'Acciones', headerClass: 'text-right' },
-              ]"
+              :columns="agingColumns"
               :rows="agingPage.items"
               row-key="loanId"
               body-class="divide-y text-xs"
@@ -243,84 +226,79 @@ onMounted(() => {
                 })
               "
             >
-              <template #row="{ row }">
-                <td class="px-4 py-3">
+              <template #cell-customer="{ row }">
+                <RouterLink
+                  :to="{ name: 'customer-detail', params: { id: row.customerId } }"
+                  class="font-medium text-foreground hover:underline"
+                >
+                  {{ row.customerName }}
+                </RouterLink>
+                <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <a
+                    :href="`tel:${row.phone}`"
+                    class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
+                    title="Llamar"
+                  >
+                    <Phone class="size-3" />
+                    {{ row.phone }}
+                  </a>
+                  <span>·</span>
+                  <a
+                    :href="`https://wa.me/51${row.phone.replace(/\D/g, '')}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    title="Abrir WhatsApp"
+                  >
+                    <MessageCircle class="size-3" />
+                    WhatsApp
+                  </a>
+                  <span>·</span>
                   <RouterLink
-                    :to="{ name: 'customer-detail', params: { id: row.customerId } }"
-                    class="font-medium text-foreground hover:underline"
+                    :to="{ name: 'loan-detail', params: { id: row.loanId } }"
+                    class="font-mono hover:underline"
                   >
-                    {{ row.customerName }}
+                    {{ row.loanId }}
                   </RouterLink>
-                  <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <a
-                      :href="`tel:${row.phone}`"
-                      class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
-                      title="Llamar"
-                    >
-                      <Phone class="size-3" />
-                      {{ row.phone }}
-                    </a>
-                    <span>·</span>
-                    <a
-                      :href="`https://wa.me/51${row.phone.replace(/\D/g, '')}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
-                      title="Abrir WhatsApp"
-                    >
-                      <MessageCircle class="size-3" />
-                      WhatsApp
-                    </a>
-                    <span>·</span>
-                    <RouterLink
-                      :to="{ name: 'loan-detail', params: { id: row.loanId } }"
-                      class="font-mono hover:underline"
-                    >
-                      {{ row.loanId }}
-                    </RouterLink>
-                  </span>
-                  <span class="mt-1 block text-[11px] text-muted-foreground">{{
-                    row.productName
-                  }}</span>
-                  <Badge
-                    v-if="row.hasBrokenPromise"
+                </span>
+                <span class="mt-1 block text-[11px] text-muted-foreground">{{
+                  row.productName
+                }}</span>
+                <Badge
+                  v-if="row.hasBrokenPromise"
+                  variant="outline"
+                  class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                >
+                  <AlertTriangle class="mr-1 size-3" />
+                  Promesa incumplida
+                </Badge>
+              </template>
+
+              <template #cell-bucket="{ row }">
+                <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
+              </template>
+
+              <template #cell-actions="{ row }">
+                <div class="flex justify-end gap-1">
+                  <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
+                    <MessageSquarePlus class="size-3.5" />
+                    <span class="sr-only">Registrar gestión</span>
+                  </Button>
+                  <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
+                    <UserPlus class="size-3.5" />
+                    <span class="sr-only">Asignar gestor</span>
+                  </Button>
+                  <Button
+                    v-if="row.daysLate > 90"
+                    size="sm"
                     variant="outline"
-                    class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                    class="h-8 text-destructive"
+                    @click="openWriteOff(row)"
                   >
-                    <AlertTriangle class="mr-1 size-3" />
-                    Promesa incumplida
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
-                </td>
-                <td class="px-4 py-3 font-medium">{{ row.daysLate }} días</td>
-                <td class="px-4 py-3">{{ row.overdueInstallments }}</td>
-                <td class="px-4 py-3"><MoneyText :amount="row.overduePrincipal" /></td>
-                <td class="px-4 py-3 font-semibold"><MoneyText :amount="row.totalDue" /></td>
-                <td class="px-4 py-3">{{ row.assignedTo || 'Sin asignar' }}</td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-1">
-                    <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
-                      <MessageSquarePlus class="size-3.5" />
-                      <span class="sr-only">Registrar gestión</span>
-                    </Button>
-                    <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
-                      <UserPlus class="size-3.5" />
-                      <span class="sr-only">Asignar gestor</span>
-                    </Button>
-                    <Button
-                      v-if="row.daysLate > 90"
-                      size="sm"
-                      variant="outline"
-                      class="h-8 text-destructive"
-                      @click="openWriteOff(row)"
-                    >
-                      <ShieldAlert class="size-3.5" />
-                      <span class="sr-only">Castigar</span>
-                    </Button>
-                  </div>
-                </td>
+                    <ShieldAlert class="size-3.5" />
+                    <span class="sr-only">Castigar</span>
+                  </Button>
+                </div>
               </template>
             </TableGenerator>
           </div>
@@ -398,62 +376,43 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'customer', label: 'Cliente' },
-                { key: 'installment', label: 'Cuota' },
-                { key: 'dueDate', label: 'Vencimiento' },
-                { key: 'daysLate', label: 'Atraso' },
-                { key: 'amount', label: 'Saldo de la cuota' },
-                { key: 'outstandingPrincipal', label: 'Capital pendiente del préstamo' },
-                { key: 'status', label: 'Estado' },
-              ]"
+              :columns="receivableColumns"
               :rows="receivablesPage.items"
               :row-key="(item) => `${item.loanId}-${item.installmentNumber}`"
               body-class="divide-y text-xs"
-              :row-class="''"
             >
-              <template #row="{ row: item }">
-                <td class="px-4 py-3">
-                  <span class="font-medium text-foreground">{{ item.customerName }}</span>
-                  <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                    <a
-                      :href="`tel:${item.phone}`"
-                      class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
-                      title="Llamar"
-                    >
-                      <Phone class="size-3" />
-                      {{ item.phone }}
-                    </a>
-                    <span>·</span>
-                    <a
-                      :href="`https://wa.me/51${item.phone.replace(/\D/g, '')}`"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
-                      title="Abrir WhatsApp"
-                    >
-                      <MessageCircle class="size-3" />
-                      WhatsApp
-                    </a>
-                    <span>·</span>
-                    <RouterLink
-                      :to="{ name: 'loan-detail', params: { id: item.loanId } }"
-                      class="font-mono hover:underline"
-                    >
-                      {{ item.loanId }}
-                    </RouterLink>
-                    <span>·</span>
-                    <span>{{ item.productName }}</span>
-                  </span>
-                </td>
-                <td class="px-4 py-3">N.º {{ item.installmentNumber }}</td>
-                <td class="px-4 py-3">{{ formatBusinessDate(item.dueDate) }}</td>
-                <td class="px-4 py-3">{{ item.daysLate > 0 ? `${item.daysLate} días` : '—' }}</td>
-                <td class="px-4 py-3 font-semibold"><MoneyText :amount="item.amount" /></td>
-                <td class="px-4 py-3"><MoneyText :amount="item.outstandingPrincipal" /></td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="receivable" :status="item.status" />
-                </td>
+              <template #cell-customer="{ row: item }">
+                <span class="font-medium text-foreground">{{ item.customerName }}</span>
+                <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <a
+                    :href="`tel:${item.phone}`"
+                    class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
+                    title="Llamar"
+                  >
+                    <Phone class="size-3" />
+                    {{ item.phone }}
+                  </a>
+                  <span>·</span>
+                  <a
+                    :href="`https://wa.me/51${item.phone.replace(/\D/g, '')}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    title="Abrir WhatsApp"
+                  >
+                    <MessageCircle class="size-3" />
+                    WhatsApp
+                  </a>
+                  <span>·</span>
+                  <RouterLink
+                    :to="{ name: 'loan-detail', params: { id: item.loanId } }"
+                    class="font-mono hover:underline"
+                  >
+                    {{ item.loanId }}
+                  </RouterLink>
+                  <span>·</span>
+                  <span>{{ item.productName }}</span>
+                </span>
               </template>
             </TableGenerator>
           </div>

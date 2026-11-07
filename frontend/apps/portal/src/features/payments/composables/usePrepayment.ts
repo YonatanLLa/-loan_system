@@ -1,7 +1,8 @@
-import { ref, computed } from 'vue'
-import type {
-  PartialPrepaymentSimulation,
-  PrepaymentQuote,
+import { ref } from 'vue'
+import {
+  toApiError,
+  type PartialPrepaymentSimulation,
+  type PrepaymentQuote,
 } from '@prestamos/api-client'
 
 import { paymentsService } from '../services/payments.service'
@@ -27,11 +28,10 @@ export function usePrepayment() {
     try {
       quote.value = await paymentsService.quotePrepayment(loanId, asOfDate)
       return quote.value
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       quoteError.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos cotizar la liquidación anticipada.'
+        apiErr.detail || 'No pudimos cotizar la liquidación anticipada.'
       return null
     } finally {
       isQuoting.value = false
@@ -65,11 +65,10 @@ export function usePrepayment() {
       )
       partialSimulation.value = result
       return result
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       partialError.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos simular el abono extraordinario.'
+        apiErr.detail || 'No pudimos simular el abono extraordinario.'
       return null
     } finally {
       isSimulatingPartial.value = false

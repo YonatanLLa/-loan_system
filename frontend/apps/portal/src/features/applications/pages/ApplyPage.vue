@@ -2,19 +2,11 @@
 import { onMounted, ref } from 'vue'
 import {
   AlertCircle,
-  ArrowRight,
-  BadgePercent,
   Briefcase,
-  Building,
   Calculator,
-  Calendar,
   CheckCircle2,
   ChevronDown,
-  Coins,
-  DollarSign,
-  FileText,
   FileUp,
-  Info,
   LoaderCircle,
   Send,
   Sparkles,
@@ -51,7 +43,6 @@ const {
   maxAmount,
   minTerm,
   maxTerm,
-  simulation,
   isCalculating,
   productsLoading,
   error: simulatorError,
@@ -139,6 +130,25 @@ onMounted(() => {
         </CardHeader>
 
         <CardContent class="space-y-4 pt-4 text-xs">
+          <Alert v-if="simulatorError" variant="destructive" class="py-2.5">
+            <AlertCircle class="size-4" />
+            <AlertDescription class="text-xs">{{ simulatorError }}</AlertDescription>
+          </Alert>
+
+          <!-- Selector de Producto (cuando hay más de un producto activo) -->
+          <div v-if="products.length > 1" class="space-y-1">
+            <Label for="productId" class="text-xs font-semibold text-muted-foreground">Producto crediticio</Label>
+            <select
+              id="productId"
+              v-model="selectedProductId"
+              class="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-xs shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              <option v-for="p in products" :key="p.id" :value="p.id">
+                {{ p.name }} (TEA {{ (Number(p.annualRate) * 100).toFixed(1) }}%)
+              </option>
+            </select>
+          </div>
+
           <!-- Monto Slider y Valor -->
           <div class="space-y-2">
             <div class="flex items-center justify-between">
@@ -336,9 +346,9 @@ onMounted(() => {
               <Label class="text-xs font-medium">Sustento de Ingresos (Boleta de Pago o Recibo por Honorarios)</Label>
               <div
                 class="rounded-xl border border-dashed p-3 text-center bg-muted/10 transition-colors"
-                :class="incomeProof ? 'border-emerald-500 bg-emerald-500/5' : 'border-input'"
+                :class="incomeProof ? 'border-success bg-success/10' : 'border-input'"
               >
-                <div v-if="incomeProof" class="flex items-center justify-between text-emerald-600 px-2 py-1">
+                <div v-if="incomeProof" class="flex items-center justify-between text-success px-2 py-1">
                   <div class="flex items-center gap-2">
                     <CheckCircle2 class="size-4" />
                     <span class="font-semibold text-[11px]">{{ incomeProof }}</span>

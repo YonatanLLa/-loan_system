@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { getCurrentInstance, onUnmounted, ref } from 'vue'
 import { toApiError } from '@prestamos/api-client'
 import type { LoanContractDocument, SignContractResponse } from '@prestamos/api-client'
 import { toast } from 'vue-sonner'
@@ -22,6 +22,12 @@ export function useContractSigning() {
   const signatureResult = ref<SignContractResponse | null>(null)
 
   let timerHandle: ReturnType<typeof setInterval> | null = null
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      if (timerHandle) clearInterval(timerHandle)
+    })
+  }
 
   function startCountdown(seconds = 60) {
     if (timerHandle) clearInterval(timerHandle)

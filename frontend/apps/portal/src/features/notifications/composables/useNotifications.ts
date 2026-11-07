@@ -1,7 +1,8 @@
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
-import type {
-  ClientNotification,
-  NotificationPreferences,
+import {
+  toApiError,
+  type ClientNotification,
+  type NotificationPreferences,
 } from '@prestamos/api-client'
 
 import { notificationsService } from '../services/notifications.service'
@@ -34,11 +35,10 @@ export function useNotifications() {
       ])
       notifications.value = notifs
       preferences.value = prefs
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos cargar tus notificaciones.'
+        apiErr.detail || 'No pudimos cargar tus notificaciones.'
     } finally {
       isLoading.value = false
     }
@@ -49,7 +49,7 @@ export function useNotifications() {
       await notificationsService.markAsRead(id)
       const target = notifications.value.find((n) => n.id === id)
       if (target) target.read = true
-    } catch (err) {
+    } catch {
       // Ignorar fallo puntual
     }
   }
@@ -60,7 +60,7 @@ export function useNotifications() {
       for (const n of notifications.value) {
         n.read = true
       }
-    } catch (err) {
+    } catch {
       // Ignorar fallo puntual
     }
   }
@@ -72,11 +72,10 @@ export function useNotifications() {
     try {
       preferences.value = await notificationsService.updatePreferences(preferences.value)
       successMessage.value = 'Preferencias de notificación guardadas con éxito.'
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No se pudieron guardar tus preferencias.'
+        apiErr.detail || 'No se pudieron guardar tus preferencias.'
     } finally {
       isSavingPreferences.value = false
     }

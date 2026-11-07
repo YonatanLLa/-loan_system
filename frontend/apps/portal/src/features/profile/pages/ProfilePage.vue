@@ -1,40 +1,30 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowRight,
   Banknote,
   Building,
   CheckCircle2,
   Clock,
-  CreditCard,
-  HelpCircle,
-  Info,
   KeyRound,
   LoaderCircle,
-  Mail,
-  Phone,
   Plus,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
   User,
-  Wallet,
 } from '@lucide/vue'
 
-import { StatusBadge } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
 
 import { useProfile } from '../composables/useProfile'
@@ -189,7 +179,7 @@ const handleConfirmRefund = async () => {
         <CardHeader class="pb-3">
           <div class="flex items-center justify-between">
             <CardTitle class="text-base flex items-center gap-2">
-              <User class="h-4 w-4 text-brand-600" />
+              <User class="h-4 w-4 text-primary" />
               <span>Datos Personales</span>
             </CardTitle>
             <Badge
@@ -250,7 +240,7 @@ const handleConfirmRefund = async () => {
             <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle class="text-base flex items-center gap-2">
-                  <Building class="h-4 w-4 text-brand-600" />
+                  <Building class="h-4 w-4 text-primary" />
                   <span>Cuentas de Desembolso</span>
                 </CardTitle>
                 <CardDescription>
@@ -291,7 +281,7 @@ const handleConfirmRefund = async () => {
                 :key="acc.id"
                 :class="[
                   acc.isPrimary
-                    ? 'border-brand-500 bg-brand-50/30'
+                    ? 'border-primary bg-primary/5'
                     : 'border-slate-200 bg-white',
                   'flex items-center justify-between rounded-xl border p-4 text-xs transition-all',
                 ]"
@@ -299,7 +289,7 @@ const handleConfirmRefund = async () => {
                 <div class="space-y-1">
                   <div class="flex items-center gap-2">
                     <span class="font-bold text-slate-900 text-sm">{{ acc.bankName }}</span>
-                    <Badge v-if="acc.isPrimary" class="bg-brand-600 text-white text-[10px]">
+                    <Badge v-if="acc.isPrimary" class="bg-primary text-white text-[10px]">
                       Cuenta Principal
                     </Badge>
                     <Badge v-if="acc.isVerified" variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
@@ -516,9 +506,9 @@ const handleConfirmRefund = async () => {
           </div>
 
           <!-- Campo de OTP obligatorio (FE-CP-18) -->
-          <div class="rounded-xl border border-brand-200 bg-brand-50/50 p-3 space-y-2">
-            <div class="flex items-center gap-1.5 font-bold text-brand-900">
-              <KeyRound class="h-4 w-4 text-brand-600" />
+          <div class="rounded-xl border border-primary/20 bg-primary/5 p-3 space-y-2">
+            <div class="flex items-center gap-1.5 font-bold text-navy">
+              <KeyRound class="h-4 w-4 text-primary" />
               <span>Verificación de Seguridad por OTP</span>
             </div>
             <p class="text-[11px] text-slate-600">
@@ -529,7 +519,7 @@ const handleConfirmRefund = async () => {
               type="text"
               maxlength="6"
               placeholder="123456"
-              class="w-full rounded-lg border border-brand-300 bg-white p-2 text-center text-lg font-bold tracking-widest text-slate-900 focus:border-brand-500 focus:outline-none"
+              class="w-full rounded-lg border border-primary/30 bg-white p-2 text-center text-lg font-bold tracking-widest text-slate-900 focus:border-primary focus:outline-none"
             />
           </div>
 
@@ -582,7 +572,7 @@ const handleConfirmRefund = async () => {
                 v-model="refundAmount"
                 type="number"
                 step="0.01"
-                class="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-base font-bold text-slate-900 focus:border-brand-500"
+                class="w-full rounded-lg border border-slate-300 py-2.5 pl-9 pr-3 text-base font-bold text-slate-900 focus:border-primary"
               />
             </div>
             <span class="text-[11px] text-slate-500 mt-1 block">

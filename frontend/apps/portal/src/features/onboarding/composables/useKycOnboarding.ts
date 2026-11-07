@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, getCurrentInstance, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toApiError } from '@prestamos/api-client'
 import { toast } from 'vue-sonner'
@@ -12,7 +12,7 @@ export type OnboardingStep = 1 | 2 | 3 | 4
  * Composable para el flujo de Onboarding KYC, Consentimientos y Cuenta de Desembolso (FE-CP-03 a FE-CP-05).
  */
 export function useKycOnboarding() {
-  const router = useRouter()
+  const router = getCurrentInstance() ? useRouter() : null
   const session = useSessionStore()
 
   const currentStep = ref<OnboardingStep>(1)
@@ -68,18 +68,26 @@ export function useKycOnboarding() {
     }
   })
 
+  function scrollToTop() {
+    try {
+      window.scrollTo?.({ top: 0, behavior: 'smooth' })
+    } catch {
+      // Ignorado en entornos de prueba sin scrollTo implementado
+    }
+  }
+
   function nextStep() {
     if (!canProceed.value) return
     if (currentStep.value < 4) {
       currentStep.value = (currentStep.value + 1) as OnboardingStep
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      scrollToTop()
     }
   }
 
   function prevStep() {
     if (currentStep.value > 1) {
       currentStep.value = (currentStep.value - 1) as OnboardingStep
-      window.scrollTo({ top: 0, behavior: 'smooth' })
+      scrollToTop()
     }
   }
 
@@ -117,7 +125,7 @@ export function useKycOnboarding() {
         description: 'Tu identidad y cuenta de desembolso han sido validadas. Ya puedes solicitar préstamos.',
       })
 
-      await router.push('/')
+      await router?.push('/inicio')
       return true
     } catch (err) {
       const apiErr = toApiError(err)

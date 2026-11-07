@@ -1,5 +1,5 @@
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
-import type { Payment, PaymentStatus } from '@prestamos/api-client'
+import { toApiError, type Payment, type PaymentStatus } from '@prestamos/api-client'
 
 import { paymentsService } from '../services/payments.service'
 
@@ -14,11 +14,10 @@ export function usePaymentHistory() {
     errorMessage.value = null
     try {
       payments.value = await paymentsService.getPaymentHistory()
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos cargar el historial de pagos.'
+        apiErr.detail || 'No pudimos cargar el historial de pagos.'
     } finally {
       isLoading.value = false
     }
@@ -42,7 +41,7 @@ export function usePaymentHistory() {
   const downloadReceipt = async (payment: Payment) => {
     try {
       await paymentsService.downloadReceiptPdf(payment.id, payment.receiptNumber)
-    } catch (err) {
+    } catch {
       errorMessage.value = 'No se pudo descargar la constancia de pago.'
     }
   }

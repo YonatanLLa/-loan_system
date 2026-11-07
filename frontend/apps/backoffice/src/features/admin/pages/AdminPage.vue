@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import {
-  AlertCircle,
   Building2,
   CalendarDays,
   CheckCircle2,
@@ -13,7 +12,6 @@ import {
   Sliders,
   Trash2,
   Users,
-  XCircle,
 } from '@lucide/vue'
 
 import type { Company, GlobalParameters } from '@prestamos/api-client'
@@ -30,11 +28,15 @@ import {
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Label } from '@prestamos/ui/components/ui/label'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
 import AddHolidayDialog from '../components/AddHolidayDialog.vue'
 import AddUserDialog from '../components/AddUserDialog.vue'
 import { useAdminSettings } from '../composables'
+import {
+  paymentMethodColumns,
+  holidayColumns,
+  adminUserColumns,
+} from '../utils/adminColumns'
 import type { CreateAdminUserPayload, CreateHolidayPayload } from '../services/admin.service'
 
 // FE-BO-41 y FE-BO-42: Administración general, empresa, canales, feriados, usuarios y parámetros.
@@ -332,56 +334,46 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'name', label: 'Canal de Recaudación' },
-                { key: 'type', label: 'Tipo de Método' },
-                { key: 'webhook', label: 'Notificación Webhook' },
-                { key: 'status', label: 'Estado' },
-                { key: 'actions', label: 'Acción' },
-              ]"
+              :columns="paymentMethodColumns"
               :rows="paymentMethods"
               row-key="id"
               body-class="divide-y text-xs"
             >
-              <template #row="{ row: method }">
-                <td class="px-4 py-3 font-semibold text-foreground">
-                  {{ method.name }}
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="outline" class="font-mono text-[10px]">
-                    {{ method.methodType }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <span
-                    v-if="method.webhookEnabled"
-                    class="inline-flex items-center gap-1 text-emerald-600 font-medium"
-                  >
-                    <CheckCircle2 class="size-3.5" />
-                    En tiempo real
-                  </span>
-                  <span v-else class="text-muted-foreground">
-                    Carga manual
-                  </span>
-                </td>
-                <td class="px-4 py-3">
-                  <Badge
-                    :variant="method.isActive ? 'default' : 'secondary'"
-                    class="text-[10px]"
-                  >
-                    {{ method.isActive ? 'ACTIVO' : 'INACTIVO' }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    class="h-7 text-xs"
-                    @click="togglePaymentMethod(method.id, !method.isActive)"
-                  >
-                    {{ method.isActive ? 'Desactivar' : 'Activar' }}
-                  </Button>
-                </td>
+              <template #cell-type="{ row: method }">
+                <Badge variant="outline" class="font-mono text-[10px]">
+                  {{ method.methodType }}
+                </Badge>
+              </template>
+
+              <template #cell-webhook="{ row: method }">
+                <span
+                  v-if="method.webhookEnabled"
+                  class="inline-flex items-center gap-1 text-emerald-600 font-medium"
+                >
+                  <CheckCircle2 class="size-3.5" />
+                  En tiempo real
+                </span>
+                <span v-else class="text-muted-foreground"> Carga manual </span>
+              </template>
+
+              <template #cell-status="{ row: method }">
+                <Badge
+                  :variant="method.isActive ? 'default' : 'secondary'"
+                  class="text-[10px]"
+                >
+                  {{ method.isActive ? 'ACTIVO' : 'INACTIVO' }}
+                </Badge>
+              </template>
+
+              <template #cell-actions="{ row: method }">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="h-7 text-xs"
+                  @click="togglePaymentMethod(method.id, !method.isActive)"
+                >
+                  {{ method.isActive ? 'Desactivar' : 'Activar' }}
+                </Button>
               </template>
             </TableGenerator>
           </div>
@@ -414,40 +406,28 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'date', label: 'Fecha' },
-                { key: 'name', label: 'Festividad' },
-                { key: 'recurrence', label: 'Frecuencia' },
-                { key: 'actions', label: 'Acciones' },
-              ]"
+              :columns="holidayColumns"
               :rows="holidays"
               row-key="id"
               body-class="divide-y text-xs"
             >
-              <template #row="{ row: h }">
-                <td class="px-4 py-3 font-mono font-semibold">
-                  {{ formatBusinessDate(h.date) }}
-                </td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  {{ h.name }}
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="outline" class="text-[10px]">
-                    {{ h.isRecurring ? 'Recurrente Anual' : 'Fecha Específica' }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="h-7 text-xs text-destructive hover:bg-destructive/10"
-                    :disabled="holidaysSaving"
-                    @click="removeHoliday(h.id)"
-                  >
-                    <Trash2 class="size-3.5 mr-1" />
-                    Eliminar
-                  </Button>
-                </td>
+              <template #cell-recurrence="{ row: h }">
+                <Badge variant="outline" class="text-[10px]">
+                  {{ h.isRecurring ? 'Recurrente Anual' : 'Fecha Específica' }}
+                </Badge>
+              </template>
+
+              <template #cell-actions="{ row: h }">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 text-xs text-destructive hover:bg-destructive/10"
+                  :disabled="holidaysSaving"
+                  @click="removeHoliday(h.id)"
+                >
+                  <Trash2 class="size-3.5 mr-1" />
+                  Eliminar
+                </Button>
               </template>
             </TableGenerator>
           </div>
@@ -483,38 +463,22 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'name', label: 'Nombre Completo' },
-                { key: 'email', label: 'Correo Corporativo' },
-                { key: 'role', label: 'Rol Asignado' },
-                { key: 'permissions', label: 'Permisos' },
-                { key: 'created', label: 'Fecha de Registro' },
-              ]"
+              :columns="adminUserColumns"
               :rows="users"
               row-key="id"
               body-class="divide-y text-xs"
             >
-              <template #row="{ row: u }">
-                <td class="px-4 py-3 font-semibold text-foreground">
-                  {{ u.fullName }}
-                </td>
-                <td class="px-4 py-3 font-mono text-muted-foreground">
-                  {{ u.email }}
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="secondary" class="text-[10px] font-mono">
-                    {{ u.role }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <span class="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <ShieldCheck class="size-3.5 text-primary" />
-                    {{ u.permissions?.length ? `${u.permissions.length} módulos` : 'Todos (*)' }}
-                  </span>
-                </td>
-                <td class="px-4 py-3 text-muted-foreground">
-                  {{ u.createdAt ? formatInstant(u.createdAt) : 'Registrado' }}
-                </td>
+              <template #cell-role="{ row: u }">
+                <Badge variant="secondary" class="text-[10px] font-mono">
+                  {{ u.role }}
+                </Badge>
+              </template>
+
+              <template #cell-permissions="{ row: u }">
+                <span class="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+                  <ShieldCheck class="size-3.5 text-primary" />
+                  {{ u.permissions?.length ? `${u.permissions.length} módulos` : 'Todos (*)' }}
+                </span>
               </template>
             </TableGenerator>
           </div>

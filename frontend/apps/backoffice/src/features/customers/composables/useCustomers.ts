@@ -3,7 +3,6 @@ import { toast } from 'vue-sonner'
 import type {
   CreateCustomerRequest,
   Customer,
-  Customer360,
   CustomerBankAccount,
   KycStatus,
   Page,

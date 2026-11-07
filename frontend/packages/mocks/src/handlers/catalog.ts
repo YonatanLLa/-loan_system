@@ -158,8 +158,13 @@ export const catalogHandlers = [
     secured('admin.manage', () => {
       const users = db.users
         .filter((u) => u.role !== 'ROLE_CLIENT')
-        .map(({ password: _, ...rest }) => ({
-          ...rest,
+        .map((u) => ({
+          id: u.id,
+          email: u.email,
+          fullName: u.fullName,
+          role: u.role,
+          permissions: u.permissions,
+          customerId: u.customerId,
           createdAt: nowIso(),
         }))
       return HttpResponse.json(users)

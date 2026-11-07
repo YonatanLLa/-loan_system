@@ -2,30 +2,22 @@
 import { onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
-  AlertCircle,
   ArrowRight,
   CheckCircle2,
   Clock,
-  Coins,
   FileCheck2,
   FilePlus,
-  FileText,
-  HandCoins,
-  LoaderCircle,
   ShieldAlert,
   Sparkles,
-  XCircle,
 } from '@lucide/vue'
 
-import { EmptyState, MoneyText, StatusBadge } from '@prestamos/ui'
+import { MoneyText, StatusBadge } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
@@ -158,7 +150,7 @@ onMounted(() => {
                   class="absolute -left-[11px] top-0.5 size-4 rounded-full flex items-center justify-center text-[10px]"
                   :class="
                     step.isDone
-                      ? 'bg-emerald-500 text-white'
+                      ? 'bg-success text-white'
                       : step.isCurrent
                       ? 'bg-primary text-white ring-4 ring-primary/20 animate-pulse'
                       : 'bg-muted border border-border text-muted-foreground'
@@ -193,16 +185,16 @@ onMounted(() => {
           <!-- Si fue APROBADO: Botón para firmar contrato electrónico (FE-CP-09) -->
           <div
             v-if="app.status === 'APROBADO' || app.status === 'APROBADO_CON_CONDICIONES'"
-            class="p-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 space-y-2 mt-2"
+            class="p-3.5 rounded-xl border border-success/30 bg-success/10 space-y-2 mt-2"
           >
-            <div class="flex items-center gap-2 text-emerald-700">
+            <div class="flex items-center gap-2 text-success font-bold text-xs">
               <Sparkles class="size-4" />
-              <span class="font-bold text-xs">¡Tu crédito está listo para desembolso!</span>
+              <span>¡Tu crédito está listo para desembolso!</span>
             </div>
-            <p class="text-[11px] text-emerald-800">
+            <p class="text-[11px] text-foreground">
               Solo falta firmar digitalmente el contrato y pagaré con tu código OTP para recibir los fondos en tu cuenta.
             </p>
-            <Button as-child size="sm" class="w-full text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button as-child size="sm" class="w-full text-xs font-semibold bg-success hover:bg-success/90 text-white">
               <RouterLink :to="{ path: '/contrato', query: { applicationId: app.id } }">
                 <FileCheck2 class="size-3.5 mr-1.5" />
                 Firmar Contrato y Pagaré Digital (FE-CP-09)

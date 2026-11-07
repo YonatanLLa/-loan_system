@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
-import { ArrowUpRight, Building2, CheckCircle2, LoaderCircle, AlertTriangle } from '@lucide/vue'
+import { ref, onMounted, computed, watch } from 'vue'
+import { ArrowUpRight, LoaderCircle, AlertTriangle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type {
@@ -18,7 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
 import { useLoans } from '../composables/useLoans'
 
@@ -125,8 +125,20 @@ const { run: submitDisbursement, isBusy } = useBusyAction(async () => {
   }
 })
 
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      void loadData()
+    }
+  },
+)
+
 onMounted(() => {
-  void loadData()
+  if (props.open) {
+    void loadData()
+  }
 })
 </script>
 

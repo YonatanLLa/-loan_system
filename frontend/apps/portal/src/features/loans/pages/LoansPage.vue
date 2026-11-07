@@ -1,24 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import {
-  AlertCircle,
-  AlertTriangle,
-  ArrowRight,
   Calendar,
-  CheckCircle2,
-  ChevronRight,
-  Clock,
   Coins,
-  FileCheck2,
-  FileText,
-  HandCoins,
-  HelpCircle,
-  Info,
-  LoaderCircle,
   Receipt,
-  ShieldAlert,
-  Sparkles,
   Wallet,
 } from '@lucide/vue'
 
@@ -53,6 +39,8 @@ const {
 const {
   schedule,
   scheduleVersion,
+  totalMoraAccrued,
+  dueCountdownText,
   isLoading: scheduleLoading,
   getInstallmentColorClass,
   getInstallmentStatusLabel,
@@ -145,7 +133,7 @@ onMounted(async () => {
             <StatusBadge kind="loan" :status="activeLoan.status" />
           </div>
 
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-center">
             <div class="p-2 rounded-lg bg-muted/20 border">
               <span class="text-[10px] text-muted-foreground block">Monto Inicial:</span>
               <span class="font-semibold text-foreground font-mono"><MoneyText :amount="activeLoan.principal" /></span>
@@ -158,6 +146,53 @@ onMounted(async () => {
               <span class="text-[10px] text-muted-foreground block">TEA Aplicada:</span>
               <span class="font-semibold text-foreground font-mono">{{ (Number(activeLoan.annualRate) * 100).toFixed(1) }}%</span>
             </div>
+
+            <!-- FE-CP-10: Días restantes o de atraso -->
+            <div
+              class="p-2 rounded-lg border"
+              :class="
+                activeLoan.status === 'EN_MORA'
+                  ? 'bg-destructive/10 border-destructive/30'
+                  : 'bg-amber-500/10 border-amber-500/30'
+              "
+            >
+              <span
+                class="text-[10px] font-semibold block"
+                :class="activeLoan.status === 'EN_MORA' ? 'text-destructive' : 'text-amber-700'"
+              >
+                {{ activeLoan.status === 'EN_MORA' ? 'Días de Atraso:' : 'Próximo Vencimiento:' }}
+              </span>
+              <span
+                class="font-bold text-xs"
+                :class="activeLoan.status === 'EN_MORA' ? 'text-destructive' : 'text-amber-700'"
+              >
+                {{ dueCountdownText }}
+              </span>
+            </div>
+
+            <!-- FE-CP-10: Mora acumulada del día -->
+            <div
+              class="p-2 rounded-lg border"
+              :class="
+                Number(totalMoraAccrued) > 0
+                  ? 'bg-destructive/10 border-destructive/30'
+                  : 'bg-muted/20 border'
+              "
+            >
+              <span
+                class="text-[10px] font-semibold block"
+                :class="Number(totalMoraAccrued) > 0 ? 'text-destructive' : 'text-muted-foreground'"
+              >
+                Mora Acumulada:
+              </span>
+              <span
+                class="font-bold font-mono text-xs"
+                :class="Number(totalMoraAccrued) > 0 ? 'text-destructive' : 'text-muted-foreground'"
+              >
+                <MoneyText :amount="totalMoraAccrued" />
+              </span>
+            </div>
+
             <div class="p-2 rounded-lg bg-muted/20 border">
               <span class="text-[10px] text-muted-foreground block">Plazo de Pago:</span>
               <span class="font-semibold text-foreground">{{ activeLoan.term }} meses</span>
@@ -200,8 +235,8 @@ onMounted(async () => {
 
             <!-- Leyenda de Colores (FE-CP-11) -->
             <div class="flex flex-wrap items-center gap-1.5 text-[10px]">
-              <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 font-medium border border-emerald-500/30">
-                <span class="size-1.5 rounded-full bg-emerald-500" />
+              <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-success/10 text-success font-medium border border-success/30">
+                <span class="size-1.5 rounded-full bg-success" />
                 Pagada
               </span>
               <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 font-medium border border-amber-500/30">
@@ -212,8 +247,8 @@ onMounted(async () => {
                 <span class="size-1.5 rounded-full bg-destructive" />
                 Vencida
               </span>
-              <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-700 font-medium border border-blue-500/30">
-                <span class="size-1.5 rounded-full bg-blue-500" />
+              <span class="flex items-center gap-1 px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium border border-primary/30">
+                <span class="size-1.5 rounded-full bg-primary" />
                 Parcial
               </span>
             </div>

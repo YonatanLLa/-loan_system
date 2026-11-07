@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import {
   AlertCircle,
   ArrowRight,
-  Building,
   CheckCircle2,
-  Clock,
   Download,
   FileCheck2,
   FileText,
@@ -15,7 +13,6 @@ import {
   QrCode,
   RotateCcw,
   ShieldCheck,
-  Sparkles,
   Wallet,
 } from '@lucide/vue'
 
@@ -32,7 +29,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate, formatInstant } from '@prestamos/utils'
+import { formatInstant } from '@prestamos/utils'
 
 import { useContractSigning } from '../composables'
 
@@ -48,7 +45,6 @@ const {
   otpCountdown,
   isSigning,
   isDownloading,
-  signedSuccess,
   loadContract,
   requestOtp,
   signWithOtp,
@@ -56,6 +52,15 @@ const {
 } = useContractSigning()
 
 const termsAccepted = ref(false)
+
+watch(
+  () => route.query.applicationId,
+  (appId) => {
+    if (appId && typeof appId === 'string') {
+      void loadContract(appId)
+    }
+  },
+)
 
 onMounted(() => {
   const appId = (route.query.applicationId as string) || undefined
@@ -204,21 +209,21 @@ onMounted(() => {
       <!-- ESTADO DE FIRMA O BOTÓN DE ACEPTACIÓN CON OTP             -->
       <!-- ══════════════════════════════════════════════════════════ -->
       <!-- Si ya está firmado -->
-      <Card v-if="contract.isSigned" class="border-emerald-500/40 bg-emerald-500/5 shadow-md">
+      <Card v-if="contract.isSigned" class="border-success/40 bg-success/5 shadow-md">
         <CardContent class="p-5 text-center space-y-3">
-          <div class="mx-auto size-12 rounded-full bg-emerald-500/20 text-emerald-600 flex items-center justify-center">
+          <div class="mx-auto size-12 rounded-full bg-success/20 text-success flex items-center justify-center">
             <CheckCircle2 class="size-7" />
           </div>
           <div>
-            <h3 class="font-bold text-base text-emerald-800">Contrato Firmado Electrónicamente</h3>
+            <h3 class="font-bold text-base text-success">Contrato Firmado Electrónicamente</h3>
             <p class="text-xs text-muted-foreground mt-0.5">
               Tu dinero ha sido desembolsado exitosamente a tu cuenta bancaria.
             </p>
           </div>
 
           <!-- Sello de Evidencia de Firma Electrónica (Ley 27269) -->
-          <div class="max-w-xs mx-auto p-3 rounded-lg border border-emerald-500/20 bg-background/80 text-[11px] text-left space-y-1 font-mono">
-            <div class="flex items-center gap-1.5 text-emerald-700 font-semibold mb-1">
+          <div class="max-w-xs mx-auto p-3 rounded-lg border border-success/20 bg-background/80 text-[11px] text-left space-y-1 font-mono">
+            <div class="flex items-center gap-1.5 text-success font-semibold mb-1">
               <ShieldCheck class="size-3.5" />
               <span>Evidencia Legal Certificada</span>
             </div>

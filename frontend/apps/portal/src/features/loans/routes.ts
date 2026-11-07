@@ -3,7 +3,7 @@ import { House } from '@lucide/vue'
 
 export const loansRoutes: RouteRecordRaw[] = [
   {
-    path: '',
+    path: 'inicio',
     name: 'home',
     component: () => import('./pages/HomePage.vue'),
     meta: {

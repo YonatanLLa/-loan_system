@@ -1,8 +1,8 @@
-import { ref, computed } from 'vue'
-import type {
-  PaymentIntent,
-  PaymentMethodType,
-  PaymentStatus,
+import { computed, getCurrentInstance, onUnmounted, ref } from 'vue'
+import {
+  toApiError,
+  type PaymentIntent,
+  type PaymentMethodType,
 } from '@prestamos/api-client'
 
 import { paymentsService, type PaymentWithLoan } from '../services/payments.service'
@@ -92,13 +92,19 @@ export function usePaymentGateway(options?: Partial<PaymentGatewayOptions>) {
           // Si timeout en QR pero sigue pendiente, queda en validación
           step.value = 'IN_VALIDATION'
         }
-      } catch (err) {
+      } catch {
         // En caso de fallo transitorio en el polling, continuar reintentando
         if (attempts >= MAX_ATTEMPTS) {
           stopPolling()
         }
       }
     }, 1500)
+  }
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      stopPolling()
+    })
   }
 
   const initiatePayment = async (): Promise<PaymentIntent | null> => {
@@ -141,11 +147,10 @@ export function usePaymentGateway(options?: Partial<PaymentGatewayOptions>) {
       }
 
       return intent
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos iniciar el pago. Por favor intenta nuevamente.'
+        apiErr.detail || 'No pudimos iniciar el pago. Por favor intenta nuevamente.'
       return null
     } finally {
       isSubmitting.value = false
@@ -161,7 +166,7 @@ export function usePaymentGateway(options?: Partial<PaymentGatewayOptions>) {
         paymentId,
         confirmedPayment.value?.receiptNumber,
       )
-    } catch (err: any) {
+    } catch {
       errorMessage.value = 'No se pudo descargar la constancia de pago.'
     }
   }

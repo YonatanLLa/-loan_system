@@ -2,23 +2,13 @@
 import { ref } from 'vue'
 import {
   AlertCircle,
-  AlertTriangle,
   BookOpen,
-  Building,
   CheckCircle2,
-  Clock,
-  Download,
-  FileCheck2,
-  FileText,
-  HelpCircle,
-  Info,
   LoaderCircle,
   Mail,
   Printer,
   Search,
   Send,
-  ShieldCheck,
-  User,
 } from '@lucide/vue'
 
 import { Badge } from '@prestamos/ui/components/ui/badge'
@@ -131,7 +121,7 @@ const handlePrint = () => {
             <div class="rounded-xl border border-emerald-100 bg-white p-5 space-y-3 text-xs">
               <div class="flex justify-between border-b border-slate-100 pb-2">
                 <span class="text-slate-500">N° de Hoja de Reclamación:</span>
-                <span class="font-mono text-base font-extrabold text-brand-700">
+                <span class="font-mono text-base font-extrabold text-primary">
                   {{ registeredRecord.correlativeNumber }}
                 </span>
               </div>
@@ -199,7 +189,7 @@ const handlePrint = () => {
               <label
                 :class="[
                   form.claimType === 'RECLAMO'
-                    ? 'border-brand-600 bg-brand-50/50 ring-2 ring-brand-500'
+                    ? 'border-primary bg-primary/5 ring-2 ring-primary'
                     : 'border-slate-200 bg-white hover:bg-slate-50',
                   'flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition-all',
                 ]"
@@ -208,7 +198,7 @@ const handlePrint = () => {
                   v-model="form.claimType"
                   type="radio"
                   value="RECLAMO"
-                  class="mt-1 text-brand-600 focus:ring-brand-500"
+                  class="mt-1 text-primary focus:ring-primary"
                 />
                 <div class="space-y-0.5 text-xs">
                   <span class="font-bold text-slate-900 block">RECLAMO</span>
@@ -221,7 +211,7 @@ const handlePrint = () => {
               <label
                 :class="[
                   form.claimType === 'QUEJA'
-                    ? 'border-brand-600 bg-brand-50/50 ring-2 ring-brand-500'
+                    ? 'border-primary bg-primary/5 ring-2 ring-primary'
                     : 'border-slate-200 bg-white hover:bg-slate-50',
                   'flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition-all',
                 ]"
@@ -230,7 +220,7 @@ const handlePrint = () => {
                   v-model="form.claimType"
                   type="radio"
                   value="QUEJA"
-                  class="mt-1 text-brand-600 focus:ring-brand-500"
+                  class="mt-1 text-primary focus:ring-primary"
                 />
                 <div class="space-y-0.5 text-xs">
                   <span class="font-bold text-slate-900 block">QUEJA</span>
@@ -395,7 +385,7 @@ const handlePrint = () => {
       <Card>
         <CardHeader class="pb-3">
           <CardTitle class="text-base flex items-center gap-2">
-            <Search class="h-4 w-4 text-brand-600" />
+            <Search class="h-4 w-4 text-primary" />
             <span>Consultar Estado de tu Reclamo</span>
           </CardTitle>
           <CardDescription>
@@ -433,7 +423,7 @@ const handlePrint = () => {
               <span class="font-mono font-bold text-slate-900 text-sm">
                 {{ queriedRecord.correlativeNumber }}
               </span>
-              <Badge class="bg-brand-600 text-white">
+              <Badge class="bg-primary text-primary-foreground">
                 {{ queriedRecord.status }}
               </Badge>
             </div>

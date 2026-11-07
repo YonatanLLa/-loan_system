@@ -7,7 +7,6 @@ import {
   KeyRound,
   LoaderCircle,
   RotateCcw,
-  ShieldCheck,
   UserPlus,
 } from '@lucide/vue'
 

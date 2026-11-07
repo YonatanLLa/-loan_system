@@ -2,13 +2,9 @@
 import { ref, computed } from 'vue'
 import {
   Bell,
-  Check,
   CheckCheck,
   CheckCircle2,
   Clock,
-  CreditCard,
-  ExternalLink,
-  Info,
   LoaderCircle,
   Mail,
   MessageCircle,
@@ -16,7 +12,6 @@ import {
   RefreshCw,
   Save,
   ShieldAlert,
-  Sparkles,
   Wallet,
 } from '@lucide/vue'
 
@@ -76,9 +71,9 @@ const getCategoryIcon = (category: ClientNotification['category']) => {
 const getCategoryClass = (category: ClientNotification['category']) => {
   switch (category) {
     case 'DISBURSEMENT':
-      return 'bg-emerald-100 text-emerald-700 border-emerald-200'
+      return 'bg-success/15 text-success border-success/30'
     case 'PAYMENT':
-      return 'bg-blue-100 text-blue-700 border-blue-200'
+      return 'bg-primary/10 text-primary border-primary/20'
     case 'LOAN':
       return 'bg-amber-100 text-amber-700 border-amber-200'
     case 'SECURITY':
@@ -96,7 +91,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
       <div>
         <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl flex items-center gap-2">
           <span>Centro de Notificaciones</span>
-          <Badge v-if="unreadCount > 0" class="bg-brand-600 text-white">
+          <Badge v-if="unreadCount > 0" class="bg-primary text-white">
             {{ unreadCount }} nuevas
           </Badge>
         </h1>
@@ -163,8 +158,8 @@ const getCategoryClass = (category: ClientNotification['category']) => {
                   type="button"
                   :class="[
                     filterMode === 'UNREAD'
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-brand-50 text-brand-700 hover:bg-brand-100',
+                      ? 'bg-primary text-white'
+                      : 'bg-primary/10 text-primary hover:bg-primary/20',
                     'rounded-lg px-2.5 py-1 font-medium transition-colors',
                   ]"
                   @click="filterMode = 'UNREAD'"
@@ -178,7 +173,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
           <CardContent class="p-0">
             <!-- Loading -->
             <div v-if="isLoading" class="p-8 text-center">
-              <LoaderCircle class="mx-auto h-6 w-6 animate-spin text-brand-600" />
+              <LoaderCircle class="mx-auto h-6 w-6 animate-spin text-primary" />
             </div>
 
             <!-- Empty -->
@@ -195,7 +190,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
                 v-for="n in filteredNotifications"
                 :key="n.id"
                 :class="[
-                  n.read ? 'bg-white' : 'bg-brand-50/20',
+                  n.read ? 'bg-white' : 'bg-primary/5',
                   'flex items-start gap-3.5 p-4 transition-colors hover:bg-slate-50/80 cursor-pointer',
                 ]"
                 @click="!n.read && markAsRead(n.id)"
@@ -229,7 +224,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
                 <!-- Punto de no leída -->
                 <span
                   v-if="!n.read"
-                  class="h-2 w-2 rounded-full bg-brand-600 shrink-0 mt-1.5"
+                  class="h-2 w-2 rounded-full bg-accent shrink-0 mt-1.5"
                   title="No leída"
                 />
               </div>
@@ -243,7 +238,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
         <Card>
           <CardHeader class="pb-3 border-b border-slate-100">
             <CardTitle class="text-base flex items-center gap-2">
-              <MessageSquare class="h-4 w-4 text-brand-600" />
+              <MessageSquare class="h-4 w-4 text-primary" />
               <span>Canales de Contacto</span>
             </CardTitle>
             <CardDescription>
@@ -266,7 +261,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
               <input
                 v-model="preferences.whatsappEnabled"
                 type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
             </label>
 
@@ -284,7 +279,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
               <input
                 v-model="preferences.emailEnabled"
                 type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
             </label>
 
@@ -302,7 +297,7 @@ const getCategoryClass = (category: ClientNotification['category']) => {
               <input
                 v-model="preferences.smsEnabled"
                 type="checkbox"
-                class="h-4 w-4 rounded border-slate-300 text-brand-600 focus:ring-brand-500"
+                class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
               />
             </label>
 

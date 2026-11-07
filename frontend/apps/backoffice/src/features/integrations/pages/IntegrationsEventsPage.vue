@@ -16,9 +16,9 @@ import {
   CardContent,
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatInstant } from '@prestamos/utils'
 
 import { useIntegrations } from '../composables/useIntegrations'
+import { integrationEventColumns } from '../utils/integrationsColumns'
 
 // FE-BO-31: Panel de eventos de integración en cola de mensajes fallidos (DLQ) con reintento manual.
 
@@ -119,17 +119,7 @@ onMounted(() => {
 
         <div v-else>
           <TableGenerator
-            :columns="[
-              { key: 'id', label: 'ID Evento' },
-              { key: 'provider', label: 'Proveedor' },
-              { key: 'eventType', label: 'Tipo de Evento' },
-              { key: 'externalId', label: 'External ID' },
-              { key: 'retryCount', label: 'Reintentos' },
-              { key: 'createdAt', label: 'Fecha' },
-              { key: 'error', label: 'Error / Causa en DLQ' },
-              { key: 'status', label: 'Estado' },
-              { key: 'action', label: 'Acción', headerClass: 'text-right' },
-            ]"
+            :columns="integrationEventColumns"
             :rows="eventsPage.items"
             row-key="id"
             body-class="divide-y divide-border text-xs"
@@ -140,66 +130,47 @@ onMounted(() => {
               })
             "
           >
-            <template #row="{ row: ev }">
-              <td class="px-4 py-3 font-mono font-bold">{{ ev.id }}</td>
-              <td class="px-4 py-3 font-bold uppercase text-foreground">
-                <Badge variant="outline" class="font-mono text-[10px]">
-                  {{ ev.provider }}
-                </Badge>
-              </td>
-              <td class="px-4 py-3 font-mono text-muted-foreground">
-                {{ ev.eventType }}
-              </td>
-              <td class="px-4 py-3 font-mono text-foreground font-semibold">
-                {{ ev.externalId }}
-              </td>
-              <td class="px-4 py-3 font-mono">
-                <span
-                  :class="ev.retryCount > 0 ? 'text-warning font-bold' : 'text-muted-foreground'"
-                >
-                  {{ ev.retryCount }} veces
-                </span>
-              </td>
-              <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                {{ formatInstant(ev.createdAt) }}
-              </td>
+            <template #cell-provider="{ row: ev }">
+              <Badge variant="outline" class="font-mono text-[10px]">
+                {{ ev.provider }}
+              </Badge>
+            </template>
 
-              <!-- Detalle del Error (FE-BO-31) -->
-              <td class="px-4 py-3 max-w-xs">
-                <div
-                  v-if="ev.errorDetail"
-                  class="text-destructive font-medium truncate"
-                  :title="ev.errorDetail"
-                >
-                  {{ ev.errorDetail }}
-                </div>
-                <span v-else class="text-muted-foreground italic">Sin errores reportados</span>
-              </td>
+            <!-- Detalle del Error (FE-BO-31) -->
+            <template #cell-error="{ row: ev }">
+              <div
+                v-if="ev.errorDetail"
+                class="text-destructive font-medium truncate"
+                :title="ev.errorDetail"
+              >
+                {{ ev.errorDetail }}
+              </div>
+              <span v-else class="text-muted-foreground italic">Sin errores reportados</span>
+            </template>
 
-              <td class="px-4 py-3">
-                <Badge
-                  variant="outline"
-                  class="text-[10px]"
-                  :class="getStatusBadge(ev.status).class"
-                >
-                  {{ getStatusBadge(ev.status).label }}
-                </Badge>
-              </td>
+            <template #cell-status="{ row: ev }">
+              <Badge
+                variant="outline"
+                class="text-[10px]"
+                :class="getStatusBadge(ev.status).class"
+              >
+                {{ getStatusBadge(ev.status).label }}
+              </Badge>
+            </template>
 
-              <td class="px-4 py-3 text-right">
-                <!-- Botón Reintentar (FE-BO-31) -->
-                <Button
-                  v-if="ev.status === 'DEAD_LETTER' || ev.status === 'FAILED'"
-                  size="sm"
-                  variant="outline"
-                  class="h-8 gap-1 text-xs"
-                  :disabled="retryingId === ev.id"
-                  @click="retryEvent(ev)"
-                >
-                  <RotateCcw class="size-3.5" />
-                  <span>Reintentar</span>
-                </Button>
-              </td>
+            <template #cell-action="{ row: ev }">
+              <!-- Botón Reintentar (FE-BO-31) -->
+              <Button
+                v-if="ev.status === 'DEAD_LETTER' || ev.status === 'FAILED'"
+                size="sm"
+                variant="outline"
+                class="h-8 gap-1 text-xs"
+                :disabled="retryingId === ev.id"
+                @click="retryEvent(ev)"
+              >
+                <RotateCcw class="size-3.5" />
+                <span>Reintentar</span>
+              </Button>
             </template>
           </TableGenerator>
         </div>

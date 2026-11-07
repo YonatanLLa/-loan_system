@@ -1,7 +1,6 @@
 import { http, HttpResponse } from 'msw'
 import type {
   ChangePrimaryBankAccountRequest,
-  ClientNotification,
   ComplaintClaimRecord,
   ComplaintClaimRequest,
   CustomerBankAccount,
@@ -24,7 +23,7 @@ import {
   toLoanDto,
 } from '../domain'
 import { notFound, pdfResponse, problem, readJson, secured } from '../http-utils'
-import { fromCents, roundHalfUp, sum, toCents } from '../money'
+import { fromCents, sum, toCents } from '../money'
 import { buildSchedule, periodRate } from '../schedule'
 import { createLoanRecord } from '../seed'
 import { statement } from './collections-reports'

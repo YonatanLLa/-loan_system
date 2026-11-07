@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch } from 'vue'
 import { CheckCircle2, DollarSign, Clock, AlertTriangle, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { PrepaymentQuote } from '@prestamos/api-client'
 import { newIdempotencyKey, toApiError } from '@prestamos/api-client'
 import { MoneyText, useBusyAction } from '@prestamos/ui'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Input } from '@prestamos/ui/components/ui/input'
 import {
@@ -82,9 +83,17 @@ const { run: submitPayment, isBusy } = useBusyAction(async () => {
   }
 })
 
-onMounted(() => {
-  void loadQuote()
-})
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      externalRef.value = `CANCEL-${Date.now().toString().slice(-6)}`
+      void loadQuote()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -110,6 +119,11 @@ onMounted(() => {
 
       <form v-else-if="quote" @submit.prevent="submitPayment">
         <CardContent class="space-y-4 pt-4">
+          <Alert v-if="errorMsg" variant="destructive">
+            <AlertTriangle class="size-4" />
+            <AlertDescription>{{ errorMsg }}</AlertDescription>
+          </Alert>
+
           <!-- Vigencia de la cotización -->
           <div class="flex items-center justify-between p-2.5 rounded-lg border bg-muted/40 text-xs">
             <span class="text-muted-foreground flex items-center gap-1.5">

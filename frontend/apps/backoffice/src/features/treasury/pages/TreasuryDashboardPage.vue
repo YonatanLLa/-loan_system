@@ -14,7 +14,7 @@ import {
 } from '@lucide/vue'
 
 import type { BankStatementLine } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -24,9 +24,13 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
 import { useTreasury } from '../composables/useTreasury'
+import {
+  internalTransferColumns,
+  disbursementColumns,
+  statementColumns,
+} from '../utils/treasuryColumns'
 import CompanyAccountModal from '../components/CompanyAccountModal.vue'
 import ImportStatementModal from '../components/ImportStatementModal.vue'
 import InternalTransferModal from '../components/InternalTransferModal.vue'
@@ -299,38 +303,14 @@ onMounted(async () => {
 
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'id', label: 'ID Fondeo' },
-                { key: 'transferDate', label: 'Fecha Valor' },
-                { key: 'source', label: 'Cuenta Origen (Salida)' },
-                { key: 'destination', label: 'Cuenta Destino (Entrada)' },
-                { key: 'amount', label: 'Monto' },
-                { key: 'operationNumber', label: 'Nº Operación' },
-                { key: 'notes', label: 'Glosa / Registrado por' },
-              ]"
+              :columns="internalTransferColumns"
               :rows="internalTransfers"
               row-key="id"
               body-class="divide-y divide-border text-xs"
             >
-              <template #row="{ row: trf }">
-                <td class="px-4 py-3 font-mono font-bold">{{ trf.id }}</td>
-                <td class="px-4 py-3 whitespace-nowrap">
-                  {{ formatBusinessDate(trf.transferDate) }}
-                </td>
-                <td class="px-4 py-3 font-medium text-destructive">
-                  - {{ trf.sourceBankName }}
-                </td>
-                <td class="px-4 py-3 font-medium text-success">
-                  + {{ trf.destinationBankName }}
-                </td>
-                <td class="px-4 py-3 font-mono font-bold text-foreground">
-                  <MoneyText :amount="trf.amount" :currency="trf.currency" />
-                </td>
-                <td class="px-4 py-3 font-mono">{{ trf.bankOperationNumber }}</td>
-                <td class="px-4 py-3 text-muted-foreground">
-                  <span class="block text-foreground">{{ trf.notes || 'Fondeo de tesorería' }}</span>
-                  <span class="text-[11px]">Por: {{ trf.createdBy }}</span>
-                </td>
+              <template #cell-notes="{ row: trf }">
+                <span class="block text-foreground">{{ trf.notes || 'Fondeo de tesorería' }}</span>
+                <span class="text-[11px] text-muted-foreground">Por: {{ trf.createdBy }}</span>
               </template>
             </TableGenerator>
           </div>
@@ -381,16 +361,7 @@ onMounted(async () => {
 
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'id', label: 'ID Orden' },
-                { key: 'initiatedAt', label: 'Iniciado' },
-                { key: 'recipient', label: 'Destinatario' },
-                { key: 'amount', label: 'Importe' },
-                { key: 'channel', label: 'Canal' },
-                { key: 'status', label: 'Estado Bancario' },
-                { key: 'error', label: 'Detalle / Error Banco' },
-                { key: 'action', label: 'Acción', headerClass: 'text-right' },
-              ]"
+              :columns="disbursementColumns"
               :rows="disbursements"
               row-key="id"
               body-class="divide-y divide-border text-xs"
@@ -401,65 +372,52 @@ onMounted(async () => {
                 })
               "
             >
-              <template #row="{ row: d }">
-                <td class="px-4 py-3 font-mono font-bold">{{ d.id }}</td>
-                <td class="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                  {{ formatInstant(d.initiatedAt) }}
-                </td>
-                <td class="px-4 py-3 font-medium text-foreground">
-                  {{ d.customerName }}
-                  <span class="text-[11px] text-muted-foreground block font-normal">
-                    Préstamo: {{ d.loanId }}
+              <template #cell-recipient="{ row: d }">
+                <span class="font-medium text-foreground">{{ d.customerName }}</span>
+                <span class="text-[11px] text-muted-foreground block font-normal">
+                  Préstamo: {{ d.loanId }}
+                </span>
+              </template>
+
+              <!-- Alertas y Motivo de Rechazo (FE-BO-28) -->
+              <template #cell-error="{ row: d }">
+                <div
+                  v-if="d.status === 'FAILED'"
+                  class="text-destructive font-medium flex items-center gap-1.5"
+                >
+                  <AlertTriangle class="size-3.5 shrink-0" />
+                  <span>
+                    [{{ d.bankResponseCode }}]
+                    {{ d.bankResponseMessage || 'Cuenta rechazada por el banco' }}
                   </span>
-                </td>
-                <td class="px-4 py-3 font-mono font-bold text-foreground">
-                  <MoneyText :amount="d.amount" />
-                </td>
-                <td class="px-4 py-3 font-medium">{{ d.channel }}</td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="disbursement" :status="d.status" />
-                </td>
+                </div>
+                <div
+                  v-else-if="d.status === 'PROCESSING'"
+                  class="text-info flex items-center gap-1"
+                >
+                  <Clock class="size-3.5" /> Enrutando con cámara de compensación
+                </div>
+                <div
+                  v-else-if="d.status === 'COMPLETED'"
+                  class="text-success flex items-center gap-1"
+                >
+                  <CheckCircle2 class="size-3.5" /> Op: {{ d.operationNumber }}
+                </div>
+              </template>
 
-                <!-- Alertas y Motivo de Rechazo (FE-BO-28) -->
-                <td class="px-4 py-3">
-                  <div
-                    v-if="d.status === 'FAILED'"
-                    class="text-destructive font-medium flex items-center gap-1.5"
-                  >
-                    <AlertTriangle class="size-3.5 shrink-0" />
-                    <span
-                      >[{{ d.bankResponseCode }}]
-                      {{ d.bankResponseMessage || 'Cuenta rechazada por el banco' }}</span
-                    >
-                  </div>
-                  <div
-                    v-else-if="d.status === 'PROCESSING'"
-                    class="text-info flex items-center gap-1"
-                  >
-                    <Clock class="size-3.5" /> Enrutando con cámara de compensación
-                  </div>
-                  <div
-                    v-else-if="d.status === 'COMPLETED'"
-                    class="text-success flex items-center gap-1"
-                  >
-                    <CheckCircle2 class="size-3.5" /> Op: {{ d.operationNumber }}
-                  </div>
-                </td>
-
-                <td class="px-4 py-3 text-right">
-                  <!-- Reintento si falló (FE-BO-28) -->
-                  <Button
-                    v-if="d.status === 'FAILED'"
-                    size="sm"
-                    variant="outline"
-                    class="h-8 gap-1 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
-                    :disabled="retryingDisbursementId === d.id"
-                    @click="retryDisbursement(d)"
-                  >
-                    <RotateCcw class="size-3.5" />
-                    <span>Reintentar</span>
-                  </Button>
-                </td>
+              <template #cell-action="{ row: d }">
+                <!-- Reintento si falló (FE-BO-28) -->
+                <Button
+                  v-if="d.status === 'FAILED'"
+                  size="sm"
+                  variant="outline"
+                  class="h-8 gap-1 text-xs text-destructive border-destructive/40 hover:bg-destructive/10"
+                  :disabled="retryingDisbursementId === d.id"
+                  @click="retryDisbursement(d)"
+                >
+                  <RotateCcw class="size-3.5" />
+                  <span>Reintentar</span>
+                </Button>
               </template>
             </TableGenerator>
           </div>
@@ -501,58 +459,39 @@ onMounted(async () => {
 
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'operationNumber', label: 'Nº Operación' },
-                { key: 'valueDate', label: 'Fecha Valor' },
-                { key: 'amount', label: 'Importe Abono / Cargo' },
-                { key: 'description', label: 'Descripción en Extracto' },
-                { key: 'status', label: 'Estado de Conciliación' },
-                { key: 'action', label: 'Acción', headerClass: 'text-right' },
-              ]"
+              :columns="statementColumns"
               :rows="statements"
               row-key="id"
               body-class="divide-y divide-border text-xs"
             >
-              <template #row="{ row: s }">
-                <td class="px-4 py-3 font-mono font-bold">{{ s.operationNumber }}</td>
-                <td class="px-4 py-3 whitespace-nowrap">{{ formatBusinessDate(s.valueDate) }}</td>
-                <td
-                  class="px-4 py-3 font-mono font-bold"
-                  :class="Number(s.amount) > 0 ? 'text-success' : 'text-destructive'"
+              <template #cell-status="{ row: s }">
+                <Badge
+                  variant="outline"
+                  class="text-[10px]"
+                  :class="
+                    s.reconciliationStatus === 'CONCILIADO_AUTOMATICO'
+                      ? 'border-success text-success bg-success/10'
+                      : s.reconciliationStatus === 'PENDIENTE_CONCILIACION'
+                        ? 'border-warning text-warning bg-warning/10'
+                        : 'border-destructive text-destructive bg-destructive/10'
+                  "
                 >
-                  <MoneyText :amount="s.amount" />
-                </td>
-                <td class="px-4 py-3 text-foreground font-medium max-w-xs truncate">
-                  {{ s.description }}
-                </td>
-                <td class="px-4 py-3">
-                  <Badge
-                    variant="outline"
-                    class="text-[10px]"
-                    :class="
-                      s.reconciliationStatus === 'CONCILIADO_AUTOMATICO'
-                        ? 'border-success text-success bg-success/10'
-                        : s.reconciliationStatus === 'PENDIENTE_CONCILIACION'
-                          ? 'border-warning text-warning bg-warning/10'
-                          : 'border-destructive text-destructive bg-destructive/10'
-                    "
-                  >
-                    {{ s.reconciliationStatus }}
-                  </Badge>
-                </td>
-                <td class="px-4 py-3 text-right">
-                  <!-- Conciliación manual para no identificados (FE-BO-29) -->
-                  <Button
-                    v-if="s.reconciliationStatus === 'PENDIENTE_CONCILIACION'"
-                    size="sm"
-                    variant="outline"
-                    class="h-8 gap-1 text-xs"
-                    @click="openMatch(s)"
-                  >
-                    <ArrowRightLeft class="size-3.5" />
-                    <span>Conciliar Manual</span>
-                  </Button>
-                </td>
+                  {{ s.reconciliationStatus }}
+                </Badge>
+              </template>
+
+              <template #cell-action="{ row: s }">
+                <!-- Conciliación manual para no identificados (FE-BO-29) -->
+                <Button
+                  v-if="s.reconciliationStatus === 'PENDIENTE_CONCILIACION'"
+                  size="sm"
+                  variant="outline"
+                  class="h-8 gap-1 text-xs"
+                  @click="openMatch(s)"
+                >
+                  <ArrowRightLeft class="size-3.5" />
+                  <span>Conciliar Manual</span>
+                </Button>
               </template>
             </TableGenerator>
           </div>

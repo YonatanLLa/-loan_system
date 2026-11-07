@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { getCurrentInstance, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toApiError } from '@prestamos/api-client'
 import type { PaymentFrequency } from '@prestamos/api-client'
@@ -17,7 +17,7 @@ export interface SubmitApplicationData {
  * Composable para la Solicitud de Préstamo con datos laborales y sustento de ingresos (FE-CP-07).
  */
 export function useLoanApplication() {
-  const router = useRouter()
+  const router = getCurrentInstance() ? useRouter() : null
 
   const destination = ref('CONSUMO')
   const employerName = ref('')
@@ -68,7 +68,7 @@ export function useLoanApplication() {
         description: `Código #${created.id}. Nuestro motor de riesgo está evaluando tu crédito.`,
       })
 
-      await router.push('/solicitudes')
+      await router?.push('/solicitudes')
       return true
     } catch (err) {
       const apiErr = toApiError(err)

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="Testcontainers.PostgreSql" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LoanSystem.DbMigrator\LoanSystem.DbMigrator.csproj" />
+    <ProjectReference Include="..\..\src\LoanSystem.WebApi\LoanSystem.WebApi.csproj" />
+    <ProjectReference Include="..\..\src\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+  </ItemGroup>
+</Project>

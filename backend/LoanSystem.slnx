@@ -1,0 +1,67 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LoanSystem.DbMigrator/LoanSystem.DbMigrator.csproj" />
+    <Project Path="src/LoanSystem.WebApi/LoanSystem.WebApi.csproj" />
+    <Project Path="src/LoanSystem.Workers/LoanSystem.Workers.csproj" />
+  </Folder>
+  <Folder Name="/src/Common/">
+    <Project Path="src/Common/LoanSystem.Common.Adapters/LoanSystem.Common.Adapters.csproj" />
+    <Project Path="src/Common/LoanSystem.Common.Core/LoanSystem.Common.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/" />
+  <Folder Name="/src/Modules/Administration/">
+    <Project Path="src/Modules/Administration/LoanSystem.Modules.Administration.Adapters/LoanSystem.Modules.Administration.Adapters.csproj" />
+    <Project Path="src/Modules/Administration/LoanSystem.Modules.Administration.Core/LoanSystem.Modules.Administration.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Collections/">
+    <Project Path="src/Modules/Collections/LoanSystem.Modules.Collections.Adapters/LoanSystem.Modules.Collections.Adapters.csproj" />
+    <Project Path="src/Modules/Collections/LoanSystem.Modules.Collections.Core/LoanSystem.Modules.Collections.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Customers/">
+    <Project Path="src/Modules/Customers/LoanSystem.Modules.Customers.Adapters/LoanSystem.Modules.Customers.Adapters.csproj" />
+    <Project Path="src/Modules/Customers/LoanSystem.Modules.Customers.Core/LoanSystem.Modules.Customers.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Integrations/">
+    <Project Path="src/Modules/Integrations/LoanSystem.Modules.Integrations.Adapters/LoanSystem.Modules.Integrations.Adapters.csproj" />
+    <Project Path="src/Modules/Integrations/LoanSystem.Modules.Integrations.Core/LoanSystem.Modules.Integrations.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Loans/">
+    <Project Path="src/Modules/Loans/LoanSystem.Modules.Loans.Adapters/LoanSystem.Modules.Loans.Adapters.csproj" />
+    <Project Path="src/Modules/Loans/LoanSystem.Modules.Loans.Core/LoanSystem.Modules.Loans.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Notifications/">
+    <Project Path="src/Modules/Notifications/LoanSystem.Modules.Notifications.Adapters/LoanSystem.Modules.Notifications.Adapters.csproj" />
+    <Project Path="src/Modules/Notifications/LoanSystem.Modules.Notifications.Core/LoanSystem.Modules.Notifications.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Origination/">
+    <Project Path="src/Modules/Origination/LoanSystem.Modules.Origination.Adapters/LoanSystem.Modules.Origination.Adapters.csproj" />
+    <Project Path="src/Modules/Origination/LoanSystem.Modules.Origination.Core/LoanSystem.Modules.Origination.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Payments/">
+    <Project Path="src/Modules/Payments/LoanSystem.Modules.Payments.Adapters/LoanSystem.Modules.Payments.Adapters.csproj" />
+    <Project Path="src/Modules/Payments/LoanSystem.Modules.Payments.Core/LoanSystem.Modules.Payments.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Products/">
+    <Project Path="src/Modules/Products/LoanSystem.Modules.Products.Adapters/LoanSystem.Modules.Products.Adapters.csproj" />
+    <Project Path="src/Modules/Products/LoanSystem.Modules.Products.Core/LoanSystem.Modules.Products.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Reports/">
+    <Project Path="src/Modules/Reports/LoanSystem.Modules.Reports.Adapters/LoanSystem.Modules.Reports.Adapters.csproj" />
+    <Project Path="src/Modules/Reports/LoanSystem.Modules.Reports.Core/LoanSystem.Modules.Reports.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Security/">
+    <Project Path="src/Modules/Security/LoanSystem.Modules.Security.Adapters/LoanSystem.Modules.Security.Adapters.csproj" />
+    <Project Path="src/Modules/Security/LoanSystem.Modules.Security.Core/LoanSystem.Modules.Security.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Modules/Treasury/">
+    <Project Path="src/Modules/Treasury/LoanSystem.Modules.Treasury.Adapters/LoanSystem.Modules.Treasury.Adapters.csproj" />
+    <Project Path="src/Modules/Treasury/LoanSystem.Modules.Treasury.Core/LoanSystem.Modules.Treasury.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/LoanSystem.Adapters.UnitTests/LoanSystem.Adapters.UnitTests.csproj" />
+    <Project Path="tests/LoanSystem.Application.UnitTests/LoanSystem.Application.UnitTests.csproj" />
+    <Project Path="tests/LoanSystem.Architecture.Tests/LoanSystem.Architecture.Tests.csproj" />
+    <Project Path="tests/LoanSystem.Domain.UnitTests/LoanSystem.Domain.UnitTests.csproj" />
+    <Project Path="tests/LoanSystem.IntegrationTests/LoanSystem.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

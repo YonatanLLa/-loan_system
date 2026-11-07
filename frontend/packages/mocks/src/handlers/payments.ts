@@ -115,7 +115,16 @@ export const paymentHandlers = [
 
   // ── Portal del cliente (US-29) ─────────────────────────────────────────────
   http.post('*/api/client/payments', secured('client.portal', async ({ request, user }) => {
-    const body = await readJson<ClientPaymentRequest>(request)
+    const raw = await readJson<
+      ClientPaymentRequest & { paymentMethod?: ClientPaymentRequest['method']; operationNumber?: string }
+    >(request)
+    const body: ClientPaymentRequest | null = raw
+      ? {
+          ...raw,
+          method: raw.method ?? raw.paymentMethod ?? 'YAPE',
+          voucherFileName: raw.voucherFileName ?? raw.operationNumber,
+        }
+      : null
     return idempotent(request, () => {
       const loan = db.loans.find((l) => l.id === body?.loanId && l.customerId === user.customerId)
       if (!loan) return notFound('El préstamo')

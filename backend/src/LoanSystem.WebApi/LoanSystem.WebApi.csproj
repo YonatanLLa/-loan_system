@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Serilog.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Security\LoanSystem.Modules.Security.Adapters\LoanSystem.Modules.Security.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Customers\LoanSystem.Modules.Customers.Adapters\LoanSystem.Modules.Customers.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Products\LoanSystem.Modules.Products.Adapters\LoanSystem.Modules.Products.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Origination\LoanSystem.Modules.Origination.Adapters\LoanSystem.Modules.Origination.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Loans\LoanSystem.Modules.Loans.Adapters\LoanSystem.Modules.Loans.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Payments\LoanSystem.Modules.Payments.Adapters\LoanSystem.Modules.Payments.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Treasury\LoanSystem.Modules.Treasury.Adapters\LoanSystem.Modules.Treasury.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Collections\LoanSystem.Modules.Collections.Adapters\LoanSystem.Modules.Collections.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Integrations\LoanSystem.Modules.Integrations.Adapters\LoanSystem.Modules.Integrations.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Notifications\LoanSystem.Modules.Notifications.Adapters\LoanSystem.Modules.Notifications.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Administration\LoanSystem.Modules.Administration.Adapters\LoanSystem.Modules.Administration.Adapters.csproj" />
+    <ProjectReference Include="..\Modules\Reports\LoanSystem.Modules.Reports.Adapters\LoanSystem.Modules.Reports.Adapters.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LoanSystem.Modules.Loans.Core\LoanSystem.Modules.Loans.Core.csproj" />
+    <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+  </ItemGroup>
+</Project>

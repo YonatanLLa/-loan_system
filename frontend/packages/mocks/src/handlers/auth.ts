@@ -59,19 +59,25 @@ export function toMe(user: UserRec): Me {
 
 async function login(request: Request, client: boolean): Promise<Response> {
   await wait()
-  const body = await readJson<LoginRequest>(request)
-  const identifier = body?.email?.trim().toLowerCase() ?? ''
+  const body = await readJson<LoginRequest & { identifier?: string }>(request)
+  const identifier = (body?.email ?? body?.identifier ?? '').trim().toLowerCase()
   const user = db.users.find((candidate) => {
     if ((candidate.role === 'ROLE_CLIENT') !== client) return false
     if (candidate.email.toLowerCase() === identifier) return true
     const customer = candidate.customerId
       ? db.customers.find((c) => c.id === candidate.customerId)
       : undefined
-    return client && customer?.phone === identifier
+    return (
+      client && (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
+    )
   })
 
   if (user && failures(user.id) >= MAX_FAILED) {
-    return problem(423, 'Cuenta bloqueada', 'Demasiados intentos fallidos. Inténtalo en 15 minutos.')
+    return problem(
+      423,
+      'Cuenta bloqueada',
+      'Demasiados intentos fallidos. Inténtalo en 15 minutos.',
+    )
   }
   if (!user || user.password !== body?.password) {
     if (user) db.counters.set(failureKey(user.id), failures(user.id) + 1)
@@ -101,7 +107,11 @@ export const authHandlers = [
     await wait()
     const body = await readJson<{ phone: string; purpose: string }>(request)
     if (!body?.phone || !/^9\d{8}$/.test(body.phone)) {
-      return problem(400, 'Celular inválido', 'Indica un celular peruano de 9 dígitos que empiece con 9.')
+      return problem(
+        400,
+        'Celular inválido',
+        'Indica un celular peruano de 9 dígitos que empiece con 9.',
+      )
     }
     return HttpResponse.json({
       message: 'Código de verificación enviado exitosamente por SMS/WhatsApp.',
@@ -117,7 +127,11 @@ export const authHandlers = [
       return problem(400, 'Código requerido', 'Ingresa el código OTP recibido.')
     }
     if (body.code.trim() !== '123456') {
-      return problem(400, 'Código incorrecto', 'El código OTP es inválido o expiró. Usa 123456 en entorno demo.')
+      return problem(
+        400,
+        'Código incorrecto',
+        'El código OTP es inválido o expiró. Usa 123456 en entorno demo.',
+      )
     }
     return HttpResponse.json({ verified: true, message: 'Identidad confirmada exitosamente.' })
   }),
@@ -125,8 +139,13 @@ export const authHandlers = [
   // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
   http.post('*/api/auth/refresh', async () => {
     await wait()
-    const user = db.users.find((u) => u.id === refreshSession.userId)
-    return user ? HttpResponse.json(issueToken(user)) : problem(401, 'Sesión no válida', 'Inicia sesión.')
+    const body = await readJson<{ refreshToken?: string }>(request)
+    const user =
+      db.users.find((u) => u.id === refreshSession.userId) ??
+      (body?.refreshToken ? db.users.find((u) => u.id === 'usr-100') : undefined)
+    return user
+      ? HttpResponse.json(issueToken(user))
+      : problem(401, 'Sesión no válida', 'Inicia sesión.')
   }),
 
   http.post('*/api/auth/logout', async () => {
@@ -135,17 +154,63 @@ export const authHandlers = [
     return new HttpResponse(null, { status: 204 })
   }),
 
-  http.get('*/api/me', secured(null, ({ user }) => HttpResponse.json(toMe(user)))),
+  http.post('*/api/client/logout', async () => {
+    await wait()
+    remember(null)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/client/verify-otp', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ target?: string; code?: string }>(request)
+    if (!body?.code || !/^\d{6}$/.test(body.code)) {
+      return problem(400, 'Código OTP inválido', 'Ingresa el código de 6 dígitos.')
+    }
+    const target = (body.target ?? '').trim().toLowerCase()
+    const user =
+      db.users.find((u) => {
+        if (u.role !== 'ROLE_CLIENT') return false
+        if (u.email.toLowerCase() === target) return true
+        const cust = u.customerId ? db.customers.find((c) => c.id === u.customerId) : undefined
+        return cust?.phone === target || cust?.docNumber.toLowerCase() === target
+      }) ?? db.users.find((u) => u.id === 'usr-100')!
+
+    const customer = db.customers.find((c) => c.id === user.customerId) ?? db.customers[0]!
+    const { accessToken } = issueToken(user)
+    remember(user.id)
+    return HttpResponse.json({
+      accessToken,
+      refreshToken: accessToken,
+      user: {
+        id: user.id,
+        customerId: customer.id,
+        fullName: customer.fullName,
+        email: customer.email,
+        docType: customer.docType === 'RUC' ? 'DNI' : customer.docType,
+        docNumber: customer.docNumber,
+        phone: customer.phone,
+        kycStatus: customer.kycStatus,
+      },
+    })
+  }),
+
+  http.get(
+    '*/api/me',
+    secured(null, ({ user }) => HttpResponse.json(toMe(user))),
+  ),
 
   http.post('*/api/client/register', async ({ request }) => {
     await wait()
     const body = await readJson<RegisterBody>(request)
     if (!body) return problem(400, 'Solicitud inválida', 'Cuerpo inválido.')
     const errors: Record<string, string[]> = {}
-    if (!/^\d{8}$/.test(body.docNumber) && body.docType === 'DNI') errors.DocNumber = ['El DNI tiene 8 dígitos']
+    if (!/^\d{8}$/.test(body.docNumber) && body.docType === 'DNI')
+      errors.DocNumber = ['El DNI tiene 8 dígitos']
     if (!/^9\d{8}$/.test(body.phone)) errors.Phone = ['El celular tiene 9 dígitos y empieza con 9']
-    if ((body.password ?? '').length < 8) errors.Password = ['La contraseña debe tener al menos 8 caracteres']
-    if (Object.keys(errors).length > 0) return problem(400, 'Datos inválidos', 'Revisa los campos.', errors)
+    if ((body.password ?? '').length < 8)
+      errors.Password = ['La contraseña debe tener al menos 8 caracteres']
+    if (Object.keys(errors).length > 0)
+      return problem(400, 'Datos inválidos', 'Revisa los campos.', errors)
     if (db.customers.some((c) => c.docType === body.docType && c.docNumber === body.docNumber)) {
       return problem(409, 'Documento duplicado', 'Ya existe un cliente con ese documento.')
     }
@@ -181,7 +246,15 @@ export const authHandlers = [
     db.users.push(newUser)
     const token = issueToken(newUser)
     remember(newUser.id)
-    recordAudit({ entityName: 'customers', entityId: customerId, action: 'CREATE', after: { docNumber: body.docNumber } })
-    return HttpResponse.json({ customerId, kycStatus: 'PENDING', accessToken: token.accessToken }, { status: 201 })
+    recordAudit({
+      entityName: 'customers',
+      entityId: customerId,
+      action: 'CREATE',
+      after: { docNumber: body.docNumber },
+    })
+    return HttpResponse.json(
+      { customerId, kycStatus: 'PENDING', accessToken: token.accessToken },
+      { status: 201 },
+    )
   }),
 ]

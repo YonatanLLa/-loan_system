@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Quartz" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\LoanSystem.Modules.Treasury.Core\LoanSystem.Modules.Treasury.Core.csproj" />
+    <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+  </ItemGroup>
+</Project>

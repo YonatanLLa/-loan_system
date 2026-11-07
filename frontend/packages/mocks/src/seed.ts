@@ -67,6 +67,7 @@ function seedUsers(): void {
     permissions: ['client.portal'],
     customerId: 'cus-001',
   })
+  db.tokens.set('demo-access-token', 'usr-100')
 }
 
 function seedCatalogs(): void {

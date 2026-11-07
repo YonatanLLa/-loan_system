@@ -128,26 +128,42 @@ El **portal del cliente** ([09](docs/09-portal-del-cliente.md)) no es un módulo
 
 **Decisión:** un monolito modular donde cada módulo es un hexágono (*Ports & Adapters*). Esta estructura reemplaza los tres árboles distintos de `architecture/`.
 
+Cada hexágono son dos proyectos: `Core` (dominio + aplicación, sin frameworks) y `Adapters` (infraestructura: entrada y salida). Las pruebas de arquitectura hacen cumplir estas fronteras.
+
 ```text
 backend/
-├── LoanSystem.sln
+├── LoanSystem.slnx
 ├── src/
 │   ├── Common/
-│   │   ├── LoanSystem.Common.Domain/          # Entity, ValueObject, AggregateRoot, IDomainEvent, Money
-│   │   ├── LoanSystem.Common.Application/     # Result<T>, ICommand/IQuery, IUnitOfWork, IClock
-│   │   └── LoanSystem.Common.Infrastructure/  # Outbox, idempotencia, interceptor de auditoría, Redis
+│   │   ├── LoanSystem.Common.Core/            # Sin frameworks
+│   │   │   ├── Domain/                        # Entity, AggregateRoot, ValueObject, IDomainEvent, Money
+│   │   │   ├── Application/                   # Result<T>, Error
+│   │   │   ├── Ports/Inbound/                 # IUseCase<TReq,TRes>, IEmptyUseCase
+│   │   │   ├── Ports/Outbound/                # IUnitOfWork, ITransactionScope, IClock, ICurrentUser, IOutbox
+│   │   │   └── Contracts/                     # IIntegrationEvent
+│   │   └── LoanSystem.Common.Adapters/
+│   │       ├── Http/                          # Idempotencia, ProblemDetails, usuario actual
+│   │       ├── Persistence/                   # ModuleDbContext (IUnitOfWork), auditoría, Npgsql
+│   │       ├── Clock/                         # SystemClock, zona horaria America/Lima
+│   │       └── Outbox/                        # Despachador del Outbox (Quartz)
 │   ├── Modules/
 │   │   └── <Módulo>/                          # Security, Customers, Products, Origination, Loans,
 │   │       │                                  # Payments, Treasury, Collections, Integrations,
 │   │       │                                  # Notifications, Administration, Reports
-│   │       ├── Domain/                        # Entidades, Value Objects, servicios de dominio,
-│   │       │   └── Ports/Outbound/            # interfaces de repositorios y servicios externos
-│   │       ├── Application/                   # Casos de uso (commands/queries)
-│   │       │   ├── Ports/Inbound/             # interfaces de casos de uso
-│   │       │   └── Contracts/                 # API pública del módulo y eventos que publica
-│   │       └── Infrastructure/                # EF Core, Dapper, adaptadores de proveedores
-│   ├── WebApi/                                # Host HTTP: endpoints, middlewares, DI
-│   └── Workers/                               # Host de jobs: Quartz.NET, Outbox, webhooks
+│   │       ├── LoanSystem.Modules.<M>.Core/
+│   │       │   ├── Domain/                    # Entidades, Value Objects, servicios de dominio
+│   │       │   ├── Application/               # Implementación de los casos de uso
+│   │       │   ├── Ports/Inbound/             # Interfaces de casos de uso (I<Verbo><Objeto>UseCase)
+│   │       │   ├── Ports/Outbound/            # I<M>UnitOfWork, repositorios y servicios externos
+│   │       │   └── Contracts/                 # Única API pública del módulo y eventos que publica
+│   │       └── LoanSystem.Modules.<M>.Adapters/
+│   │           ├── Inbound/Http/              # Endpoints Minimal API (<M>Endpoints)
+│   │           ├── Inbound/Jobs/              # Jobs de Quartz del módulo (<M>Jobs)
+│   │           ├── Outbound/Persistence/      # <M>DbContext, Dapper, proveedores externos
+│   │           └── <M>Module.cs               # Registro de dependencias (DI)
+│   ├── LoanSystem.WebApi/                     # Host HTTP: middlewares, auth, DI, mapeo de endpoints
+│   ├── LoanSystem.Workers/                    # Host de jobs: registra los jobs de cada módulo y el Outbox
+│   └── LoanSystem.DbMigrator/                 # Migraciones SQL con DbUp
 └── tests/
     ├── Domain.UnitTests/                      # Amortización, redondeo, prelación (contra Excel patrón)
     ├── Application.UnitTests/                 # Casos de uso con dobles de prueba

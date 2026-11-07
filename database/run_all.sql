@@ -40,6 +40,7 @@ BEGIN;
 \ir migrations/08_treasury_reconciliation.sql
 \ir migrations/09_collections_notifications.sql
 \ir migrations/10_integrations_reconciliation.sql
+\ir migrations/13_outbox_messages.sql
 
 -- ── PASO 4: Índices ──────────────────────────────────────────────────────────
 \echo '[4/5] Índices de rendimiento...'

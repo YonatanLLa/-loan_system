@@ -59,15 +59,15 @@ export function toMe(user: UserRec): Me {
 
 async function login(request: Request, client: boolean): Promise<Response> {
   await wait()
-  const body = await readJson<LoginRequest>(request)
-  const identifier = body?.email?.trim().toLowerCase() ?? ''
+  const body = await readJson<LoginRequest & { identifier?: string }>(request)
+  const identifier = (body?.email ?? body?.identifier ?? '').trim().toLowerCase()
   const user = db.users.find((candidate) => {
     if ((candidate.role === 'ROLE_CLIENT') !== client) return false
     if (candidate.email.toLowerCase() === identifier) return true
     const customer = candidate.customerId
       ? db.customers.find((c) => c.id === candidate.customerId)
       : undefined
-    return client && customer?.phone === identifier
+    return client && (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
   })
 
   if (user && failures(user.id) >= MAX_FAILED) {
@@ -96,10 +96,13 @@ export const authHandlers = [
   http.post('*/api/auth/login', ({ request }) => login(request, false)),
   http.post('*/api/client/login', ({ request }) => login(request, true)),
 
-  // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
-  http.post('*/api/auth/refresh', async () => {
+  // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada o refreshToken móvil.
+  http.post('*/api/auth/refresh', async ({ request }) => {
     await wait()
-    const user = db.users.find((u) => u.id === refreshSession.userId)
+    const body = await readJson<{ refreshToken?: string }>(request)
+    const user =
+      db.users.find((u) => u.id === refreshSession.userId) ??
+      (body?.refreshToken ? db.users.find((u) => u.id === 'usr-100') : undefined)
     return user ? HttpResponse.json(issueToken(user)) : problem(401, 'Sesión no válida', 'Inicia sesión.')
   }),
 
@@ -107,6 +110,46 @@ export const authHandlers = [
     await wait()
     remember(null)
     return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/client/logout', async () => {
+    await wait()
+    remember(null)
+    return new HttpResponse(null, { status: 204 })
+  }),
+
+  http.post('*/api/client/verify-otp', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ target?: string; code?: string }>(request)
+    if (!body?.code || !/^\d{6}$/.test(body.code)) {
+      return problem(400, 'Código OTP inválido', 'Ingresa el código de 6 dígitos.')
+    }
+    const target = (body.target ?? '').trim().toLowerCase()
+    const user =
+      db.users.find((u) => {
+        if (u.role !== 'ROLE_CLIENT') return false
+        if (u.email.toLowerCase() === target) return true
+        const cust = u.customerId ? db.customers.find((c) => c.id === u.customerId) : undefined
+        return cust?.phone === target || cust?.docNumber.toLowerCase() === target
+      }) ?? db.users.find((u) => u.id === 'usr-100')!
+
+    const customer = db.customers.find((c) => c.id === user.customerId) ?? db.customers[0]!
+    const { accessToken } = issueToken(user)
+    remember(user.id)
+    return HttpResponse.json({
+      accessToken,
+      refreshToken: accessToken,
+      user: {
+        id: user.id,
+        customerId: customer.id,
+        fullName: customer.fullName,
+        email: customer.email,
+        docType: customer.docType === 'RUC' ? 'DNI' : customer.docType,
+        docNumber: customer.docNumber,
+        phone: customer.phone,
+        kycStatus: customer.kycStatus,
+      },
+    })
   }),
 
   http.get('*/api/me', secured(null, ({ user }) => HttpResponse.json(toMe(user)))),

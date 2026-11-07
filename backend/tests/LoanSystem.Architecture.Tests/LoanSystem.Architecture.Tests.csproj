@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Shouldly" />
+    <PackageReference Include="NetArchTest.Rules" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Common\LoanSystem.Common.Core\LoanSystem.Common.Core.csproj" />
+    <ProjectReference Include="..\..\src\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+    <ProjectReference Include="..\..\src\LoanSystem.WebApi\LoanSystem.WebApi.csproj" />
+    <ProjectReference Include="..\..\src\LoanSystem.Workers\LoanSystem.Workers.csproj" />
+  </ItemGroup>
+
+  <!-- Every module (Core + Adapters) is referenced so the rules are applied to all of them by convention -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Modules\*\LoanSystem.Modules.*.Core\LoanSystem.Modules.*.Core.csproj" />
+    <ProjectReference Include="..\..\src\Modules\*\LoanSystem.Modules.*.Adapters\LoanSystem.Modules.*.Adapters.csproj" />
+  </ItemGroup>
+</Project>

@@ -14,6 +14,7 @@
   "scripts": {
     "dev:backoffice": "pnpm --filter @prestamos/backoffice dev",
     "dev:portal": "pnpm --filter @prestamos/portal dev",
+    "dev:mobile": "pnpm --filter @prestamos/mobile start",
     "build": "pnpm --filter \"./apps/*\" build",
     "type-check": "pnpm -r type-check",
     "test": "pnpm -r test:unit --run",

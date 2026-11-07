@@ -151,7 +151,19 @@ export const originationHandlers = [
     if (customer?.kycStatus !== 'VERIFIED') {
       return problem(422, 'KYC pendiente', 'Verifica tu identidad para solicitar un préstamo.')
     }
-    return createApplication(await readJson<CreateApplicationRequest>(request), user.customerId, 'PORTAL', user)
+    const raw = await readJson<
+      CreateApplicationRequest & { requestedAmount?: string; termMonths?: number | string }
+    >(request)
+    const normalized: CreateApplicationRequest | null = raw
+      ? {
+          ...raw,
+          productId: raw.productId || 'prod-001',
+          amount: raw.amount ?? raw.requestedAmount ?? '1000.00',
+          term: Number(raw.term ?? raw.termMonths ?? 12),
+          frequency: raw.frequency ?? 'MENSUAL',
+        }
+      : null
+    return createApplication(normalized, user.customerId, 'PORTAL', user)
   })),
 
   http.get('*/api/client/loan-applications', secured('client.portal', ({ user }) =>

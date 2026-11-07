@@ -10,7 +10,8 @@ import {
   X,
 } from '@lucide/vue'
 
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import type { Loan } from '@prestamos/api-client'
+import { EmptyState, PageHeader, TableGenerator, type TableColumn } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
@@ -18,7 +19,6 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate } from '@prestamos/utils'
 
 import { useLoans } from '../composables/useLoans'
 import DisbursementModal from '../components/DisbursementModal.vue'
@@ -38,6 +38,23 @@ const {
 } = useLoans()
 
 const isDisburseOpen = ref(false)
+
+const loanColumns: TableColumn<Loan>[] = [
+  { key: 'id', label: 'Código', kind: 'mono', cellClass: 'text-xs font-bold text-foreground' },
+  { key: 'customerName', label: 'Prestatario', cellClass: 'font-medium text-foreground' },
+  { key: 'productName', label: 'Producto', cellClass: 'text-xs text-muted-foreground font-medium' },
+  { key: 'principal', label: 'Capital Otorgado', kind: 'money', cellClass: 'text-xs' },
+  {
+    key: 'outstandingPrincipal',
+    label: 'Saldo Insoluto',
+    kind: 'money',
+    cellClass: 'text-xs font-bold text-foreground',
+  },
+  { key: 'totalPaid', label: 'Total Pagado', kind: 'money', cellClass: 'text-xs text-success' },
+  { key: 'firstDueDate', label: 'Primer Vencimiento', kind: 'date', cellClass: 'text-xs text-muted-foreground' },
+  { key: 'status', label: 'Estado', kind: 'status', statusKind: 'loan' },
+  { key: 'action', label: 'Acción', align: 'right' },
+]
 
 onMounted(() => {
   void loadLoans()
@@ -132,58 +149,25 @@ onMounted(() => {
 
         <div v-else>
           <TableGenerator
-            :columns="[
-              { key: 'code', label: 'Código' },
-              { key: 'borrower', label: 'Prestatario' },
-              { key: 'product', label: 'Producto' },
-              { key: 'principal', label: 'Capital Otorgado' },
-              { key: 'outstanding', label: 'Saldo Insoluto' },
-              { key: 'paid', label: 'Total Pagado' },
-              { key: 'dueDate', label: 'Primer Vencimiento' },
-              { key: 'status', label: 'Estado' },
-              { key: 'action', label: 'Acción', headerClass: 'text-right' },
-            ]"
+            :columns="loanColumns"
             :rows="loansPage.items"
             row-key="id"
           >
-            <template #row="{ row: loan }">
-              <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                {{ loan.id }}
-              </td>
-              <td class="px-4 py-3 font-medium text-foreground">
-                <RouterLink
-                  :to="{ name: 'customer-detail', params: { id: loan.customerId } }"
-                  class="hover:underline flex items-center gap-1 text-primary"
-                >
-                  {{ loan.customerName }}
+            <template #cell-customerName="{ row: loan }">
+              <RouterLink
+                :to="{ name: 'customer-detail', params: { id: loan.customerId } }"
+                class="hover:underline flex items-center gap-1 text-primary font-medium"
+              >
+                {{ loan.customerName }}
+              </RouterLink>
+            </template>
+            <template #cell-action="{ row: loan }">
+              <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
+                <RouterLink :to="{ name: 'loan-detail', params: { id: loan.id } }">
+                  <Eye class="size-3.5" />
+                  <span>Ver Detalle</span>
                 </RouterLink>
-              </td>
-              <td class="px-4 py-3 text-xs text-muted-foreground font-medium">
-                {{ loan.productName }}
-              </td>
-              <td class="px-4 py-3 text-xs font-mono">
-                <MoneyText :amount="loan.principal" />
-              </td>
-              <td class="px-4 py-3 text-xs font-mono font-bold text-foreground">
-                <MoneyText :amount="loan.outstandingPrincipal" />
-              </td>
-              <td class="px-4 py-3 text-xs font-mono text-success">
-                <MoneyText :amount="loan.totalPaid" />
-              </td>
-              <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                {{ loan.firstDueDate ? formatBusinessDate(loan.firstDueDate) : '—' }}
-              </td>
-              <td class="px-4 py-3">
-                <StatusBadge kind="loan" :status="loan.status" />
-              </td>
-              <td class="px-4 py-3 text-right">
-                <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
-                  <RouterLink :to="{ name: 'loan-detail', params: { id: loan.id } }">
-                    <Eye class="size-3.5" />
-                    <span>Ver Detalle</span>
-                  </RouterLink>
-                </Button>
-              </td>
+              </Button>
             </template>
           </TableGenerator>
         </div>

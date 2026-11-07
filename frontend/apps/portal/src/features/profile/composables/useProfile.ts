@@ -1,9 +1,10 @@
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
-import type {
-  ChangePrimaryBankAccountRequest,
-  Customer,
-  CustomerBankAccount,
-  RefundRequest,
+import {
+  toApiError,
+  type ChangePrimaryBankAccountRequest,
+  type Customer,
+  type CustomerBankAccount,
+  type RefundRequest,
 } from '@prestamos/api-client'
 
 import { profileService, type ChangeAccountResponse } from '../services/profile.service'
@@ -43,11 +44,10 @@ export function useProfile() {
       profile.value = profData
       bankAccounts.value = accountsData
       refunds.value = refundsData
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No pudimos cargar los datos de tu perfil.'
+        apiErr.detail || 'No pudimos cargar los datos de tu perfil.'
     } finally {
       isLoading.value = false
     }
@@ -65,11 +65,10 @@ export function useProfile() {
       successMessage.value = res.message
       await loadData()
       return res
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No se pudo actualizar la cuenta de desembolso.'
+        apiErr.detail || 'No se pudo actualizar la cuenta de desembolso.'
       return null
     } finally {
       isUpdatingAccount.value = false
@@ -89,11 +88,10 @@ export function useProfile() {
       successMessage.value = `Solicitud de devolución por S/ ${res.amount} registrada con éxito.`
       await loadData()
       return res
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
-        'No se pudo registrar la solicitud de devolución.'
+        apiErr.detail || 'No se pudo registrar la solicitud de devolución.'
       return null
     } finally {
       isRequestingRefund.value = false

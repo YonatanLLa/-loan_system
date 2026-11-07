@@ -1,20 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
-  CheckCircle2,
   Clock,
   FileCheck,
-  FileText,
   AlertTriangle,
-  User,
-  Percent,
   Calculator,
   ShieldCheck,
-  ShieldAlert,
   LoaderCircle,
-  XCircle,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -25,8 +19,8 @@ import type {
   Simulation,
 } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
+import { MoneyText, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -38,9 +32,10 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate, formatInstant } from '@prestamos/utils'
+import { formatInstant } from '@prestamos/utils'
 
 import { useOrigination } from '../composables/useOrigination'
+import { simulationInstallmentColumns } from '../utils/originationColumns'
 
 // FE-BO-14 y FE-BO-17: Evaluación de crédito con DTI, recomendación, TCEA, Ficha 360 y dictamen.
 
@@ -68,7 +63,6 @@ const isSubmitting = ref(false)
 const dictamenError = ref<string | null>(null)
 
 const isPendingReview = computed(() => application.value?.status === 'SOLICITADO')
-const isUnderEvaluation = computed(() => application.value?.status === 'EN_EVALUACION')
 const isDecided = computed(() =>
   ['APROBADO', 'APROBADO_CON_CONDICIONES', 'RECHAZADO', 'DESEMBOLSADO', 'ANULADO'].includes(
     application.value?.status ?? '',
@@ -154,6 +148,12 @@ async function submitDecision() {
     isSubmitting.value = false
   }
 }
+
+watch(applicationId, (newId, oldId) => {
+  if (newId && oldId && newId !== oldId) {
+    void loadData()
+  }
+})
 
 onMounted(() => {
   void loadData()
@@ -353,31 +353,15 @@ onMounted(() => {
               <!-- Cronograma Proyectado de Cuotas -->
               <div class="border rounded-lg max-h-56 overflow-y-auto text-xs">
                 <TableGenerator
-                  :columns="[
-                    { key: 'number', label: '#' },
-                    { key: 'dueDate', label: 'Vencimiento' },
-                    { key: 'principal', label: 'Capital' },
-                    { key: 'interest', label: 'Interés' },
-                    { key: 'totalDue', label: 'Cuota' },
-                    { key: 'balance', label: 'Saldo' },
-                  ]"
+                  :columns="simulationInstallmentColumns"
                   :rows="simulation.installments"
                   row-key="number"
                   table-class="w-full text-xs text-left"
                   head-class="bg-muted text-[11px] text-muted-foreground border-b sticky top-0"
                   header-cell-class="p-2"
                   body-class="divide-y"
-                  row-class=""
-                >
-                  <template #row="{ row: inst }">
-                    <td class="p-2 font-mono">{{ inst.number }}</td>
-                    <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
-                    <td class="p-2"><MoneyText :amount="inst.principal" /></td>
-                    <td class="p-2"><MoneyText :amount="inst.interest" /></td>
-                    <td class="p-2 font-bold"><MoneyText :amount="inst.totalDue" /></td>
-                    <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
-                  </template>
-                </TableGenerator>
+                  cell-class="p-2"
+                />
               </div>
             </CardContent>
           </Card>

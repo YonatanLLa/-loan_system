@@ -1,0 +1,46 @@
+/*
+ * ══════════════════════════════════════════════════════
+ * PALETA DE MARCA — Portal del Prestatario
+ * Para cambiar toda la paleta, editar solo este bloque.
+ * ══════════════════════════════════════════════════════
+ *
+ * brand-primary  · Azul fintech  → botones, CTAs, enlaces activos
+ * brand-navy     · Azul profundo → headers, logotipo, navegación
+ * brand-navy-mid · Azul medio    → gradientes, hover de navy
+ * brand-navy-dark· Azul oscuro   → fondo hero, overlays
+ * brand-accent   · Celeste       → indicadores, highlights, íconos
+ * brand-success  · Verde         → pagos OK, cuotas al día
+ */
+
+:root {
+  --brand-primary:      #2563EB;
+  --brand-primary-dark: #1d4ed8;
+  --brand-primary-fg:   #ffffff;
+
+  --brand-navy:         #123B5D;
+  --brand-navy-mid:     #1a4f7a;
+  --brand-navy-dark:    #0e2f4a;
+  --brand-navy-fg:      #ffffff;
+
+  --brand-accent:       #38BDF8;
+  --brand-accent-fg:    #0f172a;
+
+  --brand-success:      #16A37A;
+  --brand-success-fg:   #ffffff;
+
+  /* aliases legacy para componentes que aún usen los nombres anteriores */
+  --primary:  var(--brand-primary);
+  --navy:     var(--brand-navy);
+  --success:  var(--brand-success);
+  --accent:   var(--brand-accent);
+  --ring:     var(--brand-primary);
+}
+
+/* ── Encabezados solo en páginas autenticadas (no en landing/hero) ── */
+.app-content h1,
+.app-content h2,
+.app-content h3,
+.app-content h4,
+.font-heading {
+  color: var(--brand-navy);
+}

@@ -33,12 +33,14 @@ export const useSessionStore = defineStore('session', () => {
     if (inactivityInterval) clearInterval(inactivityInterval)
     markActivity()
 
-    // Escucha eventos de interacción
+    // Escucha eventos de interacción (remueve primero para evitar duplicados)
     if (typeof window !== 'undefined') {
-      const resetActivity = () => markActivity()
-      window.addEventListener('click', resetActivity, { passive: true })
-      window.addEventListener('keydown', resetActivity, { passive: true })
-      window.addEventListener('touchstart', resetActivity, { passive: true })
+      window.removeEventListener('click', markActivity)
+      window.removeEventListener('keydown', markActivity)
+      window.removeEventListener('touchstart', markActivity)
+      window.addEventListener('click', markActivity, { passive: true })
+      window.addEventListener('keydown', markActivity, { passive: true })
+      window.addEventListener('touchstart', markActivity, { passive: true })
     }
 
     inactivityInterval = setInterval(() => {
@@ -53,6 +55,11 @@ export const useSessionStore = defineStore('session', () => {
     if (inactivityInterval) {
       clearInterval(inactivityInterval)
       inactivityInterval = null
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('click', markActivity)
+      window.removeEventListener('keydown', markActivity)
+      window.removeEventListener('touchstart', markActivity)
     }
   }
 

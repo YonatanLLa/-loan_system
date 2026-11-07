@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
-import { createMemoryHistory, createRouter } from 'vue-router'
 
 import CustomerFormSheet from '../features/customers/components/CustomerFormSheet.vue'
 

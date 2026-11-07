@@ -35,6 +35,7 @@ import {
 import { formatInstant } from '@prestamos/utils'
 
 import { useAuditLog } from '../composables/useAuditLog'
+import { auditLogColumns } from '../utils/auditColumns'
 
 // FE-BO-05: Bitácora de auditoría con filtros por entidad, fechas, usuario y acción, y vista "antes / después" del JSON.
 
@@ -220,54 +221,40 @@ onMounted(async () => {
         <!-- Lista de registros -->
         <div v-else>
           <TableGenerator
-            :columns="[
-              { key: 'id', label: 'ID' },
-              { key: 'createdAt', label: 'Fecha y Hora' },
-              { key: 'user', label: 'Usuario / IP' },
-              { key: 'entity', label: 'Entidad' },
-              { key: 'entityId', label: 'ID Entidad' },
-              { key: 'action', label: 'Acción' },
-              { key: 'compare', label: 'Comparar', headerClass: 'text-right' },
-            ]"
+            :columns="auditLogColumns"
             :rows="auditPage.items"
             row-key="id"
           >
-            <template #row="{ row: entry }">
-              <td class="px-4 py-3 font-mono text-xs text-muted-foreground">#{{ entry.id }}</td>
-              <td class="px-4 py-3 whitespace-nowrap text-xs">
-                {{ formatInstant(entry.createdAt) }}
-              </td>
-              <td class="px-4 py-3">
-                <div class="font-medium text-foreground leading-tight">{{ entry.userName }}</div>
-                <div class="text-xs font-mono text-muted-foreground">{{ entry.userIp }}</div>
-              </td>
-              <td class="px-4 py-3 font-medium">
-                <Badge variant="outline" class="font-mono text-xs">
-                  {{ entry.entityName }}
-                </Badge>
-              </td>
-              <td class="px-4 py-3 font-mono text-xs text-muted-foreground">
-                {{ entry.entityId }}
-              </td>
-              <td class="px-4 py-3">
-                <span
-                  class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold"
-                  :class="getActionBadgeVariant(entry.action)"
-                >
-                  {{ entry.action }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  class="h-8 gap-1.5 text-xs"
-                  @click="openDetail(entry)"
-                >
-                  <Eye class="size-3.5" />
-                  <span>Ver cambio</span>
-                </Button>
-              </td>
+            <template #cell-user="{ row: entry }">
+              <div class="font-medium text-foreground leading-tight">{{ entry.userName }}</div>
+              <div class="text-xs font-mono text-muted-foreground">{{ entry.userIp }}</div>
+            </template>
+
+            <template #cell-entity="{ row: entry }">
+              <Badge variant="outline" class="font-mono text-xs">
+                {{ entry.entityName }}
+              </Badge>
+            </template>
+
+            <template #cell-action="{ row: entry }">
+              <span
+                class="inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold"
+                :class="getActionBadgeVariant(entry.action)"
+              >
+                {{ entry.action }}
+              </span>
+            </template>
+
+            <template #cell-compare="{ row: entry }">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="h-8 gap-1.5 text-xs"
+                @click="openDetail(entry)"
+              >
+                <Eye class="size-3.5" />
+                <span>Ver cambio</span>
+              </Button>
             </template>
           </TableGenerator>
         </div>

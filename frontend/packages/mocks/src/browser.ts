@@ -24,5 +24,5 @@ export async function startMocks(options: StartMocksOptions = {}): Promise<void>
     quiet: true,
     serviceWorker: { url: '/mockServiceWorker.js' },
   })
-  console.info('[mocks] API simulada activa. Usuarios: admin@sistema.local, cliente@correo.pe · clave Demo1234!')
+  console.info('[mocks] API simulada activa. Clientes: cliente@correo.pe (con préstamo), nuevo@correo.pe (sin préstamo) · clave Demo1234!')
 }

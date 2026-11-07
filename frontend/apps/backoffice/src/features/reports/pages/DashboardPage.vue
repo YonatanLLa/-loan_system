@@ -5,21 +5,15 @@ import {
   ArrowUpRight,
   Banknote,
   Building2,
-  Calendar,
-  CheckCircle2,
   Clock,
-  DollarSign,
   HandCoins,
-  Layers,
-  Percent,
   RefreshCw,
   ShieldAlert,
   ShieldCheck,
   TrendingUp,
-  Users,
 } from '@lucide/vue'
 
-import { MoneyText, PageHeader, StatusBadge } from '@prestamos/ui'
+import { MoneyText, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -32,6 +26,7 @@ import {
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 
 import { useDashboardKpis } from '../composables'
+import { monthlyEvolutionColumns } from '../utils/reportsColumns'
 
 // FE-BO-37 y FE-BO-38: Dashboard de KPIs ejecutivos, cartera, mora y originación.
 
@@ -233,26 +228,17 @@ onMounted(() => {
         </CardHeader>
         <CardContent class="p-0">
           <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs">
-              <thead class="border-b bg-muted/50 text-muted-foreground font-medium">
-                <tr>
-                  <th class="px-4 py-2.5">Mes</th>
-                  <th class="px-4 py-2.5">Desembolsado</th>
-                  <th class="px-4 py-2.5">Recaudado</th>
-                  <th class="px-4 py-2.5 text-right">Balance Neto</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-border">
-                <tr v-for="m in kpis.monthly" :key="m.month" class="hover:bg-muted/30">
-                  <td class="px-4 py-2.5 font-semibold text-foreground">{{ m.month }}</td>
-                  <td class="px-4 py-2.5 font-mono text-primary"><MoneyText :amount="m.disbursed" /></td>
-                  <td class="px-4 py-2.5 font-mono text-emerald-600 font-semibold"><MoneyText :amount="m.collected" /></td>
-                  <td class="px-4 py-2.5 font-mono text-right font-bold">
-                    <MoneyText :amount="(Number(m.collected) - Number(m.disbursed)).toFixed(2)" />
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <TableGenerator
+              :columns="monthlyEvolutionColumns"
+              :rows="kpis.monthly"
+              row-key="month"
+              table-class="w-full text-left text-xs"
+              head-class="border-b bg-muted/50 text-muted-foreground font-medium"
+              header-cell-class="px-4 py-2.5"
+              body-class="divide-y divide-border"
+              cell-class="px-4 py-2.5"
+              row-class="hover:bg-muted/30"
+            />
           </div>
         </CardContent>
       </Card>

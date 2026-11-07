@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Building2, LoaderCircle, AlertTriangle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
-import type { CompanyBankAccount } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Input } from '@prestamos/ui/components/ui/input'
@@ -41,6 +40,23 @@ const form = ref({
   isDisbursement: true,
   isCollection: true,
 })
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      form.value = {
+        bankName: 'BCP',
+        cci: '',
+        accountNumberMasked: '',
+        currency: 'PEN',
+        isDisbursement: true,
+        isCollection: true,
+      }
+    }
+  },
+)
 
 async function onSubmit() {
   errorMsg.value = null

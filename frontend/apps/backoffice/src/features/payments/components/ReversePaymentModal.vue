@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RotateCcw, AlertTriangle, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -14,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
 import { usePayments } from '../composables/usePayments'
 
@@ -33,6 +33,16 @@ const emit = defineEmits<{
 const { reversePayment } = usePayments()
 const reason = ref('')
 const errorMsg = ref<string | null>(null)
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      reason.value = ''
+      errorMsg.value = null
+    }
+  },
+)
 
 const { run: submitReversal, isBusy } = useBusyAction(async () => {
   if (!props.payment) return

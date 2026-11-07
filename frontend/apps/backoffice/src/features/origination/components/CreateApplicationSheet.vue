@@ -1,15 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import {
-  FileText,
   FilePlus,
   Calculator,
   LoaderCircle,
   AlertTriangle,
-  Percent,
-  CheckCircle2,
-  Calendar,
-  Layers,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -18,7 +13,6 @@ import { toApiError } from '@prestamos/api-client'
 import { MoneyText, TableGenerator } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Input } from '@prestamos/ui/components/ui/input'
-import { Badge } from '@prestamos/ui/components/ui/badge'
 import {
   Sheet,
   SheetContent,
@@ -27,9 +21,9 @@ import {
   SheetTitle,
 } from '@prestamos/ui/components/ui/sheet'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
-import { formatBusinessDate } from '@prestamos/utils'
 
 import { useOrigination } from '../composables/useOrigination'
+import { simulationInstallmentColumns } from '../utils/originationColumns'
 
 // FE-BO-13, FE-BO-14, FE-BO-15: Registro de solicitud con simulador interactivo y cálculo de TCEA.
 
@@ -167,6 +161,18 @@ async function onSubmit() {
     isSubmitting.value = false
   }
 }
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      fieldErrors.value = {}
+      generalError.value = null
+      showScheduleModal.value = false
+      void loadInitialData()
+    }
+  },
+)
 
 onMounted(() => {
   void loadInitialData()
@@ -402,31 +408,15 @@ onMounted(() => {
               class="mt-3 max-h-56 overflow-y-auto rounded-lg border bg-background text-xs"
             >
               <TableGenerator
-                :columns="[
-                  { key: 'number', label: '#' },
-                  { key: 'dueDate', label: 'Vencimiento' },
-                  { key: 'principal', label: 'Capital' },
-                  { key: 'interest', label: 'Interés' },
-                  { key: 'totalDue', label: 'Cuota' },
-                  { key: 'balance', label: 'Saldo' },
-                ]"
+                :columns="simulationInstallmentColumns"
                 :rows="simulation.installments"
                 row-key="number"
                 table-class="w-full text-xs text-left"
                 head-class="bg-muted/80 text-[11px] text-muted-foreground border-b sticky top-0"
                 header-cell-class="p-2"
                 body-class="divide-y"
-                row-class=""
-              >
-                <template #row="{ row: inst }">
-                  <td class="p-2 font-mono">{{ inst.number }}</td>
-                  <td class="p-2">{{ formatBusinessDate(inst.dueDate) }}</td>
-                  <td class="p-2"><MoneyText :amount="inst.principal" /></td>
-                  <td class="p-2"><MoneyText :amount="inst.interest" /></td>
-                  <td class="p-2 font-semibold"><MoneyText :amount="inst.totalDue" /></td>
-                  <td class="p-2 text-muted-foreground"><MoneyText :amount="inst.balance" /></td>
-                </template>
-              </TableGenerator>
+                cell-class="p-2"
+              />
             </div>
           </div>
         </div>

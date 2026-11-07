@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { CheckCircle2, ArrowRightLeft, AlertTriangle, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -67,8 +67,20 @@ const { run: submitMatch, isBusy } = useBusyAction(async () => {
   }
 })
 
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      void loadPendingPayments()
+    }
+  },
+)
+
 onMounted(() => {
-  void loadPendingPayments()
+  if (props.open) {
+    void loadPendingPayments()
+  }
 })
 </script>
 

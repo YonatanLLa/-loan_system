@@ -1,7 +1,8 @@
 import { ref } from 'vue'
-import type {
-  ComplaintClaimRecord,
-  ComplaintClaimRequest,
+import {
+  toApiError,
+  type ComplaintClaimRecord,
+  type ComplaintClaimRequest,
 } from '@prestamos/api-client'
 
 import { complaintsService } from '../services/complaints.service'
@@ -64,10 +65,10 @@ export function useComplaints() {
       const record = await complaintsService.submitComplaint(form.value)
       registeredRecord.value = record
       return record
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       errorMessage.value =
-        err?.response?.data?.detail ||
-        err?.message ||
+        apiErr.detail ||
         'No pudimos registrar tu hoja de reclamación. Intenta nuevamente.'
       return null
     } finally {
@@ -89,10 +90,10 @@ export function useComplaints() {
       const record = await complaintsService.getComplaint(correlative.trim())
       queriedRecord.value = record
       return record
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const apiErr = toApiError(err)
       queryError.value =
-        err?.response?.data?.detail ||
-        err?.message ||
+        apiErr.detail ||
         'No encontramos ninguna reclamación registrada con ese código.'
       return null
     } finally {

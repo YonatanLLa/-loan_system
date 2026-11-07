@@ -7,13 +7,10 @@ import {
   Camera,
   CheckCircle2,
   FileCheck2,
-  FileText,
   IdCard,
   LoaderCircle,
-  ShieldCheck,
   Smartphone,
   Sparkles,
-  Upload,
   UserCheck,
   Wallet,
 } from '@lucide/vue'
@@ -94,7 +91,7 @@ const PERU_BANKS = [
         class="h-1.5 rounded-full transition-all duration-300"
         :class="
           s < currentStep
-            ? 'bg-emerald-500'
+            ? 'bg-success'
             : s === currentStep
             ? 'bg-primary'
             : 'bg-muted'
@@ -126,7 +123,7 @@ const PERU_BANKS = [
         <div class="space-y-2 rounded-xl border border-dashed p-3.5 text-center bg-muted/10">
           <span class="font-semibold block text-foreground">1. Lado Frontal (Anverso)</span>
           <div v-if="dniFront" class="space-y-2">
-            <div class="h-28 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex flex-col items-center justify-center text-emerald-600 gap-1.5 p-2">
+            <div class="h-28 rounded-lg bg-success/10 border border-success/30 flex flex-col items-center justify-center text-success gap-1.5 p-2">
               <CheckCircle2 class="size-6" />
               <span class="font-medium text-[11px]">Foto frontal capturada correctamente</span>
             </div>
@@ -160,7 +157,7 @@ const PERU_BANKS = [
         <div class="space-y-2 rounded-xl border border-dashed p-3.5 text-center bg-muted/10">
           <span class="font-semibold block text-foreground">2. Lado Posterior (Reverso)</span>
           <div v-if="dniBack" class="space-y-2">
-            <div class="h-28 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex flex-col items-center justify-center text-emerald-600 gap-1.5 p-2">
+            <div class="h-28 rounded-lg bg-success/10 border border-success/30 flex flex-col items-center justify-center text-success gap-1.5 p-2">
               <CheckCircle2 class="size-6" />
               <span class="font-medium text-[11px]">Foto posterior capturada correctamente</span>
             </div>
@@ -210,9 +207,9 @@ const PERU_BANKS = [
         <div class="mx-auto max-w-xs p-4 rounded-2xl border border-dashed bg-muted/20 space-y-3">
           <div
             class="mx-auto size-44 rounded-full border-4 border-primary/40 flex items-center justify-center overflow-hidden transition-all"
-            :class="selfie ? 'border-emerald-500 bg-emerald-50' : 'bg-muted/40'"
+            :class="selfie ? 'border-success bg-success/10' : 'bg-muted/40'"
           >
-            <div v-if="selfie" class="text-center p-2 text-emerald-600">
+            <div v-if="selfie" class="text-center p-2 text-success">
               <CheckCircle2 class="size-12 mx-auto mb-1" />
               <span class="font-bold text-xs block">Biometría Aprobada</span>
               <span class="text-[10px] text-muted-foreground">Prueba de vida verificada</span>

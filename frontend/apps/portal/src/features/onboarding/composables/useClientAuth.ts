@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { getCurrentInstance, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { toApiError } from '@prestamos/api-client'
 import type { ClientRegisterRequest } from '@prestamos/api-client'
@@ -11,7 +11,7 @@ import { onboardingService } from '../services/onboarding.service'
  * Composable para la autenticación y registro con OTP del cliente (FE-CP-01 y FE-CP-02).
  */
 export function useClientAuth() {
-  const router = useRouter()
+  const router = getCurrentInstance() ? useRouter() : null
   const session = useSessionStore()
 
   // ── Login ──────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ export function useClientAuth() {
         toast.info('Sesión cerrada por inactividad', {
           description: 'Tu sesión se cerró automáticamente tras 15 minutos sin interacción.',
         })
-        void router.push('/login')
+        void router?.push('/login')
       })
 
       toast.success('¡Bienvenido de vuelta!', {
@@ -50,9 +50,9 @@ export function useClientAuth() {
 
       // Si el KYC aún no está verificado, redirige al onboarding
       if (user?.kycStatus === 'PENDING') {
-        await router.push('/verificacion')
+        await router?.push('/verificacion')
       } else {
-        await router.push('/')
+        await router?.push('/inicio')
       }
       return true
     } catch (err) {
@@ -85,6 +85,12 @@ export function useClientAuth() {
   const registerError = ref<string | null>(null)
 
   let timerHandle: ReturnType<typeof setInterval> | null = null
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      if (timerHandle) clearInterval(timerHandle)
+    })
+  }
 
   function startCountdown(seconds = 60) {
     if (timerHandle) clearInterval(timerHandle)
@@ -162,7 +168,7 @@ export function useClientAuth() {
       })
 
       isOtpModalOpen.value = false
-      await router.push('/verificacion')
+      await router?.push('/verificacion')
       return true
     } catch (err) {
       const apiErr = toApiError(err)
@@ -184,7 +190,7 @@ export function useClientAuth() {
       // Si la llamada falla, igualmente limpiamos el estado local
     } finally {
       session.clear()
-      await router.push('/login')
+      await router?.push('/login')
       toast.info('Sesión cerrada correctamente.')
     }
   }

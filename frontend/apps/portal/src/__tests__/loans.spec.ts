@@ -79,7 +79,7 @@ describe('useLoanSchedule Composable (FE-CP-11)', () => {
     }
 
     // 1. Verde para cuota pagada
-    expect(getInstallmentColorClass(baseInst)).toContain('emerald')
+    expect(getInstallmentColorClass(baseInst)).toContain('success')
     expect(getInstallmentStatusLabel('PAID')).toBe('Pagada')
 
     // 2. Amarillo para cuota pendiente próxima
@@ -94,7 +94,7 @@ describe('useLoanSchedule Composable (FE-CP-11)', () => {
 
     // 4. Azul para cuota con pago parcial
     const partialInst: Installment = { ...baseInst, status: 'PARTIAL' }
-    expect(getInstallmentColorClass(partialInst)).toContain('blue')
+    expect(getInstallmentColorClass(partialInst)).toContain('primary')
     expect(getInstallmentStatusLabel('PARTIAL')).toBe('Pago Parcial')
   })
 })

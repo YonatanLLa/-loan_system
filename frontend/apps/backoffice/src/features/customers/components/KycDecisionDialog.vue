@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { CheckCircle2, XCircle, AlertTriangle, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -37,6 +37,17 @@ const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
 const isReject = computed(() => decision.value === 'REJECTED')
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      decision.value = 'VERIFIED'
+      notes.value = ''
+      errorMsg.value = null
+    }
+  },
+)
 
 async function onSubmit() {
   errorMsg.value = null

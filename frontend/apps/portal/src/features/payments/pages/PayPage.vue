@@ -1,25 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   AlertCircle,
-  AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  ChevronRight,
   Clock,
-  Coins,
   CreditCard,
   Download,
-  ExternalLink,
-  FileCheck2,
-  FileText,
-  HelpCircle,
   Info,
   LoaderCircle,
   QrCode,
   Receipt,
-  RotateCcw,
   ShieldCheck,
   Sparkles,
   TrendingDown,
@@ -28,7 +20,6 @@ import {
 } from '@lucide/vue'
 
 import type { PaymentMethodType } from '@prestamos/api-client'
-import { MoneyText, StatusBadge } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -39,11 +30,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useClientLoans } from '@/features/loans/composables/useClientLoans'
-import { useLoanSchedule } from '@/features/loans/composables/useLoanSchedule'
+import { useClientLoans, useLoanSchedule } from '@/features/loans'
 import {
   usePaymentGateway,
   usePaymentHistory,
@@ -52,7 +41,6 @@ import {
 
 // Requerimientos FE-CP-12 a FE-CP-17
 const route = useRoute()
-const router = useRouter()
 
 const activeTab = ref<'PAY' | 'PREPAY_TOTAL' | 'PREPAY_PARTIAL' | 'HISTORY'>('PAY')
 
@@ -60,54 +48,18 @@ const {
   loans,
   selectedLoanId,
   activeLoan,
-  hasLoans,
-  isLoading: loansLoading,
   loadLoans,
 } = useClientLoans()
 
 const {
-  schedule,
   nextInstallment: nextPendingInstallment,
   loadSchedule,
-  isLoading: scheduleLoading,
 } = useLoanSchedule()
-
-const selectLoan = (id: string) => {
-  selectedLoanId.value = id
-  if (id) loadSchedule(id)
-}
-
-watch(selectedLoanId, (newId) => {
-  if (newId) loadSchedule(newId)
-})
-
-const {
-  loanId: gatewayLoanId,
-  amount: gatewayAmount,
-  installmentNumber: gatewayInstallmentNumber,
-  concept: gatewayConcept,
-  selectedMethod,
-  voucherFileName,
-  step: gatewayStep,
-  isSubmitting: gatewaySubmitting,
-  isPolling,
-  errorMessage: gatewayError,
-  activeIntent,
-  confirmedPayment,
-  isQrMethod,
-  isCardMethod,
-  isVoucherMethod,
-  handleVoucherSelected,
-  initiatePayment,
-  downloadReceipt: downloadGatewayReceipt,
-  reset: resetGateway,
-} = usePaymentGateway()
 
 const {
   payments,
   filteredPayments,
   isLoading: historyLoading,
-  errorMessage: historyError,
   statusFilter,
   pendingCount,
   appliedCount,
@@ -129,6 +81,62 @@ const {
   resetQuote,
   resetPartial,
 } = usePrepayment()
+
+const {
+  loanId: gatewayLoanId,
+  amount: gatewayAmount,
+  installmentNumber: gatewayInstallmentNumber,
+  concept: gatewayConcept,
+  selectedMethod,
+  voucherFileName,
+  step: gatewayStep,
+  isSubmitting: gatewaySubmitting,
+  errorMessage: gatewayError,
+  activeIntent,
+  confirmedPayment,
+  isQrMethod,
+  isCardMethod,
+  isVoucherMethod,
+  handleVoucherSelected,
+  initiatePayment,
+  downloadReceipt: downloadGatewayReceipt,
+  reset: resetGateway,
+} = usePaymentGateway({
+  onSuccess: () => {
+    void loadLoans()
+    if (selectedLoanId.value) {
+      void loadSchedule(selectedLoanId.value)
+    }
+    void fetchHistory()
+  },
+})
+
+watch(gatewayStep, (newStep) => {
+  if (newStep === 'IN_VALIDATION') {
+    void fetchHistory()
+  }
+})
+
+const selectLoan = (id: string) => {
+  if (!id) return
+  const changed = selectedLoanId.value !== id
+  selectedLoanId.value = id
+  if (changed) {
+    resetGateway()
+    gatewayAmount.value = ''
+    gatewayInstallmentNumber.value = undefined
+    resetQuote()
+    resetPartial()
+    if (activeTab.value === 'PREPAY_TOTAL') {
+      void loadTotalPrepaymentQuote(id)
+    }
+  }
+  void loadSchedule(id)
+}
+
+watch(selectedLoanId, (newId) => {
+  if (newId) void loadSchedule(newId)
+})
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
@@ -154,7 +162,7 @@ watch(
   { immediate: true },
 )
 
-// Soporte de query params: ?tab=prepago|abono|historial & ?loanId=...
+// Soporte de query params: ?tab=prepago|abono|historial | ?mode=PREPAYMENT & ?loanId=...
 onMounted(async () => {
   await loadLoans()
 
@@ -162,9 +170,9 @@ onMounted(async () => {
     selectLoan(route.query.loanId)
   }
 
-  if (route.query.tab === 'prepago') {
+  if (route.query.tab === 'prepago' || route.query.mode === 'PREPAYMENT') {
     activeTab.value = 'PREPAY_TOTAL'
-    handleLoadQuote()
+    void handleLoadQuote()
   } else if (route.query.tab === 'abono') {
     activeTab.value = 'PREPAY_PARTIAL'
   } else if (route.query.tab === 'historial') {
@@ -181,28 +189,30 @@ const handleLoadQuote = async () => {
 
 watch(activeTab, (tab) => {
   if (tab === 'PREPAY_TOTAL' && !quote.value && selectedLoanId.value) {
-    handleLoadQuote()
+    void handleLoadQuote()
   }
 })
 
 // Preparar pago desde Prepago Total
 const proceedFromTotalQuote = () => {
   if (!quote.value) return
+  resetGateway()
+  gatewayInstallmentNumber.value = undefined
   gatewayAmount.value = quote.value.totalToPay
   gatewayConcept.value = `Cancelación anticipada total (${activeLoan.value?.productName ?? 'Préstamo'})`
   activeTab.value = 'PAY'
-  resetGateway()
 }
 
 // Preparar pago desde Abono Extraordinario
 const proceedFromPartialSimulation = () => {
   if (!partialSimulation.value) return
+  resetGateway()
+  gatewayInstallmentNumber.value = undefined
   gatewayAmount.value = partialSimulation.value.prepaymentAmount
   gatewayConcept.value = `Abono extraordinario a capital - ${
     partialSimulation.value.option === 'REDUCE_TERM' ? 'Reducción de plazo' : 'Reducción de cuota'
   }`
   activeTab.value = 'PAY'
-  resetGateway()
 }
 
 const handleFileChange = (event: Event) => {
@@ -267,7 +277,7 @@ const paymentMethods: {
         <select
           id="loan-select"
           :value="selectedLoanId"
-          class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-800 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           @change="selectLoan(($event.target as HTMLSelectElement).value)"
         >
           <option v-for="l in loans" :key="l.id" :value="l.id">
@@ -278,14 +288,14 @@ const paymentMethods: {
     </div>
 
     <!-- Navegación por pestañas -->
-    <div class="border-b border-slate-200">
+    <div class="border-b border-border">
       <nav class="-mb-px flex flex-wrap gap-2 sm:gap-6" aria-label="Tabs">
         <button
           type="button"
           :class="[
             activeTab === 'PAY'
-              ? 'border-brand-600 text-brand-600'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
             'flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors',
           ]"
           @click="activeTab = 'PAY'"
@@ -298,15 +308,15 @@ const paymentMethods: {
           type="button"
           :class="[
             activeTab === 'PREPAY_TOTAL'
-              ? 'border-brand-600 text-brand-600'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
             'flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors',
           ]"
           @click="activeTab = 'PREPAY_TOTAL'"
         >
           <Sparkles class="h-4 w-4" />
           <span>Cancelación Anticipada (Total)</span>
-          <Badge variant="outline" class="border-emerald-200 bg-emerald-50 text-[11px] text-emerald-700">
+          <Badge variant="outline" class="border-success/30 bg-success/10 text-[11px] text-success">
             0% penalidad
           </Badge>
         </button>
@@ -315,8 +325,8 @@ const paymentMethods: {
           type="button"
           :class="[
             activeTab === 'PREPAY_PARTIAL'
-              ? 'border-brand-600 text-brand-600'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
             'flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors',
           ]"
           @click="activeTab = 'PREPAY_PARTIAL'"
@@ -329,8 +339,8 @@ const paymentMethods: {
           type="button"
           :class="[
             activeTab === 'HISTORY'
-              ? 'border-brand-600 text-brand-600'
-              : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700',
+              ? 'border-primary text-primary font-semibold'
+              : 'border-transparent text-muted-foreground hover:border-border hover:text-foreground',
             'flex items-center gap-2 border-b-2 py-3 px-1 text-sm font-medium transition-colors',
           ]"
           @click="activeTab = 'HISTORY'"
@@ -352,7 +362,7 @@ const paymentMethods: {
         <Card class="lg:col-span-2">
           <CardHeader>
             <CardTitle class="flex items-center gap-2 text-lg">
-              <CreditCard class="h-5 w-5 text-brand-600" />
+              <CreditCard class="h-5 w-5 text-primary" />
               Selecciona tu medio de pago
             </CardTitle>
             <CardDescription>
@@ -369,29 +379,29 @@ const paymentMethods: {
                 type="button"
                 :class="[
                   selectedMethod === m.id
-                    ? 'border-brand-600 bg-brand-50/50 ring-2 ring-brand-500'
-                    : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+                    ? 'border-primary bg-primary/5 ring-2 ring-primary'
+                    : 'border-border bg-card hover:border-muted-foreground/30 hover:bg-muted/30',
                   'relative flex flex-col items-start rounded-xl border p-4 text-left transition-all',
                 ]"
                 @click="selectedMethod = m.id"
               >
                 <div class="flex w-full items-center justify-between">
-                  <span class="font-semibold text-slate-900">{{ m.name }}</span>
-                  <Badge v-if="m.badge" class="bg-brand-100 text-brand-700 text-[10px]">
+                  <span class="font-semibold text-foreground">{{ m.name }}</span>
+                  <Badge v-if="m.badge" class="bg-primary/10 text-primary border-primary/20 text-[10px]">
                     {{ m.badge }}
                   </Badge>
                 </div>
-                <span class="mt-1 text-xs text-slate-500 leading-relaxed">{{ m.tagline }}</span>
+                <span class="mt-1 text-xs text-muted-foreground leading-relaxed">{{ m.tagline }}</span>
               </button>
             </div>
 
             <!-- Campo de Monto -->
-            <div class="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-              <label for="amount-input" class="text-xs font-semibold uppercase tracking-wider text-slate-600">
+            <div class="space-y-2 rounded-xl border border-border bg-muted/20 p-4">
+              <label for="amount-input" class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Monto a pagar (S/)
               </label>
               <div class="relative rounded-lg shadow-sm">
-                <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 font-semibold text-slate-500">
+                <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 font-semibold text-muted-foreground">
                   S/
                 </span>
                 <input
@@ -401,17 +411,17 @@ const paymentMethods: {
                   step="0.01"
                   min="1"
                   placeholder="0.00"
-                  class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-lg font-bold text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                  class="w-full rounded-lg border border-input bg-card py-2.5 pl-9 pr-3 text-lg font-bold text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
 
               <!-- Atajos de monto -->
               <div class="flex flex-wrap items-center gap-2 pt-2">
-                <span class="text-xs text-slate-500">Sugerencias:</span>
+                <span class="text-xs text-muted-foreground">Sugerencias:</span>
                 <button
                   v-if="nextPendingInstallment"
                   type="button"
-                  class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-400 hover:text-brand-600"
+                  class="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary hover:text-primary transition-colors"
                   @click="gatewayAmount = nextPendingInstallment.totalDue; gatewayConcept = `Cuota N° ${nextPendingInstallment.number}`"
                 >
                   Próxima cuota (S/ {{ nextPendingInstallment.totalDue }})
@@ -419,7 +429,7 @@ const paymentMethods: {
                 <button
                   v-if="activeLoan?.outstandingPrincipal"
                   type="button"
-                  class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:border-brand-400 hover:text-brand-600"
+                  class="rounded-full border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground hover:border-primary hover:text-primary transition-colors"
                   @click="gatewayAmount = activeLoan.outstandingPrincipal; gatewayConcept = 'Saldo capital restante'"
                 >
                   Saldo total (S/ {{ activeLoan.outstandingPrincipal }})
@@ -520,13 +530,13 @@ const paymentMethods: {
             </CardContent>
           </Card>
 
-          <Card class="bg-brand-50/50 border-brand-100">
-            <CardContent class="p-4 space-y-2 text-xs text-brand-900">
-              <div class="flex items-center gap-2 font-semibold">
-                <ShieldCheck class="h-4 w-4 text-brand-600" />
+          <Card class="bg-primary/5 border-primary/20">
+            <CardContent class="p-4 space-y-2 text-xs text-foreground">
+              <div class="flex items-center gap-2 font-semibold text-primary">
+                <ShieldCheck class="h-4 w-4 text-primary" />
                 <span>Pago 100% Protegido</span>
               </div>
-              <p class="leading-relaxed text-brand-800/90">
+              <p class="leading-relaxed text-muted-foreground">
                 Tus pagos son procesados con encriptación de nivel bancario. Los comprobantes oficiales se generan de forma instantánea con validez tributaria.
               </p>
             </CardContent>
@@ -536,9 +546,9 @@ const paymentMethods: {
 
       <!-- PASO B: ESPERANDO PAGO CON QR DINÁMICO O TARJETA (FE-CP-12, FE-CP-14) -->
       <div v-else-if="gatewayStep === 'AWAITING_PAYMENT'" class="mx-auto max-w-xl">
-        <Card class="border-brand-200 shadow-md">
+        <Card class="border-primary/20 shadow-md">
           <CardHeader class="text-center pb-2">
-            <div class="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
+            <div class="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
               <QrCode v-if="isQrMethod" class="h-6 w-6" />
               <CreditCard v-else class="h-6 w-6" />
             </div>
@@ -583,7 +593,7 @@ const paymentMethods: {
             <div v-else-if="isCardMethod" class="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                 <span class="text-xs font-semibold text-slate-600">Checkout Seguro Niubiz / Izipay</span>
-                <span class="text-[10px] font-bold uppercase text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">PCI-DSS Level 1</span>
+                <span class="text-[10px] font-bold uppercase text-success bg-success/10 px-2 py-0.5 rounded">PCI-DSS Level 1</span>
               </div>
               <div class="space-y-3 text-xs">
                 <div>
@@ -639,45 +649,45 @@ const paymentMethods: {
 
       <!-- PASO C: CONFIRMACIÓN INSTANTÁNEA (FE-CP-14) -->
       <div v-else-if="gatewayStep === 'CONFIRMED'" class="mx-auto max-w-xl">
-        <Card class="border-emerald-200 bg-gradient-to-b from-emerald-50/40 to-white shadow-lg">
+        <Card class="border-success/30 bg-gradient-to-b from-success/5 to-card shadow-lg">
           <CardHeader class="text-center pb-3">
-            <div class="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+            <div class="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-success/15 text-success">
               <CheckCircle2 class="h-10 w-10" />
             </div>
-            <CardTitle class="text-2xl text-emerald-900">¡Pago Confirmado con Éxito!</CardTitle>
-            <CardDescription class="text-emerald-700">
+            <CardTitle class="text-2xl font-bold text-success">¡Pago Confirmado con Éxito!</CardTitle>
+            <CardDescription class="text-muted-foreground">
               Tu cuota ha sido amortizada y registrada en el sistema.
             </CardDescription>
           </CardHeader>
 
           <CardContent class="space-y-4">
-            <div class="rounded-xl border border-emerald-100 bg-white p-4 space-y-2.5 text-sm">
+            <div class="rounded-xl border border-border bg-card p-4 space-y-2.5 text-sm">
               <div class="flex justify-between">
-                <span class="text-slate-500">N° de Recibo</span>
-                <span class="font-mono font-bold text-slate-900">
+                <span class="text-muted-foreground">N° de Recibo</span>
+                <span class="font-mono font-bold text-foreground">
                   {{ confirmedPayment?.receiptNumber ?? 'REC-20261106-0001' }}
                 </span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-500">Monto Abonado</span>
-                <span class="font-bold text-emerald-600">S/ {{ confirmedPayment?.amount ?? gatewayAmount }}</span>
+                <span class="text-muted-foreground">Monto Abonado</span>
+                <span class="font-bold text-success">S/ {{ confirmedPayment?.amount ?? gatewayAmount }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-500">Medio de Pago</span>
-                <span class="font-medium text-slate-800">{{ confirmedPayment?.method ?? selectedMethod }}</span>
+                <span class="text-muted-foreground">Medio de Pago</span>
+                <span class="font-medium text-foreground">{{ confirmedPayment?.method ?? selectedMethod }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-500">Fecha y Hora</span>
-                <span class="text-slate-700">{{ confirmedPayment?.paidAt ? formatInstant(confirmedPayment.paidAt) : 'Hoy' }}</span>
+                <span class="text-muted-foreground">Fecha y Hora</span>
+                <span class="text-foreground">{{ confirmedPayment?.paidAt ? formatInstant(confirmedPayment.paidAt) : 'Hoy' }}</span>
               </div>
-              <div class="flex justify-between border-t border-slate-100 pt-2">
-                <span class="text-slate-500">Estado</span>
-                <Badge class="bg-emerald-100 text-emerald-800">APLICADO</Badge>
+              <div class="flex justify-between border-t border-border pt-2">
+                <span class="text-muted-foreground">Estado</span>
+                <Badge class="bg-success/15 text-success border-success/30 font-semibold">APLICADO</Badge>
               </div>
             </div>
 
             <!-- Botón de descarga de comprobante PDF oficial -->
-            <Button class="w-full bg-emerald-600 hover:bg-emerald-700" size="lg" @click="downloadGatewayReceipt">
+            <Button class="w-full bg-success hover:bg-success/90 text-white font-semibold" size="lg" @click="downloadGatewayReceipt">
               <Download class="mr-2 h-5 w-5" />
               <span>Descargar Recibo Oficial en PDF</span>
             </Button>
@@ -738,10 +748,10 @@ const paymentMethods: {
         <CardHeader>
           <div class="flex items-center justify-between">
             <CardTitle class="flex items-center gap-2 text-lg">
-              <Sparkles class="h-5 w-5 text-emerald-600" />
+              <Sparkles class="h-5 w-5 text-success" />
               Liquidación por Cancelación Anticipada (Prepago Total)
             </CardTitle>
-            <Badge class="bg-emerald-100 text-emerald-800">Ley 29571 / SBS</Badge>
+            <Badge class="bg-success/15 text-success border-success/30 font-semibold">Ley 29571 / SBS</Badge>
           </div>
           <CardDescription>
             Calcula la deuda exacta a la fecha de hoy, ahorrando los intereses futuros no devengados.
@@ -751,12 +761,12 @@ const paymentMethods: {
         <CardContent class="space-y-6">
           <!-- Loading state -->
           <div v-if="isQuoting" class="py-12 text-center space-y-2">
-            <LoaderCircle class="mx-auto h-8 w-8 animate-spin text-brand-600" />
-            <p class="text-sm text-slate-500">Calculando cotización al día de hoy...</p>
+            <LoaderCircle class="mx-auto h-8 w-8 animate-spin text-primary" />
+            <p class="text-sm text-muted-foreground">Calculando cotización al día de hoy...</p>
           </div>
 
           <!-- Error state -->
-          <div v-else-if="quoteError" class="rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs text-rose-800">
+          <div v-else-if="quoteError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-xs text-destructive">
             <p class="font-semibold">No se pudo cotizar:</p>
             <p>{{ quoteError }}</p>
           </div>
@@ -764,49 +774,49 @@ const paymentMethods: {
           <!-- Cotización calculada -->
           <div v-else-if="quote" class="grid gap-6 md:grid-cols-2">
             <!-- Desglose Financiero -->
-            <div class="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-5 text-sm">
-              <h3 class="font-semibold text-slate-900 border-b border-slate-200 pb-2">
+            <div class="space-y-3 rounded-xl border border-border bg-muted/20 p-5 text-sm">
+              <h3 class="font-semibold text-foreground border-b border-border pb-2">
                 Desglose de Liquidación al {{ formatBusinessDate(quote.asOfDate) }}
               </h3>
               <div class="flex justify-between">
-                <span class="text-slate-600">Saldo Capital Insoluto</span>
-                <span class="font-medium text-slate-900">S/ {{ quote.outstandingPrincipal }}</span>
+                <span class="text-muted-foreground">Saldo Capital Insoluto</span>
+                <span class="font-medium text-foreground">S/ {{ quote.outstandingPrincipal }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-600">Interés Devengado a la Fecha</span>
-                <span class="font-medium text-slate-900">S/ {{ quote.accruedInterest }}</span>
+                <span class="text-muted-foreground">Interés Devengado a la Fecha</span>
+                <span class="font-medium text-foreground">S/ {{ quote.accruedInterest }}</span>
               </div>
               <div class="flex justify-between">
-                <span class="text-slate-600">Mora Acumulada</span>
-                <span class="font-medium text-slate-900">S/ {{ quote.accruedMora }}</span>
+                <span class="text-muted-foreground">Mora Acumulada</span>
+                <span class="font-medium text-foreground">S/ {{ quote.accruedMora }}</span>
               </div>
-              <div class="flex justify-between text-emerald-700">
+              <div class="flex justify-between text-success">
                 <span class="font-medium">Comisión / Penalidad por Prepago</span>
                 <span class="font-bold">S/ {{ quote.prepaymentPenalty }} (0.00%)</span>
               </div>
-              <div class="flex justify-between border-t-2 border-slate-300 pt-3 text-base">
-                <span class="font-bold text-slate-900">Total a Liquidar Hoy</span>
-                <span class="font-extrabold text-brand-700 text-lg">S/ {{ quote.totalToPay }}</span>
+              <div class="flex justify-between border-t-2 border-border pt-3 text-base">
+                <span class="font-bold text-foreground">Total a Liquidar Hoy</span>
+                <span class="font-extrabold text-primary text-lg">S/ {{ quote.totalToPay }}</span>
               </div>
             </div>
 
             <!-- Beneficios y Vigencia -->
             <div class="space-y-4">
-              <div class="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-emerald-900 space-y-2">
-                <div class="flex items-center gap-2 font-bold text-sm text-emerald-950">
-                  <CheckCircle2 class="h-4 w-4 text-emerald-600" />
+              <div class="rounded-xl border border-success/30 bg-success/10 p-4 text-xs text-foreground space-y-2">
+                <div class="flex items-center gap-2 font-bold text-sm text-success">
+                  <CheckCircle2 class="h-4 w-4 text-success" />
                   <span>Beneficio SBS: Cero Penalidades</span>
                 </div>
                 <p class="leading-relaxed">
                   Conforme al Código de Protección al Consumidor y normas de la SBS, tienes derecho a cancelar tu crédito en cualquier momento sin comisión de prepago y con descuento íntegro de cuotas e intereses futuros.
                 </p>
-                <p class="font-medium text-emerald-800">
+                <p class="font-medium text-muted-foreground">
                   Vigencia de esta cotización: <strong>Hoy hasta las 23:59 hrs</strong>.
                 </p>
               </div>
 
               <!-- CTA de pago -->
-              <Button class="w-full bg-emerald-600 hover:bg-emerald-700" size="lg" @click="proceedFromTotalQuote">
+              <Button class="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" size="lg" @click="proceedFromTotalQuote">
                 <Wallet class="mr-2 h-5 w-5" />
                 <span>Pagar Liquidación Total (S/ {{ quote.totalToPay }})</span>
               </Button>
@@ -822,10 +832,10 @@ const paymentMethods: {
         <CardHeader>
           <div class="flex items-center justify-between">
             <CardTitle class="flex items-center gap-2 text-lg">
-              <TrendingDown class="h-5 w-5 text-brand-600" />
+              <TrendingDown class="h-5 w-5 text-primary" />
               Simulador de Abono a Capital (Prepago Parcial)
             </CardTitle>
-            <Badge class="bg-brand-100 text-brand-800">Ley 29571 Art. 85</Badge>
+            <Badge class="bg-primary/10 text-primary border-primary/20">Ley 29571 Art. 85</Badge>
           </div>
           <CardDescription>
             Amortiza un monto extraordinario a tu capital adeudado y elige cómo deseas beneficiarte.
@@ -837,11 +847,11 @@ const paymentMethods: {
             <!-- Controles del Simulador -->
             <div class="space-y-4">
               <div class="space-y-1.5">
-                <label for="partial-amount" class="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                <label for="partial-amount" class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Monto extraordinario a amortizar (S/)
                 </label>
                 <div class="relative">
-                  <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 font-semibold text-slate-500">
+                  <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 font-semibold text-muted-foreground">
                     S/
                   </span>
                   <input
@@ -850,17 +860,17 @@ const paymentMethods: {
                     type="number"
                     step="50"
                     placeholder="Ej. 1000.00"
-                    class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-9 pr-3 text-base font-bold text-slate-900 focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                    class="w-full rounded-lg border border-input bg-card py-2.5 pl-9 pr-3 text-base font-bold text-foreground focus:border-primary focus:ring-1 focus:ring-primary"
                   />
                 </div>
-                <p class="text-[11px] text-slate-500">
+                <p class="text-[11px] text-muted-foreground">
                   Saldo capital disponible: S/ {{ activeLoan?.outstandingPrincipal }}
                 </p>
               </div>
 
               <!-- Elección de modalidad (Ley 29571) -->
               <div class="space-y-2">
-                <label class="text-xs font-semibold uppercase tracking-wider text-slate-700">
+                <label class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Modalidad de Amortización:
                 </label>
                 <div class="grid grid-cols-2 gap-2">
@@ -868,28 +878,28 @@ const paymentMethods: {
                     type="button"
                     :class="[
                       partialOption === 'REDUCE_TERM'
-                        ? 'border-brand-600 bg-brand-50/60 font-semibold text-brand-900 ring-2 ring-brand-500'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                        ? 'border-primary bg-primary/5 font-semibold text-primary ring-2 ring-primary'
+                        : 'border-border bg-card text-foreground hover:bg-muted/30',
                       'rounded-lg border p-3 text-left text-xs transition-all',
                     ]"
                     @click="partialOption = 'REDUCE_TERM'; handleSimulatePartial()"
                   >
                     <p class="font-bold">Reducir Plazo</p>
-                    <span class="text-[11px] text-slate-500">Pagas antes, ahorras más intereses</span>
+                    <span class="text-[11px] text-muted-foreground">Pagas antes, ahorras más intereses</span>
                   </button>
 
                   <button
                     type="button"
                     :class="[
                       partialOption === 'REDUCE_FEE'
-                        ? 'border-brand-600 bg-brand-50/60 font-semibold text-brand-900 ring-2 ring-brand-500'
-                        : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50',
+                        ? 'border-primary bg-primary/5 font-semibold text-primary ring-2 ring-primary'
+                        : 'border-border bg-card text-foreground hover:bg-muted/30',
                       'rounded-lg border p-3 text-left text-xs transition-all',
                     ]"
                     @click="partialOption = 'REDUCE_FEE'; handleSimulatePartial()"
                   >
                     <p class="font-bold">Reducir Cuota</p>
-                    <span class="text-[11px] text-slate-500">Mismo plazo, cuotas más cómodas</span>
+                    <span class="text-[11px] text-muted-foreground">Mismo plazo, cuotas más cómodas</span>
                   </button>
                 </div>
               </div>
@@ -903,49 +913,49 @@ const paymentMethods: {
                 <span>Simular Nuevo Cronograma</span>
               </Button>
 
-              <div v-if="partialError" class="rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+              <div v-if="partialError" class="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
                 {{ partialError }}
               </div>
             </div>
 
             <!-- Resultado de la Simulación -->
-            <div class="rounded-xl border border-slate-200 bg-slate-50 p-5 space-y-4">
-              <h3 class="font-semibold text-slate-900 border-b border-slate-200 pb-2 text-sm">
+            <div class="rounded-xl border border-border bg-muted/20 p-5 space-y-4">
+              <h3 class="font-semibold text-foreground border-b border-border pb-2 text-sm">
                 Comparativo de Impacto
               </h3>
 
               <div v-if="partialSimulation" class="space-y-3 text-xs">
-                <div class="grid grid-cols-2 gap-3 rounded-lg bg-white p-3 border border-slate-200">
+                <div class="grid grid-cols-2 gap-3 rounded-lg bg-card p-3 border border-border">
                   <div>
-                    <span class="text-slate-500 block">Cuotas restantes</span>
-                    <span class="text-sm font-bold text-slate-900">
+                    <span class="text-muted-foreground block">Cuotas restantes</span>
+                    <span class="text-sm font-bold text-foreground">
                       {{ partialSimulation.newTermRemaining }} cuotas
                     </span>
-                    <span class="text-[10px] text-slate-400 block line-through">
+                    <span class="text-[10px] text-muted-foreground block line-through">
                       Antes: {{ partialSimulation.currentTermRemaining }}
                     </span>
                   </div>
                   <div>
-                    <span class="text-slate-500 block">Valor por cuota</span>
-                    <span class="text-sm font-bold text-slate-900">
+                    <span class="text-muted-foreground block">Valor por cuota</span>
+                    <span class="text-sm font-bold text-foreground">
                       S/ {{ partialSimulation.newInstallmentAmount }}
                     </span>
-                    <span class="text-[10px] text-slate-400 block line-through">
+                    <span class="text-[10px] text-muted-foreground block line-through">
                       Antes: S/ {{ partialSimulation.currentInstallmentAmount }}
                     </span>
                   </div>
                 </div>
 
-                <div class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-emerald-900">
-                  <span class="text-[11px] font-semibold block text-emerald-800 uppercase">
+                <div class="rounded-lg bg-success/10 border border-success/30 p-3 text-foreground">
+                  <span class="text-[11px] font-semibold block text-success uppercase">
                     Ahorro Total Proyectado de Intereses
                   </span>
-                  <span class="text-xl font-extrabold text-emerald-700">
+                  <span class="text-xl font-extrabold text-success">
                     S/ {{ partialSimulation.totalInterestSaved }}
                   </span>
                 </div>
 
-                <Button class="w-full bg-brand-600 hover:bg-brand-700 mt-2" @click="proceedFromPartialSimulation">
+                <Button class="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold mt-2" @click="proceedFromPartialSimulation">
                   <ArrowRight class="mr-2 h-4 w-4" />
                   <span>Abonar S/ {{ partialSimulation.prepaymentAmount }}</span>
                 </Button>
@@ -1002,8 +1012,8 @@ const paymentMethods: {
                 type="button"
                 :class="[
                   statusFilter === 'APPLIED'
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+                    ? 'bg-success text-white'
+                    : 'bg-success/10 text-success hover:bg-success/20',
                   'rounded-lg px-2.5 py-1 font-medium transition-colors',
                 ]"
                 @click="statusFilter = 'APPLIED'"
@@ -1017,7 +1027,7 @@ const paymentMethods: {
         <CardContent class="p-0">
           <!-- Loading -->
           <div v-if="historyLoading" class="p-8 text-center">
-            <LoaderCircle class="mx-auto h-6 w-6 animate-spin text-brand-600" />
+            <LoaderCircle class="mx-auto h-6 w-6 animate-spin text-primary" />
           </div>
 
           <!-- Empty state -->
@@ -1061,7 +1071,7 @@ const paymentMethods: {
                     </Badge>
                     <Badge
                       v-else-if="p.status === 'APPLIED'"
-                      class="bg-emerald-100 text-emerald-800"
+                      class="bg-success/15 text-success border border-success/30 font-medium"
                     >
                       Aplicado
                     </Badge>
@@ -1077,7 +1087,7 @@ const paymentMethods: {
                       v-if="p.status === 'APPLIED'"
                       variant="ghost"
                       size="sm"
-                      class="h-8 gap-1 text-brand-600 hover:text-brand-700"
+                      class="h-8 gap-1 text-primary hover:text-primary/80"
                       @click="downloadHistoryReceipt(p)"
                     >
                       <Download class="h-3.5 w-3.5" />

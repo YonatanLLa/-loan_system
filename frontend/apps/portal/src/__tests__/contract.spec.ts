@@ -19,11 +19,6 @@ describe('Contract Service (FE-CP-09)', () => {
     vi.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:mock-contract-url')
     vi.spyOn(window.URL, 'revokeObjectURL').mockReturnValue()
 
-    // Mock response de fetch para get /client/contract/document.pdf
-    const mockUseApi = {
-      get: vi.fn().mockResolvedValue({ data: new ArrayBuffer(8) }),
-    }
-
     vi.spyOn(contractService, 'downloadContractPdf').mockImplementation(async () => {
       const blob = new Blob([new ArrayBuffer(8)], { type: 'application/pdf' })
       const url = window.URL.createObjectURL(blob)

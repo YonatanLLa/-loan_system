@@ -108,9 +108,12 @@ watch(
   () => props.open,
   (isOpen) => {
     if (isOpen) {
+      errorMsg.value = null
+      form.value.loanId = props.initialLoanId ?? ''
+      form.value.amount = props.initialAmount ?? ''
+      form.value.externalReference = ''
+      form.value.paidAt = new Date().toISOString().slice(0, 16)
       void loadData()
-      if (props.initialLoanId) form.value.loanId = props.initialLoanId
-      if (props.initialAmount) form.value.amount = props.initialAmount
     }
   },
 )

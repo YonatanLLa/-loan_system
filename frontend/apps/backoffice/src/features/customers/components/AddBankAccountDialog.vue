@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Building2, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -42,6 +42,21 @@ const form = ref({
 })
 
 const isWallet = computed(() => form.value.accountType === 'BILLETERA_DIGITAL')
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      form.value = {
+        bankName: 'BCP',
+        accountType: 'CUENTA_AHORRO',
+        cci: '',
+        phoneWallet: '',
+      }
+    }
+  },
+)
 
 function onAccountTypeChange() {
   if (isWallet.value) {

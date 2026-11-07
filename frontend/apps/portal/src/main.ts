@@ -1,4 +1,5 @@
 import '@prestamos/ui/styles.css'
+import './assets/portal.css'
 import 'vue-sonner/style.css'
 
 import { createApp } from 'vue'

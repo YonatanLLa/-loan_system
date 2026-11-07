@@ -60,11 +60,11 @@ export function useLoanSchedule() {
   function getInstallmentColorClass(inst: Installment): string {
     switch (inst.status) {
       case 'PAID':
-        return 'text-emerald-700 bg-emerald-500/10 border-emerald-500/30'
+        return 'text-success bg-success/10 border-success/30'
       case 'OVERDUE':
         return 'text-destructive bg-destructive/10 border-destructive/30'
       case 'PARTIAL':
-        return 'text-blue-700 bg-blue-500/10 border-blue-500/30'
+        return 'text-primary bg-primary/10 border-primary/30'
       case 'PENDING':
         return 'text-amber-700 bg-amber-500/10 border-amber-500/30'
       case 'CANCELLED_BY_PREPAYMENT':

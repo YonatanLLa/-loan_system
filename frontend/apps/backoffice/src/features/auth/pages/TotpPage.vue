@@ -104,9 +104,7 @@ onUnmounted(() => {
   <main class="grid min-h-svh place-items-center bg-muted/40 p-4">
     <div class="w-full max-w-sm space-y-6">
       <div class="flex items-center justify-center gap-2 text-lg font-semibold">
-        <span
-          class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"
-        >
+        <span class="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <HandCoins class="size-4" aria-hidden="true" />
         </span>
         Sistema de Préstamos
@@ -121,9 +119,7 @@ onUnmounted(() => {
 
       <Card>
         <CardHeader class="items-center text-center">
-          <span
-            class="mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"
-          >
+          <span class="mb-2 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
             <KeyRound class="size-6" aria-hidden="true" />
           </span>
           <CardTitle>
@@ -138,46 +134,26 @@ onUnmounted(() => {
             <FieldGroup>
               <Field :data-invalid="!!codeError || undefined">
                 <FieldLabel for="totp-code">Código TOTP</FieldLabel>
-                <Input
-                  id="totp-code"
-                  :value="code"
-                  type="text"
-                  inputmode="numeric"
-                  autocomplete="one-time-code"
-                  :maxlength="CODE_LENGTH"
-                  placeholder="000000"
-                  class="text-center text-lg tracking-[0.3em]"
-                  :aria-invalid="!!codeError"
-                  @input="onInput"
-                />
+                <Input id="totp-code" :value="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                  :maxlength="CODE_LENGTH" placeholder="000000" class="text-center text-lg tracking-[0.3em]"
+                  :aria-invalid="!!codeError" @input="onInput" />
                 <FieldError :errors="[codeError]" />
               </Field>
 
               <div class="flex items-center justify-center gap-2 text-sm text-muted-foreground">
                 <span>El código expira en</span>
-                <span
-                  class="font-mono font-semibold"
-                  :class="remainingSeconds <= 5 ? 'text-destructive' : 'text-foreground'"
-                >
+                <span class="font-mono font-semibold"
+                  :class="remainingSeconds <= 5 ? 'text-destructive' : 'text-foreground'">
                   {{ formattedTime }}
                 </span>
               </div>
 
-              <Button
-                type="submit"
-                class="w-full"
-                :disabled="isVerifying || !isCodeComplete"
-              >
+              <Button type="submit" class="w-full" :disabled="isVerifying || !isCodeComplete">
                 <LoaderCircle v-if="isVerifying" class="animate-spin" aria-hidden="true" />
                 Verificar
               </Button>
 
-              <Button
-                type="button"
-                variant="ghost"
-                class="w-full"
-                @click="goBack"
-              >
+              <Button type="button" variant="ghost" class="w-full" @click="goBack">
                 Volver al inicio de sesión
               </Button>
             </FieldGroup>

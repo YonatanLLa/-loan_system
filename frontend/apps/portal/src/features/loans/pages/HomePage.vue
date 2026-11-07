@@ -2,21 +2,13 @@
 import { onMounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import {
-  AlertCircle,
-  AlertTriangle,
   ArrowRight,
-  Calendar,
-  CheckCircle2,
   Clock,
   Coins,
-  CreditCard,
   FilePlus,
   FileText,
-  HandCoins,
-  Receipt,
   ShieldAlert,
   Sparkles,
-  TrendingUp,
   Wallet,
 } from '@lucide/vue'
 
@@ -26,9 +18,7 @@ import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate } from '@prestamos/utils'
@@ -40,20 +30,16 @@ import { useClientLoans, useLoanSchedule } from '../composables'
 
 const session = useSessionStore()
 const {
-  loans,
   activeLoan,
   hasLoans,
-  hasOverdueLoans,
   isLoading: loansLoading,
   loadLoans,
 } = useClientLoans()
 
 const {
-  schedule,
   nextInstallment,
   totalMoraAccrued,
   dueCountdownText,
-  isLoading: scheduleLoading,
   loadSchedule,
 } = useLoanSchedule()
 
@@ -243,7 +229,7 @@ onMounted(() => {
           to="/solicitudes"
           class="p-3 rounded-xl border bg-card hover:bg-muted/20 transition-all flex items-center gap-2.5 shadow-xs"
         >
-          <div class="size-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-600 shrink-0">
+          <div class="size-8 rounded-lg bg-success/15 flex items-center justify-center text-success shrink-0">
             <Clock class="size-4" />
           </div>
           <div>

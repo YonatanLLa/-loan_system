@@ -67,6 +67,15 @@ function seedUsers(): void {
     permissions: ['client.portal'],
     customerId: 'cus-001',
   })
+  db.users.push({
+    id: 'usr-101',
+    email: 'nuevo@correo.pe',
+    password: DEMO_PASSWORD,
+    fullName: 'Juan Pérez Alva',
+    role: 'ROLE_CLIENT',
+    permissions: ['client.portal'],
+    customerId: 'cus-009',
+  })
 }
 
 function seedCatalogs(): void {
@@ -182,6 +191,7 @@ function seedCustomers(): void {
     { name: 'Pedro Castillo León', doc: '46789012', birth: '1979-09-09', income: '1500.00', occupation: 'Taxista', employer: 'Independiente', district: 'Ate', kyc: 'REJECTED' },
     { name: 'Rosa Chávez Díaz', doc: '47890123', birth: '1982-12-21', income: '2900.00', occupation: 'Docente', employer: 'I.E. San Martín', district: 'Pueblo Libre', kyc: 'VERIFIED' },
     { name: 'Distribuidora Andina S.A.C.', doc: '20512345678', docType: 'RUC', birth: '2010-02-01', income: '18000.00', occupation: 'Distribución de abarrotes', employer: 'Distribuidora Andina S.A.C.', district: 'La Victoria', kyc: 'VERIFIED', juridical: true },
+    { name: 'Juan Pérez Alva', doc: '48901234', birth: '1995-06-15', income: '2800.00', occupation: 'Analista comercial', employer: 'Inversiones Lima S.A.C.', district: 'San Borja', kyc: 'VERIFIED' },
   ]
   seeds.forEach((seed, index) => {
     const id = nextId('cus')
@@ -192,8 +202,8 @@ function seedCustomers(): void {
       docType: seed.docType ?? 'DNI',
       docNumber: seed.doc,
       fullName: seed.name,
-      email: index === 0 ? 'cliente@correo.pe' : `${slug[0]}.${slug[1]}@correo.pe`,
-      phone: `9${String(87000000 + index * 1111111).slice(0, 8)}`,
+      email: index === 0 ? 'cliente@correo.pe' : seed.name === 'Juan Pérez Alva' ? 'nuevo@correo.pe' : `${slug[0]}.${slug[1]}@correo.pe`,
+      phone: seed.name === 'Juan Pérez Alva' ? '987000101' : `9${String(87000000 + index * 1111111).slice(0, 8)}`,
       address: `Jr. Los Pinos ${100 + index * 17}`,
       district: seed.district,
       birthDate: seed.birth,

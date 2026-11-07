@@ -1,36 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  AlertTriangle,
   ArrowLeft,
   Building2,
   Calendar,
   CheckCircle2,
-  Clock,
   CreditCard,
-  DollarSign,
   FileBadge,
-  FileCheck2,
   FileText,
   Mail,
   MapPin,
   Pencil,
   Phone,
-  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
   Star,
-  User,
   UserCheck,
-  XCircle,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { Customer360, CustomerBankAccount, KycStatus } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { MoneyText, StatusBadge, TableGenerator, type TableColumn } from '@prestamos/ui'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -116,6 +109,42 @@ function onKycDecided(newStatus: KycStatus) {
 function onAccountAdded() {
   void loadCustomer()
 }
+
+const customerLoanColumns: TableColumn<Customer360['loans'][number]>[] = [
+  { key: 'id', label: 'Código', kind: 'mono', cellClass: 'text-xs font-semibold' },
+  { key: 'productName', label: 'Producto', cellClass: 'font-medium' },
+  { key: 'principal', label: 'Monto Capital', kind: 'money', cellClass: 'text-xs' },
+  {
+    key: 'outstandingPrincipal',
+    label: 'Saldo Insoluto',
+    kind: 'money',
+    cellClass: 'text-xs font-bold text-foreground',
+  },
+  { key: 'nextDueDate', label: 'Próximo Vencimiento', kind: 'date', cellClass: 'text-xs text-muted-foreground' },
+  {
+    key: 'daysLate',
+    label: 'Días Atraso',
+    value: (loan) => (loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día'),
+    cellClass: (loan) =>
+      loan.daysLate > 0 ? 'text-destructive font-bold text-xs' : 'text-muted-foreground text-xs font-semibold',
+  },
+  { key: 'status', label: 'Estado', kind: 'status', statusKind: 'loan' },
+  { key: 'action', label: 'Ver', align: 'right' },
+]
+
+const customerApplicationColumns: TableColumn<Customer360['applications'][number]>[] = [
+  { key: 'id', label: 'ID Solicitud', kind: 'mono', cellClass: 'text-xs font-medium' },
+  { key: 'productName', label: 'Producto' },
+  { key: 'requestedAmount', label: 'Monto Solicitado', kind: 'money', cellClass: 'text-xs font-semibold' },
+  { key: 'createdAt', label: 'Fecha Solicitud', kind: 'datetime', cellClass: 'text-xs text-muted-foreground' },
+  { key: 'status', label: 'Estado', kind: 'status', statusKind: 'application' },
+]
+
+watch(customerId, (newId, oldId) => {
+  if (newId && oldId && newId !== oldId) {
+    void loadCustomer()
+  }
+})
 
 onMounted(() => {
   void loadCustomer()
@@ -613,63 +642,20 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div
-                v-if="customer.loans.length === 0"
-                class="p-8 text-center text-xs text-muted-foreground"
+              <TableGenerator
+                :columns="customerLoanColumns"
+                :rows="customer.loans"
+                row-key="id"
+                empty-text="El cliente no cuenta con préstamos registrados."
               >
-                El cliente no cuenta con préstamos registrados.
-              </div>
-              <div v-else>
-                <TableGenerator
-                  :columns="[
-                    { key: 'id', label: 'Código' },
-                    { key: 'product', label: 'Producto' },
-                    { key: 'principal', label: 'Monto Capital' },
-                    { key: 'outstanding', label: 'Saldo Insoluto' },
-                    { key: 'nextDueDate', label: 'Próximo Vencimiento' },
-                    { key: 'daysLate', label: 'Días Atraso' },
-                    { key: 'status', label: 'Estado' },
-                    { key: 'action', label: 'Ver', headerClass: 'text-right' },
-                  ]"
-                  :rows="customer.loans"
-                  row-key="id"
-                >
-                  <template #row="{ row: loan }">
-                    <td class="px-4 py-3 font-mono text-xs font-semibold">
-                      {{ loan.id }}
-                    </td>
-                    <td class="px-4 py-3 font-medium">{{ loan.productName }}</td>
-                    <td class="px-4 py-3 font-mono text-xs">
-                      <MoneyText :amount="loan.principal" />
-                    </td>
-                    <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                      <MoneyText :amount="loan.outstandingPrincipal" />
-                    </td>
-                    <td class="px-4 py-3 text-xs text-muted-foreground">
-                      {{ loan.nextDueDate ? formatBusinessDate(loan.nextDueDate) : '—' }}
-                    </td>
-                    <td class="px-4 py-3 text-xs font-semibold">
-                      <span
-                        :class="
-                          loan.daysLate > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'
-                        "
-                      >
-                        {{ loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día' }}
-                      </span>
-                    </td>
-                    <td class="px-4 py-3">
-                      <StatusBadge kind="loan" :status="loan.status" />
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                      <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
-                        <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
-                          Detalle
-                        </RouterLink>
-                      </Button>
-                    </td>
-                  </template>
-                </TableGenerator>
-              </div>
+                <template #cell-action="{ row: loan }">
+                  <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
+                    <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
+                      Detalle
+                    </RouterLink>
+                  </Button>
+                </template>
+              </TableGenerator>
             </CardContent>
           </Card>
         </div>
@@ -686,39 +672,12 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div
-                v-if="customer.applications.length === 0"
-                class="p-8 text-center text-xs text-muted-foreground"
-              >
-                No hay solicitudes de crédito registradas para este cliente.
-              </div>
-              <div v-else>
-                <TableGenerator
-                  :columns="[
-                    { key: 'id', label: 'ID Solicitud' },
-                    { key: 'product', label: 'Producto' },
-                    { key: 'amount', label: 'Monto Solicitado' },
-                    { key: 'createdAt', label: 'Fecha Solicitud' },
-                    { key: 'status', label: 'Estado' },
-                  ]"
-                  :rows="customer.applications"
-                  row-key="id"
-                >
-                  <template #row="{ row: app }">
-                    <td class="px-4 py-3 font-mono text-xs font-medium">{{ app.id }}</td>
-                    <td class="px-4 py-3">{{ app.productName }}</td>
-                    <td class="px-4 py-3 font-mono text-xs font-semibold">
-                      <MoneyText :amount="app.requestedAmount" />
-                    </td>
-                    <td class="px-4 py-3 text-xs text-muted-foreground">
-                      {{ formatInstant(app.createdAt) }}
-                    </td>
-                    <td class="px-4 py-3">
-                      <StatusBadge kind="application" :status="app.status" />
-                    </td>
-                  </template>
-                </TableGenerator>
-              </div>
+              <TableGenerator
+                :columns="customerApplicationColumns"
+                :rows="customer.applications"
+                row-key="id"
+                empty-text="No hay solicitudes de crédito registradas para este cliente."
+              />
             </CardContent>
           </Card>
         </div>

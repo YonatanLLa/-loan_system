@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import {
   ArrowDownToLine,
-  Calendar,
-  ChartColumn,
   Clock,
   Download,
   FileCheck2,
@@ -16,7 +14,13 @@ import {
   Users,
 } from '@lucide/vue'
 
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import {
+  MoneyText,
+  PageHeader,
+  SummaryGrid,
+  TableGenerator,
+  type SummaryItem,
+} from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -28,9 +32,16 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate, formatInstant } from '@prestamos/utils'
+import { formatBusinessDate } from '@prestamos/utils'
 
 import { useReports } from '../composables'
+import {
+  portfolioColumns,
+  agingReportColumns,
+  analystProductivityColumns,
+  collectorProductivityColumns,
+  statementMovementColumns,
+} from '../utils/reportsColumns'
 
 // FE-BO-39 y FE-BO-40: Reportes ejecutivos, exportación y estado de cuenta.
 
@@ -40,7 +51,6 @@ const {
   portfolioPage,
   portfolioQuery,
   portfolioLoading,
-  portfolioPages,
   loadPortfolio,
   exportPortfolioCsv,
   // Aging
@@ -57,7 +67,6 @@ const {
   exportCashflowCsv,
   // Productividad
   productivity,
-  productivityLoading,
   loadProductivity,
   // Estado de Cuenta
   statementSearchId,
@@ -65,6 +74,26 @@ const {
   statementLoading,
   loadStatement,
 } = useReports()
+
+const statementSummaryItems = computed<SummaryItem[]>(() => {
+  if (!statement.value) return []
+  return [
+    { label: 'Capital Inicial', money: statement.value.principal, valueClass: 'text-foreground' },
+    {
+      label: 'Saldo Insoluto',
+      money: statement.value.outstandingPrincipal,
+      valueClass: 'text-primary',
+    },
+    { label: 'Total Amortizado', money: statement.value.totalPaid, valueClass: 'text-success' },
+    {
+      label: 'Próximo Vencimiento',
+      value: statement.value.nextDueDate
+        ? formatBusinessDate(statement.value.nextDueDate)
+        : 'Al día',
+      valueClass: 'font-semibold text-foreground',
+    },
+  ]
+})
 
 onMounted(() => {
   void loadPortfolio()
@@ -196,33 +225,18 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'id', label: 'Código' },
-                { key: 'customer', label: 'Cliente' },
-                { key: 'product', label: 'Producto' },
-                { key: 'principal', label: 'Monto Capital' },
-                { key: 'outstanding', label: 'Saldo Insoluto' },
-                { key: 'rate', label: 'TEA' },
-                { key: 'status', label: 'Estado' },
-              ]"
+              :columns="portfolioColumns"
               :rows="portfolioPage.items"
               row-key="id"
               body-class="divide-y text-xs"
             >
-              <template #row="{ row: loan }">
-                <td class="px-4 py-3 font-mono font-semibold">
-                  <RouterLink :to="{ name: 'loan-detail', params: { id: loan.id } }" class="text-primary hover:underline">
-                    {{ loan.id }}
-                  </RouterLink>
-                </td>
-                <td class="px-4 py-3 font-medium">{{ loan.customerName }}</td>
-                <td class="px-4 py-3 text-muted-foreground">{{ loan.productName }}</td>
-                <td class="px-4 py-3 font-mono"><MoneyText :amount="loan.principal" /></td>
-                <td class="px-4 py-3 font-mono font-bold"><MoneyText :amount="loan.outstandingPrincipal" /></td>
-                <td class="px-4 py-3">{{ (Number(loan.annualRate) * 100).toFixed(1) }}%</td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="loan" :status="loan.status" />
-                </td>
+              <template #cell-id="{ row: loan }">
+                <RouterLink
+                  :to="{ name: 'loan-detail', params: { id: loan.id } }"
+                  class="text-primary hover:underline font-mono font-semibold"
+                >
+                  {{ loan.id }}
+                </RouterLink>
               </template>
             </TableGenerator>
           </div>
@@ -254,23 +268,11 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'bucket', label: 'Tramo de Aging' },
-                { key: 'loans', label: 'Préstamos en Mora' },
-                { key: 'principal', label: 'Capital Vencido' },
-                { key: 'total', label: 'Total Exigible (Capital + Mora)' },
-              ]"
+              :columns="agingReportColumns"
               :rows="agingSummary"
               row-key="bucket"
               body-class="divide-y text-xs"
-            >
-              <template #row="{ row }">
-                <td class="px-4 py-3 font-semibold">{{ row.bucket.replace(/_/g, ' ') }}</td>
-                <td class="px-4 py-3 font-bold">{{ row.loans }} créditos</td>
-                <td class="px-4 py-3 font-mono text-destructive"><MoneyText :amount="row.overduePrincipal" /></td>
-                <td class="px-4 py-3 font-mono font-bold text-destructive"><MoneyText :amount="row.totalDue" /></td>
-              </template>
-            </TableGenerator>
+            />
           </div>
         </CardContent>
       </Card>
@@ -397,23 +399,12 @@ onMounted(() => {
           </CardHeader>
           <CardContent class="p-0">
             <TableGenerator
-              :columns="[
-                { key: 'name', label: 'Analista' },
-                { key: 'decided', label: 'Dictaminados' },
-                { key: 'approved', label: 'Aprobados' },
-                { key: 'rejected', label: 'Rechazados' },
-              ]"
+              :columns="analystProductivityColumns"
               :rows="productivity.analysts"
               row-key="userId"
               body-class="divide-y text-xs"
-            >
-              <template #row="{ row: a }">
-                <td class="px-4 py-2.5 font-medium">{{ a.fullName }}</td>
-                <td class="px-4 py-2.5 font-bold">{{ a.decidedCount }}</td>
-                <td class="px-4 py-2.5 text-success font-semibold">{{ a.approvedCount }}</td>
-                <td class="px-4 py-2.5 text-destructive">{{ a.rejectedCount }}</td>
-              </template>
-            </TableGenerator>
+              cell-class="px-4 py-2.5"
+            />
           </CardContent>
         </Card>
 
@@ -428,21 +419,12 @@ onMounted(() => {
           </CardHeader>
           <CardContent class="p-0">
             <TableGenerator
-              :columns="[
-                { key: 'name', label: 'Gestor' },
-                { key: 'actions', label: 'Acciones Registradas' },
-                { key: 'promises', label: 'Promesas Acordadas' },
-              ]"
+              :columns="collectorProductivityColumns"
               :rows="productivity.collectors"
               row-key="userId"
               body-class="divide-y text-xs"
-            >
-              <template #row="{ row: c }">
-                <td class="px-4 py-2.5 font-medium">{{ c.fullName }}</td>
-                <td class="px-4 py-2.5 font-bold text-primary">{{ c.actionsCount }}</td>
-                <td class="px-4 py-2.5 text-emerald-600 font-semibold">{{ c.promisesCount }}</td>
-              </template>
-            </TableGenerator>
+              cell-class="px-4 py-2.5"
+            />
           </CardContent>
         </Card>
       </div>
@@ -488,66 +470,38 @@ onMounted(() => {
           </div>
         </CardHeader>
         <CardContent class="space-y-4 pt-4">
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-            <div class="p-2.5 rounded border bg-muted/20">
-              <span class="text-muted-foreground block text-[11px]">Capital Inicial:</span>
-              <span class="font-bold text-foreground text-sm"><MoneyText :amount="statement.principal" /></span>
-            </div>
-            <div class="p-2.5 rounded border bg-muted/20">
-              <span class="text-muted-foreground block text-[11px]">Saldo Insoluto:</span>
-              <span class="font-bold text-primary text-sm"><MoneyText :amount="statement.outstandingPrincipal" /></span>
-            </div>
-            <div class="p-2.5 rounded border bg-muted/20">
-              <span class="text-muted-foreground block text-[11px]">Total Amortizado:</span>
-              <span class="font-bold text-success text-sm"><MoneyText :amount="statement.totalPaid" /></span>
-            </div>
-            <div class="p-2.5 rounded border bg-muted/20">
-              <span class="text-muted-foreground block text-[11px]">Próximo Vencimiento:</span>
-              <span class="font-semibold text-foreground">
-                {{ statement.nextDueDate ? formatBusinessDate(statement.nextDueDate) : 'Al día' }}
-              </span>
-            </div>
-          </div>
+          <SummaryGrid :items="statementSummaryItems" grid-class="grid-cols-2 sm:grid-cols-4" />
 
           <div class="space-y-2">
             <h4 class="font-semibold text-xs text-foreground">Movimientos Históricos Imputados</h4>
             <div class="overflow-x-auto rounded-lg border">
-              <table class="w-full text-left text-xs">
-                <thead class="border-b bg-muted/50 font-medium text-muted-foreground">
-                  <tr>
-                    <th class="px-4 py-2">Fecha y Hora</th>
-                    <th class="px-4 py-2">Operación</th>
-                    <th class="px-4 py-2">Comprobante / Recibo</th>
-                    <th class="px-4 py-2 text-right">Monto</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-border">
-                  <tr v-for="(mov, idx) in statement.movements" :key="idx" class="hover:bg-muted/30">
-                    <td class="px-4 py-2.5">{{ formatInstant(mov.date) }}</td>
-                    <td class="px-4 py-2.5 font-semibold">
-                      <Badge
-                        variant="outline"
-                        :class="
-                          mov.type === 'PAGO'
-                            ? 'border-success text-success bg-success/10'
-                            : mov.type === 'REVERSO'
-                            ? 'border-destructive text-destructive bg-destructive/10'
-                            : 'border-primary text-primary bg-primary/10'
-                        "
-                        class="text-[10px]"
-                      >
-                        {{ mov.type }}
-                      </Badge>
-                    </td>
-                    <td class="px-4 py-2.5 font-mono text-[11px] text-muted-foreground">
-                      {{ mov.receiptNumber || 'REC-INICIAL' }}
-                    </td>
-                    <td class="px-4 py-2.5 font-mono text-right font-bold">
-                      <MoneyText :amount="mov.amount" />
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <TableGenerator
+                :columns="statementMovementColumns"
+                :rows="statement.movements"
+                :row-key="(_, idx) => idx"
+                table-class="w-full text-left text-xs"
+                head-class="border-b bg-muted/50 font-medium text-muted-foreground"
+                header-cell-class="px-4 py-2"
+                body-class="divide-y divide-border"
+                cell-class="px-4 py-2.5"
+                row-class="hover:bg-muted/30"
+              >
+                <template #cell-type="{ row: mov }">
+                  <Badge
+                    variant="outline"
+                    :class="
+                      mov.type === 'PAGO'
+                        ? 'border-success text-success bg-success/10'
+                        : mov.type === 'REVERSO'
+                          ? 'border-destructive text-destructive bg-destructive/10'
+                          : 'border-primary text-primary bg-primary/10'
+                    "
+                    class="text-[10px]"
+                  >
+                    {{ mov.type }}
+                  </Badge>
+                </template>
+              </TableGenerator>
             </div>
           </div>
         </CardContent>

@@ -96,6 +96,32 @@ export const authHandlers = [
   http.post('*/api/auth/login', ({ request }) => login(request, false)),
   http.post('*/api/client/login', ({ request }) => login(request, true)),
 
+  // Envío y verificación de OTP (FE-CP-01, FE-CP-09, FE-CP-18).
+  http.post('*/api/auth/otp/send', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ phone: string; purpose: string }>(request)
+    if (!body?.phone || !/^9\d{8}$/.test(body.phone)) {
+      return problem(400, 'Celular inválido', 'Indica un celular peruano de 9 dígitos que empiece con 9.')
+    }
+    return HttpResponse.json({
+      message: 'Código de verificación enviado exitosamente por SMS/WhatsApp.',
+      expiresInSeconds: 120,
+      demoCode: '123456',
+    })
+  }),
+
+  http.post('*/api/auth/otp/verify', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ phone: string; code: string; purpose: string }>(request)
+    if (!body?.code?.trim() || !body?.phone) {
+      return problem(400, 'Código requerido', 'Ingresa el código OTP recibido.')
+    }
+    if (body.code.trim() !== '123456') {
+      return problem(400, 'Código incorrecto', 'El código OTP es inválido o expiró. Usa 123456 en entorno demo.')
+    }
+    return HttpResponse.json({ verified: true, message: 'Identidad confirmada exitosamente.' })
+  }),
+
   // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
   http.post('*/api/auth/refresh', async () => {
     await wait()
@@ -143,7 +169,7 @@ export const authHandlers = [
       creditBalance: '0.00',
       createdAt: nowIso(),
     })
-    db.users.push({
+    const newUser = {
       id: nextId('usr'),
       email: body.email,
       password: body.password,
@@ -151,8 +177,11 @@ export const authHandlers = [
       role: 'ROLE_CLIENT',
       permissions: ['client.portal'],
       customerId,
-    })
+    }
+    db.users.push(newUser)
+    const token = issueToken(newUser)
+    remember(newUser.id)
     recordAudit({ entityName: 'customers', entityId: customerId, action: 'CREATE', after: { docNumber: body.docNumber } })
-    return HttpResponse.json({ customerId, kycStatus: 'PENDING' }, { status: 201 })
+    return HttpResponse.json({ customerId, kycStatus: 'PENDING', accessToken: token.accessToken }, { status: 201 })
   }),
 ]

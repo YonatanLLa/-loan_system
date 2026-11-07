@@ -1,90 +1,38 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { onMounted } from 'vue'
 import {
-  Plug,
   RefreshCw,
   RotateCcw,
-  AlertTriangle,
   CheckCircle2,
-  Clock,
-  Layers,
-  Search,
-  X,
   ChevronLeft,
   ChevronRight,
-  ShieldAlert,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { IntegrationEvent, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
 import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useIntegrations } from '../composables/useIntegrations'
 
 // FE-BO-31: Panel de eventos de integración en cola de mensajes fallidos (DLQ) con reintento manual.
 
-const loading = ref(false)
-const eventsPage = ref<Page<IntegrationEvent>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
-
-const selectedStatus = ref('')
-const selectedProvider = ref('')
-const currentPage = ref(1)
-const retryingId = ref<string | null>(null)
-
-async function loadEvents() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: eventsPage.value.pageSize,
-    }
-    if (selectedStatus.value) params.status = selectedStatus.value
-
-    const { data } = await useApi().get<Page<IntegrationEvent>>('/integrations/events', { params })
-    eventsPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar eventos de integración', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-async function retryEvent(event: IntegrationEvent) {
-  retryingId.value = event.id
-  try {
-    const { data } = await useApi().post<IntegrationEvent>(
-      `/integrations/events/${event.id}/retry`,
-      {},
-    )
-    toast.success('Evento reintentado', {
-      description: `El evento ${data.externalId} fue reprocesado con estado ${data.status}.`,
-    })
-    void loadEvents()
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al reintentar evento', { description: apiError.detail })
-  } finally {
-    retryingId.value = null
-  }
-}
+const {
+  loading,
+  eventsPage,
+  selectedStatus,
+  currentPage,
+  retryingId,
+  totalPages,
+  loadEvents,
+  retryEvent,
+  goToPage,
+} = useIntegrations()
 
 function getStatusBadge(status: string) {
   switch (status) {
@@ -103,21 +51,6 @@ function getStatusBadge(status: string) {
       return { label: status, class: 'border-border text-muted-foreground' }
   }
 }
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadEvents()
-}
-
-const totalPages = ref(1)
-watch(
-  () => eventsPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / eventsPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 onMounted(() => {
   void loadEvents()

@@ -14,7 +14,7 @@ import {
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 
 // FE-BO-08: Dictamen de expediente KYC: aprobar o rechazar con notas obligatorias si se rechaza.
 
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'decided', status: KycStatus, notes?: string): void
 }>()
 
+const { submitKycDecision } = useCustomers()
 const decision = ref<'VERIFIED' | 'REJECTED'>('VERIFIED')
 const notes = ref('')
 const isSubmitting = ref(false)
@@ -47,7 +48,7 @@ async function onSubmit() {
 
   isSubmitting.value = true
   try {
-    await useApi().patch(`/customers/${props.customerId}/kyc`, {
+    await submitKycDecision(props.customerId, {
       status: decision.value,
       notes: notes.value.trim() || undefined,
     })

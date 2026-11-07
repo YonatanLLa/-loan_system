@@ -81,6 +81,8 @@ export interface CustomerBankAccount {
   isVerified: boolean
   isPrimary: boolean
   status: 'ACTIVE' | 'INACTIVE' | 'PENDING_VERIFICATION'
+  /** Periodo de enfriamiento por seguridad tras cambio con OTP (FE-CP-18 / ARQUITECTURA_GENERAL §9). */
+  coolingOffUntil?: Instant
 }
 
 export interface Customer {
@@ -157,6 +159,12 @@ export interface LoanProduct {
   minMonthlyIncome: Money
   maxDtiAuto: string
   maxDtiManual: string
+  /** Día fijo de pago mensual (1-28) o según fecha de desembolso (FE-BO-12). */
+  paymentDay?: number
+  /** Capitalización de intereses vencidos (FE-BO-11). */
+  allowAnatocism?: boolean
+  /** Regla de traslado si el vencimiento cae en feriado o fin de semana (FE-BO-11). */
+  holidayAdjustment?: 'NEXT_BUSINESS_DAY' | 'PREVIOUS_BUSINESS_DAY' | 'NONE'
   status: 'ACTIVO' | 'INACTIVO'
 }
 
@@ -233,6 +241,10 @@ export interface CreateApplicationRequest {
   term: number
   frequency: PaymentFrequency
   destination?: string
+  employerName?: string
+  occupation?: string
+  monthlyNetIncome?: Money
+  incomeProofUrl?: string
 }
 
 export interface DecisionRequest {
@@ -310,6 +322,20 @@ export interface PrepaymentQuote {
   prepaymentPenalty: Money
   totalToPay: Money
   validUntil: BusinessDate
+}
+
+/** Simulación de abono extraordinario a capital (prepago parcial - FE-CP-17). */
+export interface PartialPrepaymentSimulation {
+  loanId: string
+  currentOutstandingPrincipal: Money
+  prepaymentAmount: Money
+  newOutstandingPrincipal: Money
+  option: 'REDUCE_TERM' | 'REDUCE_FEE'
+  currentTermRemaining: number
+  newTermRemaining: number
+  currentInstallmentAmount: Money
+  newInstallmentAmount: Money
+  totalInterestSaved: Money
 }
 
 // ── Pagos ────────────────────────────────────────────────────────────────────
@@ -423,7 +449,37 @@ export interface DailyBalance {
   difference: Money
   result: 'CUADRADO' | 'DESCUADRADO'
   issues: string[]
+  /** Total de fondeos recibidos desde otras cuentas propias en la fecha (RF-24.6). */
+  internalTransfersIn?: Money
+  /** Total de fondeos enviados hacia otras cuentas propias en la fecha (RF-24.6). */
+  internalTransfersOut?: Money
 }
+
+/** Transferencia interna entre cuentas bancarias propias de la empresa (Fondeo / Barrido de Tesorería — RF-24.5). */
+export interface InternalAccountTransfer {
+  id: string
+  sourceBankAccountId: string
+  sourceBankName: string
+  destinationBankAccountId: string
+  destinationBankName: string
+  currency: 'PEN' | 'USD'
+  amount: Money
+  transferDate: BusinessDate
+  bankOperationNumber: string
+  notes?: string
+  createdBy: string
+  createdAt: Instant
+}
+
+export interface CreateInternalTransferRequest {
+  sourceBankAccountId: string
+  destinationBankAccountId: string
+  amount: Money
+  transferDate: BusinessDate
+  bankOperationNumber: string
+  notes?: string
+}
+
 
 export interface IntegrationEvent {
   id: string
@@ -524,6 +580,24 @@ export interface AccountStatement {
   movements: { date: Instant; type: 'DESEMBOLSO' | 'PAGO' | 'REVERSO'; amount: Money; receiptNumber?: string }[]
 }
 
+export interface ProductivityReport {
+  analysts: {
+    userId: string
+    fullName: string
+    role: string
+    decidedCount: number
+    approvedCount: number
+    rejectedCount: number
+  }[]
+  collectors: {
+    userId: string
+    fullName: string
+    role: string
+    actionsCount: number
+    promisesCount: number
+  }[]
+}
+
 // ── Auditoría y administración ───────────────────────────────────────────────
 export interface AuditLogEntry {
   id: number
@@ -562,3 +636,186 @@ export interface PaymentMethodConfig {
   webhookEnabled: boolean
   isActive: boolean
 }
+
+export interface GlobalParameters {
+  collectionAllowedHoursStart: string
+  collectionAllowedHoursEnd: string
+  bankAccountChangeHoldHours: number
+  prepaymentQuoteValidityDays: number
+  maxDtiRatioPercent: number
+  alertOverdueDaysThreshold: number
+}
+
+export interface AdminUserDto {
+  id: string
+  email: string
+  fullName: string
+  role: string
+  permissions: string[]
+  createdAt?: Instant
+}
+
+// ── Portal del Cliente Onboarding (FE-CP-01 a FE-CP-05) ───────────────────────
+export interface ClientRegisterRequest {
+  docType: 'DNI' | 'CE' | 'PASAPORTE'
+  docNumber: string
+  fullName: string
+  email: string
+  phone: string
+  password: string
+}
+
+export interface ClientRegisterResponse {
+  customerId: string
+  kycStatus: KycStatus
+  accessToken?: string
+}
+
+export interface OtpSendRequest {
+  phone: string
+  purpose: 'REGISTER' | 'CONTRACT_SIGN' | 'BANK_CHANGE'
+}
+
+export interface OtpSendResponse {
+  message: string
+  expiresInSeconds: number
+  demoCode?: string
+}
+
+export interface OtpVerifyRequest {
+  phone: string
+  code: string
+  purpose: 'REGISTER' | 'CONTRACT_SIGN' | 'BANK_CHANGE'
+}
+
+export interface OtpVerifyResponse {
+  verified: boolean
+  message?: string
+}
+
+export interface KycSubmitRequest {
+  dniFrontUrl?: string
+  dniBackUrl?: string
+  selfieUrl?: string
+}
+
+export interface ConsentsSubmitRequest {
+  dataProtection: boolean
+  creditBureau: boolean
+  marketing: boolean
+}
+
+export interface CreateClientBankAccountRequest {
+  bankName: string
+  accountType: 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'BILLETERA_DIGITAL'
+  cci?: string
+  phoneWallet?: string
+}
+
+// ── Contrato y Firma Digital (FE-CP-09) ──────────────────────────────────────
+export interface LoanContractDocument {
+  applicationId: string
+  loanId?: string
+  customerName: string
+  docNumber: string
+  productName: string
+  principal: Money
+  term: number
+  frequency: PaymentFrequency
+  tea: string
+  tcea: string
+  monthlyInstallment: Money
+  totalInterest: Money
+  totalFees: Money
+  totalCost: Money
+  disbursementAccount: string
+  disbursementBank: string
+  clauses: { title: string; body: string }[]
+  schedule: ScheduleRow[]
+  isSigned: boolean
+  signatureEvidence?: {
+    signedAt: Instant
+    signedIp: string
+    otpCode: string
+    verified: boolean
+  }
+}
+
+// ── Perfil y Cuentas Bancarias (FE-CP-18 y FE-CP-19) ──────────────────────────
+export interface ChangePrimaryBankAccountRequest {
+  bankAccountId?: string
+  newAccount?: {
+    bankName: string
+    accountType?: CustomerBankAccount['accountType']
+    cci?: string
+    phoneWallet?: string
+  }
+  otpCode: string
+}
+
+export interface RefundRequest {
+  id: string
+  customerId: string
+  amount: Money
+  customerBankAccountId: string
+  status: 'PENDING_APPROVAL' | 'APPROVED' | 'DISBURSED' | 'REJECTED'
+  requestedAt: Instant
+  bankName: string
+  accountNumberMasked: string
+}
+
+// ── Centro de Notificaciones (FE-CP-20) ──────────────────────────────────────
+export interface ClientNotification {
+  id: string
+  customerId: string
+  title: string
+  message: string
+  category: 'PAYMENT' | 'LOAN' | 'DISBURSEMENT' | 'SECURITY' | 'SYSTEM'
+  read: boolean
+  createdAt: Instant
+}
+
+export interface NotificationPreferences {
+  emailEnabled: boolean
+  whatsappEnabled: boolean
+  smsEnabled: boolean
+  notifyDaysBeforeDue: number
+}
+
+// ── Libro de Reclamaciones Virtual (FE-CP-21 / Ley 29571) ─────────────────────
+export interface ComplaintClaimRequest {
+  claimType: 'RECLAMO' | 'QUEJA'
+  consumerFullName: string
+  docType: 'DNI' | 'CE' | 'PASAPORTE' | 'RUC'
+  docNumber: string
+  email: string
+  phone: string
+  address: string
+  contractedGood: 'PRODUCTO' | 'SERVICIO'
+  amountClaimed?: string
+  description: string
+  consumerOrder: string
+}
+
+export interface ComplaintClaimRecord extends ComplaintClaimRequest {
+  id: string
+  correlativeNumber: string
+  status: 'REGISTRADO' | 'EN_EVALUACION' | 'ATENDIDO'
+  createdAt: Instant
+  responseDeadline: Instant
+}
+
+
+export interface SignContractRequest {
+  applicationId: string
+  otpCode: string
+}
+
+export interface SignContractResponse {
+  success: boolean
+  loanId: string
+  signedAt: Instant
+  message: string
+}
+
+

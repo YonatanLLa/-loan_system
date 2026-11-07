@@ -29,7 +29,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { formatBusinessDate } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useOrigination } from '../composables/useOrigination'
 
 // FE-BO-13, FE-BO-14, FE-BO-15: Registro de solicitud con simulador interactivo y cálculo de TCEA.
 
@@ -41,6 +41,13 @@ const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'created'): void
 }>()
+
+const {
+  getActiveProducts,
+  getCustomersDirectory,
+  simulateNewApplication,
+  createApplication,
+} = useOrigination()
 
 const products = ref<LoanProduct[]>([])
 const customers = ref<Customer[]>([])
@@ -64,12 +71,12 @@ const showScheduleModal = ref(false)
 
 async function loadInitialData() {
   try {
-    const [prodRes, custRes] = await Promise.all([
-      useApi().get<LoanProduct[]>('/loan-products?status=ACTIVO'),
-      useApi().get<{ items: Customer[] }>('/customers?pageSize=50'),
+    const [prodData, custItems] = await Promise.all([
+      getActiveProducts(),
+      getCustomersDirectory(),
     ])
-    products.value = prodRes.data
-    customers.value = custRes.data.items
+    products.value = prodData
+    customers.value = custItems
 
     if (products.value.length > 0 && !form.value.productId) {
       const first = products.value[0]
@@ -98,13 +105,12 @@ async function runSimulation() {
   generalError.value = null
 
   try {
-    const { data } = await useApi().post<Simulation>('/loan-applications/simulate', {
+    simulation.value = await simulateNewApplication({
       productId: form.value.productId,
       amount: form.value.amount,
       term: form.value.term,
       frequency: form.value.frequency,
     })
-    simulation.value = data
   } catch (error) {
     const apiError = toApiError(error)
     simulation.value = null
@@ -142,7 +148,7 @@ async function onSubmit() {
 
   isSubmitting.value = true
   try {
-    await useApi().post('/loan-applications', form.value)
+    await createApplication(form.value)
     toast.success('Solicitud registrada con éxito', {
       description: 'La solicitud ha ingresado a la bandeja de evaluación de crédito.',
     })

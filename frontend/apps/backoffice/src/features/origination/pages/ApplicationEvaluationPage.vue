@@ -40,13 +40,20 @@ import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useOrigination } from '../composables/useOrigination'
 
 // FE-BO-14 y FE-BO-17: Evaluación de crédito con DTI, recomendación, TCEA, Ficha 360 y dictamen.
 
 const route = useRoute()
 const router = useRouter()
 const applicationId = computed(() => route.params.id as string)
+const {
+  getApplication,
+  simulateExistingApplication,
+  getCustomer360,
+  startReview: startReviewApi,
+  submitDecision: submitDecisionApi,
+} = useOrigination()
 
 const loading = ref(true)
 const application = ref<LoanApplication | null>(null)
@@ -71,19 +78,17 @@ const isDecided = computed(() =>
 async function loadData() {
   loading.value = true
   try {
-    const { data: appData } = await useApi().get<LoanApplication>(
-      `/loan-applications/${applicationId.value}`,
-    )
+    const appData = await getApplication(applicationId.value)
     application.value = appData
     approvedAmount.value = appData.approvedAmount ?? appData.requestedAmount
 
     // Cargar simulación y ficha 360 en paralelo
-    const [simRes, custRes] = await Promise.all([
-      useApi().post<Simulation>(`/loan-applications/${applicationId.value}/simulate`, {}),
-      useApi().get<Customer360>(`/customers/${appData.customerId}`),
+    const [simData, custData] = await Promise.all([
+      simulateExistingApplication(applicationId.value),
+      getCustomer360(appData.customerId),
     ])
-    simulation.value = simRes.data
-    customer.value = custRes.data
+    simulation.value = simData
+    customer.value = custData
   } catch (error) {
     const apiError = toApiError(error)
     toast.error('Error al cargar solicitud', { description: apiError.detail })
@@ -95,10 +100,7 @@ async function loadData() {
 
 async function startReview() {
   try {
-    const { data } = await useApi().post<LoanApplication>(
-      `/loan-applications/${applicationId.value}/start-review`,
-    )
-    application.value = data
+    application.value = await startReviewApi(applicationId.value)
     toast.info('Evaluación iniciada', {
       description: 'La solicitud ha cambiado a estado EN_EVALUACIÓN.',
     })
@@ -139,10 +141,7 @@ async function submitDecision() {
         decision.value === 'APROBADO_CON_CONDICIONES' ? approvedAmount.value : undefined,
     }
 
-    const { data } = await useApi().post<LoanApplication>(
-      `/loan-applications/${applicationId.value}/decision`,
-      payload,
-    )
+    const data = await submitDecisionApi(applicationId.value, payload)
     application.value = data
     toast.success('Dictamen registrado', {
       description: `La solicitud fue dictaminada como ${data.status}.`,

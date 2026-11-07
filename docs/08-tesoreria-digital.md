@@ -98,3 +98,26 @@ Este dominio reemplaza al antiguo "Control de Caja y Arqueo". Su objetivo es que
 ## 3. Requisitos No Funcionales del Dominio
 - **RNF-16 (Bloqueo Operativo):** Ningún desembolso se envía si la cuenta de origen está inactiva o no habilitada para desembolsos, o si la cuenta destino del cliente no está verificada. La validación ocurre antes de llamar al banco.
 - **RNF-17 (Inmutabilidad del Cuadre):** Un cuadre diario cerrado no se modifica. Las diferencias detectadas después se registran como ajustes en el cuadre del día en que se identifican, con referencia al día original.
+
+---
+
+## 4. Nota de Alcance V1 — Transferencias Internas entre Cuentas Propias de la Empresa (Fondeo / Barrido de Tesorería)
+
+> [!IMPORTANT]
+> **Por qué es indispensable en el modelo 100% digital (V1):**
+> En una operación fintech real no se utiliza una única cuenta bancaria para todo el flujo de dinero:
+> - Existe al menos una **Cuenta Recaudadora** (`is_collection = true`, ej. donde ingresan masivamente los cobros de Yape, Plin, pasarelas y transferencias de clientes).
+> - Y existe al menos una **Cuenta Pagadora de Desembolsos** (`is_disbursement = true`, desde donde salen las transferencias CCI hacia los prestatarios).
+> - Periódicamente, Tesorería transfiere fondos de la Cuenta Recaudadora hacia la Cuenta de Desembolsos para fondearla (*fondeo o barrido de tesorería / cash sweeping*).
+> - **Impacto si no se registra:** Al importar los extractos bancarios, aparecerá una salida (ej. `-S/ 50,000.00`) en la Cuenta Recaudadora y una entrada (`+S/ 50,000.00`) en la Cuenta de Desembolsos que no corresponden a ningún préstamo ni a ningún cliente, dejando el **Cuadre Diario (`US-24`) descuadrado** en ambas cuentas.
+
+### Reglas Operativas del Fondeo entre Cuentas Propias (Extensión US-24)
+- **RF-24.5 (Registro de Transferencia Interna — `internal_account_transfers`):**
+  - Permite registrar un traspaso de liquidez entre dos cuentas activas de `company_bank_accounts` de la misma moneda (`source_bank_account_id` → `destination_bank_account_id`), indicando `amount`, `transfer_date`, `bank_operation_number` y `notes`.
+  - Endpoints V1: `GET /api/treasury/internal-transfers` y `POST /api/treasury/internal-transfers`.
+- **RF-24.6 (Efecto Simétrico en el Cuadre Diario y Conciliación):**
+  - Genera dos movimientos vinculados en el libro mayor de tesorería (`INTERNAL_TRANSFER_OUT` en la cuenta origen e `INTERNAL_TRANSFER_IN` en la cuenta destino) sin tocar saldos de ningún préstamo.
+  - La fórmula del **Saldo Esperado (`RF-24.1`)** por cuenta bancaria incorpora explícitamente estos traspasos:
+    $$\text{Saldo Esperado} = \text{Saldo Inicial} + \sum \text{Cobros} - \sum \text{Desembolsos} + \sum \text{Fondeos Recibidos} - \sum \text{Fondeos Enviados} \pm \sum \text{Ajustes}$$
+  - Durante la importación del extracto bancario (`US-37`), el motor concilia el cargo en la cuenta origen y el abono en la cuenta destino mediante el `bank_operation_number` y monto exacto.
+

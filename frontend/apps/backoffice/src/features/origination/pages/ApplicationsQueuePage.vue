@@ -1,101 +1,45 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   FileText,
   FilePlus,
   Search,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Eye,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
   X,
   Clock,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { LoanApplication, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
 import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useOrigination } from '../composables/useOrigination'
 import CreateApplicationSheet from '../components/CreateApplicationSheet.vue'
 
 // FE-BO-16: Bandeja de solicitudes de crédito ordenada por antigüedad con filtros por estado.
 
-const loading = ref(false)
-const applicationsPage = ref<Page<LoanApplication>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
+const {
+  loading,
+  applicationsPage,
+  searchQuery,
+  selectedStatus,
+  totalPages,
+  loadApplications,
+  onSearch,
+  resetFilters,
+  goToPage,
+} = useOrigination()
 
-const searchQuery = ref('')
-const selectedStatus = ref('SOLICITADO,EN_EVALUACION') // Por defecto la bandeja de pendientes
-const currentPage = ref(1)
 const isCreateOpen = ref(false)
-
-async function loadApplications() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: applicationsPage.value.pageSize,
-    }
-    if (searchQuery.value.trim()) params.q = searchQuery.value.trim()
-    if (selectedStatus.value) params.status = selectedStatus.value
-
-    const { data } = await useApi().get<Page<LoanApplication>>('/loan-applications', { params })
-    applicationsPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar solicitudes', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  currentPage.value = 1
-  void loadApplications()
-}
-
-function resetFilters() {
-  searchQuery.value = ''
-  selectedStatus.value = ''
-  currentPage.value = 1
-  void loadApplications()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadApplications()
-}
-
-const totalPages = ref(1)
-watch(
-  () => applicationsPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / applicationsPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 function getRecommendationBadge(rec?: string) {
   switch (rec) {

@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { usePayments } from '../composables/usePayments'
 
 // FE-BO-23: Reverso de pago con motivo obligatorio y prevención de doble reverso (409).
 
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'reversed'): void
 }>()
 
+const { reversePayment } = usePayments()
 const reason = ref('')
 const errorMsg = ref<string | null>(null)
 
@@ -43,9 +44,7 @@ const { run: submitReversal, isBusy } = useBusyAction(async () => {
   }
 
   try {
-    await useApi().post(`/payments/${props.payment.id}/reverse`, {
-      reason: reason.value.trim(),
-    })
+    await reversePayment(props.payment.id, reason.value.trim())
 
     toast.success('Pago revertido', {
       description: `El pago #${props.payment.id} fue revertido y los saldos del préstamo fueron restituidos.`,

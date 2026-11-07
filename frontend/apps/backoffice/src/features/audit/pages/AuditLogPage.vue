@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   FileText,
   Filter,
@@ -10,12 +10,9 @@ import {
   ChevronRight,
   Eye,
   X,
-  ArrowRight,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { AuditLogEntry, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
+import type { AuditLogEntry } from '@prestamos/api-client'
 import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -37,31 +34,23 @@ import {
 } from '@prestamos/ui/components/ui/sheet'
 import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useAuditLog } from '../composables/useAuditLog'
 
 // FE-BO-05: Bitácora de auditoría con filtros por entidad, fechas, usuario y acción, y vista "antes / después" del JSON.
 
-const loading = ref(false)
-const auditPage = ref<Page<AuditLogEntry>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 15,
-})
-
-// Opciones dinámicas de filtros
-const availableEntities = ref<string[]>([])
-const availableActions = ref<string[]>([])
-
-// Filtros reactivos
-const filters = ref({
-  entity: '',
-  action: '',
-  user: '',
-  from: '',
-  to: '',
-  page: 1,
-})
+const {
+  loading,
+  auditPage,
+  availableEntities,
+  availableActions,
+  filters,
+  totalPages,
+  loadCatalogs,
+  loadAuditLogs,
+  onSearch,
+  resetFilters,
+  goToPage,
+} = useAuditLog()
 
 // Registro seleccionado para ver detalle "antes / después"
 const selectedEntry = ref<AuditLogEntry | null>(null)
@@ -76,74 +65,6 @@ function closeDetail() {
   isDetailOpen.value = false
   selectedEntry.value = null
 }
-
-async function loadCatalogs() {
-  try {
-    const [entitiesRes, actionsRes] = await Promise.all([
-      useApi().get<string[]>('/audit/entities'),
-      useApi().get<string[]>('/audit/actions'),
-    ])
-    availableEntities.value = entitiesRes.data
-    availableActions.value = actionsRes.data
-  } catch {
-    // Si falla cargar catálogos dinámicos se mantiene la lista vacía para entrada libre
-  }
-}
-
-async function loadAuditLogs() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: filters.value.page,
-      pageSize: auditPage.value.pageSize,
-    }
-    if (filters.value.entity) params.entity = filters.value.entity
-    if (filters.value.action) params.action = filters.value.action
-    if (filters.value.user.trim()) params.user = filters.value.user.trim()
-    if (filters.value.from) params.from = filters.value.from
-    if (filters.value.to) params.to = filters.value.to
-
-    const { data } = await useApi().get<Page<AuditLogEntry>>('/audit', { params })
-    auditPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar bitácora', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  filters.value.page = 1
-  void loadAuditLogs()
-}
-
-function resetFilters() {
-  filters.value = {
-    entity: '',
-    action: '',
-    user: '',
-    from: '',
-    to: '',
-    page: 1,
-  }
-  void loadAuditLogs()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  filters.value.page = p
-  void loadAuditLogs()
-}
-
-const totalPages = ref(1)
-watch(
-  () => auditPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / auditPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 function getActionBadgeVariant(action: string) {
   switch (action.toUpperCase()) {

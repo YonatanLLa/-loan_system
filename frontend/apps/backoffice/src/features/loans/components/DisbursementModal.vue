@@ -20,7 +20,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useLoans } from '../composables/useLoans'
 
 // FE-BO-19: Iniciar desembolso digital con Idempotency-Key y botón protegido contra doble clic.
 
@@ -33,6 +33,13 @@ const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'disbursed'): void
 }>()
+
+const {
+  getApprovedApplications,
+  getCompanyDisbursementAccounts,
+  getCustomerVerifiedAccounts,
+  createDisbursementLoan,
+} = useLoans()
 
 const applications = ref<LoanApplication[]>([])
 const companyAccounts = ref<CompanyBankAccount[]>([])
@@ -49,12 +56,12 @@ const selectedApp = computed(() =>
 
 async function loadData() {
   try {
-    const [appRes, compRes] = await Promise.all([
-      useApi().get<{ items: LoanApplication[] }>('/loan-applications?status=APROBADO,APROBADO_CON_CONDICIONES'),
-      useApi().get<CompanyBankAccount[]>('/treasury/bank-accounts'),
+    const [appItems, compItems] = await Promise.all([
+      getApprovedApplications(),
+      getCompanyDisbursementAccounts(),
     ])
-    applications.value = appRes.data.items
-    companyAccounts.value = compRes.data.filter((a) => a.isActive && a.isDisbursement)
+    applications.value = appItems
+    companyAccounts.value = compItems
 
     if (companyAccounts.value.length > 0 && !selectedCompanyAccId.value) {
       selectedCompanyAccId.value = companyAccounts.value[0]?.id ?? ''
@@ -77,10 +84,7 @@ async function loadData() {
 
 async function loadCustomerAccounts(customerId: string) {
   try {
-    const { data } = await useApi().get<CustomerBankAccount[]>(
-      `/customers/${customerId}/bank-accounts`,
-    )
-    customerAccounts.value = data.filter((a) => a.isVerified)
+    customerAccounts.value = await getCustomerVerifiedAccounts(customerId)
     const primary = customerAccounts.value.find((a) => a.isPrimary)
     selectedCustomerAccId.value = primary?.id ?? customerAccounts.value[0]?.id ?? ''
   } catch {
@@ -100,16 +104,13 @@ const { run: submitDisbursement, isBusy } = useBusyAction(async () => {
     // FE-BO-19: Idempotency-Key generada en el cliente para evitar desembolsos duplicados por reintentos de red
     const idempotencyKey = newIdempotencyKey()
 
-    await useApi().post(
-      '/loans',
+    await createDisbursementLoan(
       {
         applicationId: selectedAppId.value,
         companyBankAccountId: selectedCompanyAccId.value,
         customerBankAccountId: selectedCustomerAccId.value,
       },
-      {
-        headers: { 'Idempotency-Key': idempotencyKey },
-      },
+      idempotencyKey,
     )
 
     toast.success('Desembolso iniciado', {

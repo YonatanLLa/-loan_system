@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 
 // FE-BO-29: Importar extractos bancarios con conciliación y match automático.
 
@@ -29,6 +29,8 @@ const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'imported'): void
 }>()
+
+const { importStatement } = useTreasury()
 
 const selectedAccountId = ref(props.companyAccounts[0]?.id ?? 'bca-001')
 const rawLines = ref(
@@ -62,12 +64,7 @@ const { run: submitImport, isBusy } = useBusyAction(async () => {
         }
       })
 
-    const { data } = await useApi().post<{
-      imported: number
-      matched: number
-      pending: number
-      duplicated: number
-    }>('/reconciliation/import', {
+    const data = await importStatement({
       bankAccountId: selectedAccountId.value,
       lines: parsedLines,
     })

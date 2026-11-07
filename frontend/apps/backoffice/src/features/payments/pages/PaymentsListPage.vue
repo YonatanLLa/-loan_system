@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import {
   CreditCard,
   PlusCircle,
@@ -7,130 +7,57 @@ import {
   CheckCircle2,
   Clock,
   Search,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
-  ArrowRight,
-  Eye,
-  X,
   FileCheck2,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { Payment, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
+import type { Payment } from '@prestamos/api-client'
 import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
 import { useSessionStore } from '@/app/stores/session'
+import { usePayments } from '../composables/usePayments'
 import RegisterPaymentModal from '../components/RegisterPaymentModal.vue'
 import ReversePaymentModal from '../components/ReversePaymentModal.vue'
 
 // FE-BO-21, FE-BO-22, FE-BO-23: Bandeja de vouchers pendientes, registro de pagos y reversos.
 
 const session = useSessionStore()
-const loading = ref(false)
-const paymentsPage = ref<Page<Payment>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
-
-const activeTab = ref<'pending' | 'all'>('pending')
-const searchQuery = ref('')
-const currentPage = ref(1)
+const {
+  loading,
+  paymentsPage,
+  activeTab,
+  searchQuery,
+  confirmingId,
+  totalPages,
+  loadPayments,
+  confirmVoucher,
+  onSearch,
+  switchTab,
+  goToPage,
+} = usePayments()
 
 // Modales
 const isRegisterOpen = ref(false)
 const isReverseOpen = ref(false)
 const paymentToReverse = ref<Payment | null>(null)
-const confirmingId = ref<string | null>(null)
 
 // Permiso para reversos (FE-BO-23)
 const canReverse = computed(() => session.can('payments.reverse'))
-
-async function loadPayments() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: paymentsPage.value.pageSize,
-    }
-    if (searchQuery.value.trim()) params.q = searchQuery.value.trim()
-    if (activeTab.value === 'pending') {
-      params.status = 'PENDING_CONFIRMATION'
-    }
-
-    const { data } = await useApi().get<Page<Payment>>('/payments', { params })
-    paymentsPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar pagos', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-// Confirmar un voucher reportado (FE-BO-21)
-async function confirmVoucher(payment: Payment) {
-  confirmingId.value = payment.id
-  try {
-    await useApi().post(`/payments/${payment.id}/confirm`)
-    toast.success('Pago confirmado y aplicado', {
-      description: `El voucher por S/ ${payment.amount} fue conciliado y amortizado exitosamente.`,
-    })
-    void loadPayments()
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al confirmar pago', { description: apiError.detail })
-  } finally {
-    confirmingId.value = null
-  }
-}
 
 function openReverse(payment: Payment) {
   paymentToReverse.value = payment
   isReverseOpen.value = true
 }
-
-function onSearch() {
-  currentPage.value = 1
-  void loadPayments()
-}
-
-function switchTab(tab: 'pending' | 'all') {
-  activeTab.value = tab
-  currentPage.value = 1
-  void loadPayments()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadPayments()
-}
-
-const totalPages = ref(1)
-watch(
-  () => paymentsPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / paymentsPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 onMounted(() => {
   void loadPayments()

@@ -127,6 +127,15 @@ Documentos hermanos: [Frontend](REQUERIMIENTOS_FRONTEND.md) · [Base de datos](R
 | BE-TRE-07 | Liquidaciones en lote de pasarelas: 1 depósito ↔ N pagos, con registro de la comisión de la pasarela | Modelo digital | F2 | Nuevo |
 | BE-TRE-08 | Cuadre diario por cuenta (libro mayor vs. extracto) e inmutabilidad del cuadre cerrado | US-24, RNF-17 | F2 | Especificado |
 
+> [!IMPORTANT]
+> **Nota V1 (Transferencias Internas entre Cuentas Propias de la Empresa — Fondeo / Barrido de Tesorería):**
+> En una fintech real no se usa una sola cuenta bancaria para todo:
+> - Existe una **Cuenta Recaudadora** (ej. donde entran todos los cobros de Yape/Plin/Pasarela).
+> - Y existe una **Cuenta Pagadora de Desembolsos** (desde donde salen las transferencias a los clientes).
+> - Todas las semanas el tesorero transfiere dinero de la Cuenta Recaudadora a la Cuenta de Desembolsos para fondearla (*fondeo o barrido de tesorería*).
+> - **Qué pasa si no se contempla:** Al importar el extracto del banco, se verá una salida de `-S/ 50,000` en una cuenta y una entrada de `+S/ 50,000` en la otra que no pertenecen a ningún préstamo ni a ningún cliente, y el **Cuadre Diario (`BE-TRE-08`) quedará descuadrado**. Por ello, en V1 se incluyen los asientos simétricos (`INTERNAL_TRANSFER_OUT` / `INTERNAL_TRANSFER_IN`) y endpoints `GET/POST /api/treasury/internal-transfers` (`RF-24.4` a `RF-24.6`) para conciliar estos movimientos internos sin afectar préstamos.
+
+
 ## 8. Collections
 
 | ID | Requerimiento | Origen | Fase | Estado |
@@ -220,3 +229,55 @@ Documentos hermanos: [Frontend](REQUERIMIENTOS_FRONTEND.md) · [Base de datos](R
    - RF-19.2 no excluye las cuotas canceladas por prepago (BE-COL-02).
    - RNF-21 exige incluir el desembolso del refinanciamiento en la misma transacción, lo que es imposible con una transferencia bancaria (BE-LOA-13).
    - La solicitud debe pasar a `DESEMBOLSADO`, pero ese estado no existe en la BD (BE-ORI-10).
+
+---
+
+## 13. Evolución V2 — Requerimientos de Lógica de Negocio Avanzada (Backend, Jobs y Datos)
+
+Esta sección detalla los requerimientos técnicos de Backend para la **Versión 2.0 (V2)** especificados en [`14-modelo-negocio-v2.md`](14-modelo-negocio-v2.md), organizados por módulo del Monolito Modular (.NET).
+
+### 13.1 Clientes, Buró de Crédito y Fidelización (`Customers` & `Origination` V2)
+
+| ID | Requerimiento | Origen | Fase | Estado |
+|---|---|---|---|---|
+| BE-CUS-11 | **Integración con Centrales de Riesgo (`ICreditBureauGateway`)**: adaptador para Equifax/Infocorp, Sentinel y reporte RCC SBS con caché configurable (15 días por DNI/RUC) y persistencia del snapshot inmutable en `credit_bureau_reports` | US-44, RF-44.1 | V2 | Especificado |
+| BE-CUS-12 | **Motor de Escalonamiento (*Credit Ladder*) y Ofertas Pre-Aprobadas**: cálculo automático del nivel del cliente (`Tier 1..4`) al liquidar préstamos o superar el $80\%$ de cuotas pagadas con atraso máximo histórico $\le 3$ días; generación de `pre_approved_offers` con fecha de expiración | US-45, RF-45.1–45.3 | V2 | Especificado |
+| BE-ORI-12 | **Cálculo de DTI Sistémico Real y *Knock-out Rules* de Buró**: incluir la cuota mensual externa reportada en el RCC (`external_monthly_installment`) en el numerador del DTI y rechazar automáticamente clasificaciones SBS `DEFICIENTE`, `DUDOSO` o `PERDIDA` o exceso de entidades acreedoras (*loan stacking*) | US-44, RF-44.2–44.3 | V2 | Especificado |
+| BE-ORI-13 | **Aceptación 1-Click de Oferta Pre-Aprobada (*Fast-Track*)**: endpoint `POST /api/portal/me/pre-approved-offers/{offerId}/accept` que origina y aprueba automáticamente la solicitud si el buró vigente sigue en `NORMAL` y el DTI está dentro del umbral, pasando directo a generación de contrato | US-45, RF-45.3 | V2 | Especificado |
+| BE-ORI-14 | **Gestión y Validación de Intervinientes Adicionales (Aval / Fiador Solidario y Cónyuge)**: registro en `application_co_debtors`, validación obligatoria de su KYC y buró `NORMAL`, y bloqueo del paso a contrato si el producto o dictamen exige aval y este no está validado | US-54, RF-54.1–54.2 | V2 | Especificado |
+
+### 13.2 Ingeniería de Producto y Topes Regulatorios (`Products` & `FinancialEngine` V2)
+
+| ID | Requerimiento | Origen | Fase | Estado |
+|---|---|---|---|---|
+| BE-PRO-10 | **Cálculo de Seguro de Desgravamen sobre Saldo Insoluto**: soporte en el motor financiero para tasa mensual/diaria de desgravamen aplicada sobre el saldo capital de cada período ($S_{k-1}$), integrando la tasa de seguro en la fórmula de anualidad del método Francés para conservar cuotas totales constantes y $\sum \text{Capital}_k = \text{Principal}$ | US-46, RF-46.1 | V2 | Especificado |
+| BE-PRO-11 | **Períodos de Gracia Inicial (`PARTIAL` y `TOTAL`) e ITF ($0.005\%$)**: generación matemática del cronograma con $g$ cuotas iniciales de gracia parcial (pago solo de interés + seguro, $\text{Capital}_k = 0$) o gracia total (diferimiento/capitalización de intereses de los primeros $g$ períodos en las $n - g$ cuotas restantes), más desglose de ITF | US-46, RF-46.2–46.3 | V2 | Especificado |
+| BE-PRO-12 | **Validador Automático de Tasa Máxima BCRP (Ley N° 31143 contra la Usura)**: tabla `regulatory_rate_caps` por moneda y vigencia semestral; interceptor de dominio que rechaza con `422 ERR_USURY_CAP_EXCEEDED` cualquier creación/edición de producto, simulación o contrato cuya TEA compensatoria o moratoria supere el tope legal del BCRP | US-47, RF-47.1–47.2 | V2 | Especificado |
+
+### 13.3 Préstamos, Firma Multiparte, Condonaciones y Convenios (`Loans` & `Collections` V2)
+
+| ID | Requerimiento | Origen | Fase | Estado |
+|---|---|---|---|---|
+| BE-LOA-14 | **Firma Electrónica Mancomunada Multiparte con OTP Independiente**: entidad `contract_signers` por cada interviniente (`PRIMARY_BORROWER`, `SOLIDARY_GUARANTOR`, `SPOUSE`); estado `PARTIALLY_SIGNED` hasta que todos los firmantes validen su OTP individual (`FULLY_SIGNED`), bloqueando la orden de desembolso mientras falte alguna firma | US-55, RF-55.1–55.2 | V2 | Especificado |
+| BE-LOA-15 | **Reestructuración Condicionada a Cuota Inicial (*Down Payment*)**: creación de convenio en estado `PENDING_DOWN_PAYMENT` con `required_down_payment_amount` y `down_payment_due_date`; listener de eventos de pago que activa atómicamente la versión `v+1` del cronograma recién cuando se confirma el abono inicial | US-49, RF-49.1–49.2 | V2 | Especificado |
+| BE-COL-10 | **Motor de Condonaciones (*Waivers*) con Aprobación de 4 Ojos y Expiración**: registro en `loan_waivers` de descuentos propuestos sobre mora, penalidades e interés vencido (nunca sobre capital), aprobación por supervisor distinto al solicitante y aplicación atómica del asiento `WAIVER_CREDIT` al confirmarse el pago de liquidación dentro de `valid_until` | US-48, RF-48.1–48.2 | V2 | Especificado |
+| BE-COL-11 | **Job de Caducidad de Condonaciones y Convenios Impagos (`AgreementExpirationJob`)**: job programado que marca como `EXPIRED` los *waivers* y convenios `PENDING_DOWN_PAYMENT` cuya fecha límite venció sin pago confirmado | US-48, US-49 | V2 | Especificado |
+
+### 13.4 Tesorería, Pasarelas en Lote y Débito Automático (`Treasury`, `Payments` & `Integrations` V2)
+
+| ID | Requerimiento | Origen | Fase | Estado |
+|---|---|---|---|---|
+| BE-TRE-09 | **Conciliador de Liquidaciones en Lote de Pasarelas (`gateway_settlements`)**: endpoint y procesador que vincula `1 línea de extracto bancario (Neto) ↔ 1 Lote de Liquidación ↔ N Pagos de clientes (Bruto)`, validando al centavo $\sum \text{Bruto} - \text{Comisión} - \text{IGV} = \text{Neto}$ y asentando el gasto financiero de pasarela | US-50, RF-50.1–50.2 | V2 | Especificado |
+| BE-INT-07 | **Bóveda de Referencias de Tarjetas Tokenizadas y Mandatos (*Auto-Pay*)**: almacenamiento seguro en `customer_autopay_methods` exclusivamente del `gateway_card_token`, `last4`, marca, expiración y firma OTP del mandato (prohibido almacenar PAN o CVV) | US-51, RF-51.1 | V2 | Especificado |
+| BE-INT-08 | **Job Diario de Cargo Recurrente (`AutoPayChargeJob` 07:00 AM Lima) y Reintentos**: ejecución idempotente de cobros automáticos el día de vencimiento de la cuota vía `IPaymentGateway.ChargeTokenAsync`, con programación de reintentos en $T+1$ y $T+3$ ante falta de fondos y desactivación automática ante rechazo definitivo de tarjeta | US-51, RF-51.2 | V2 | Especificado |
+
+### 13.5 Facturación Electrónica Tributaria (SUNAT / OSE) y Contabilidad (`Accounting` & `Tax` V2)
+
+| ID | Requerimiento | Origen | Fase | Estado |
+|---|---|---|---|---|
+| BE-TAX-01 | **Determinación Tributaria de Base Imponible en Pagos de Crédito**: separación estricta entre retorno de capital (`principal_paid`, no afecto a comprobante de venta) e ingresos financieros gravables/inafectos (`interest_paid + late_fee_paid + fee_paid`) para la emisión de Boleta (`03`) o Factura (`01`) | US-52, RF-52.1 | V2 | Especificado |
+| BE-TAX-02 | **Worker Outbox de Facturación Electrónica UBL 2.1 (`IElectronicBillingGateway`)**: generación de serie/correlativo fiscal, envío asíncrono a OSE/PSE tras confirmar cada pago con ingresos $> 0$, recepción y almacenamiento de XML firmado, CDR de SUNAT y PDF representativo en `tax_vouchers` | US-52, RF-52.2 | V2 | Especificado |
+| BE-TAX-03 | **Emisión Automática de Nota de Crédito Electrónica (`07`) en Reversos**: al ejecutar `POST /api/payments/{id}/reverse` sobre un pago que emitió Boleta o Factura, encolar automáticamente la emisión de la Nota de Crédito Electrónica por anulación referenciando el comprobante original | US-52, RF-52.3 | V2 | Especificado |
+| BE-ACC-01 | **Libro Mayor Inmutable de Partida Doble (`accounting_journal_entries`)**: generación transaccional de asientos contables (`Debe = Haber`) por cada desembolso, cobro, condonación, reverso, liquidación de pasarela, devolución y castigo, con catálogo de cuentas PCGE/SBS configurable | US-53, RF-53.1 | V2 | Especificado |
+| BE-ACC-02 | **Motor de Cálculo Mensual de Provisiones de Cartera por Tramo SBS**: proceso de cierre mensual que clasifica la cartera activa por días de mora (`0-8d: 1%`, `9-30d: 5%`, `31-60d: 25%`, `61-120d: 60%`, `>120d: 100%`), guarda la foto en `portfolio_provision_runs` y genera el asiento contable de ajuste de provisión | US-53, RF-53.2 | V2 | Especificado |
+

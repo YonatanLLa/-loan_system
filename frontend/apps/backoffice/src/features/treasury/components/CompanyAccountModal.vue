@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 
 // FE-BO-27: Alta y configuración de cuentas bancarias de la Fintech (uso, moneda, activación).
 
@@ -29,6 +29,7 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
+const { createCompanyAccount } = useTreasury()
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
@@ -60,7 +61,7 @@ async function onSubmit() {
       isCollection: form.value.isCollection,
     }
 
-    await useApi().post('/treasury/bank-accounts', payload)
+    await createCompanyAccount(payload)
     toast.success('Cuenta corporativa registrada', {
       description: `La cuenta ${payload.bankName} (${payload.currency}) fue añadida al catálogo de tesorería.`,
     })

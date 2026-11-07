@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ShieldAlert, AlertTriangle, LoaderCircle } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
 import type { AgingRow } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { MoneyText, useBusyAction } from '@prestamos/ui'
+import { MoneyText } from '@prestamos/ui'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -16,9 +14,9 @@ import {
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
 
-import { useApi } from '@/app/api'
 import { useSessionStore } from '@/app/stores/session'
-import type { CollectorOption } from './AssignCollectorDialog.vue'
+import { useWriteOffDebt } from '../composables'
+import type { CollectorOption } from '../services/collections.service'
 
 // FE-BO-35: castigo con justificación y aprobación de un segundo usuario.
 
@@ -40,7 +38,8 @@ const session = useSessionStore()
 const reason = ref('')
 const minuteRef = ref('')
 const approvedBy = ref('')
-const errorMsg = ref<string | null>(null)
+
+const { writeOff, isBusy, error: errorMsg } = useWriteOffDebt()
 
 const others = computed(() =>
   props.approvers.filter(
@@ -63,29 +62,18 @@ watch(
   },
 )
 
-const { run: submit, isBusy } = useBusyAction(async () => {
+async function submit() {
   if (!props.row || !canSubmit.value) return
-  errorMsg.value = null
-  try {
-    await useApi().post(`/loans/${props.row.loanId}/write-off`, {
-      reason: reason.value.trim(),
-      minuteRef: minuteRef.value.trim(),
-      approvedBy: approvedBy.value,
-    })
-    toast.success('Deuda castigada', {
-      description: `${props.row.loanId} pasó a CASTIGADO. El historial del deudor se conserva.`,
-    })
+  const success = await writeOff(props.row.loanId, {
+    reason: reason.value.trim(),
+    minuteRef: minuteRef.value.trim(),
+    approvedBy: approvedBy.value,
+  })
+  if (success) {
     emit('writtenOff')
     emit('update:open', false)
-  } catch (error) {
-    const apiError = toApiError(error)
-    errorMsg.value =
-      apiError.status === 409
-        ? 'Este préstamo ya se encuentra castigado.'
-        : apiError.detail
-    toast.error(apiError.title, { description: errorMsg.value })
   }
-})
+}
 </script>
 
 <template>

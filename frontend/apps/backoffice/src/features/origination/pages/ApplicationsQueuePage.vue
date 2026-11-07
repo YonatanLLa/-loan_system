@@ -1,101 +1,45 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   FileText,
   FilePlus,
   Search,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Eye,
-  CheckCircle2,
-  AlertCircle,
-  XCircle,
   X,
   Clock,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { LoanApplication, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { EmptyState, MoneyText, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useOrigination } from '../composables/useOrigination'
+import { applicationColumns } from '../utils/originationColumns'
 import CreateApplicationSheet from '../components/CreateApplicationSheet.vue'
 
 // FE-BO-16: Bandeja de solicitudes de crédito ordenada por antigüedad con filtros por estado.
 
-const loading = ref(false)
-const applicationsPage = ref<Page<LoanApplication>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
+const {
+  loading,
+  applicationsPage,
+  searchQuery,
+  selectedStatus,
+  totalPages,
+  loadApplications,
+  onSearch,
+  resetFilters,
+  goToPage,
+} = useOrigination()
 
-const searchQuery = ref('')
-const selectedStatus = ref('SOLICITADO,EN_EVALUACION') // Por defecto la bandeja de pendientes
-const currentPage = ref(1)
 const isCreateOpen = ref(false)
-
-async function loadApplications() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: applicationsPage.value.pageSize,
-    }
-    if (searchQuery.value.trim()) params.q = searchQuery.value.trim()
-    if (selectedStatus.value) params.status = selectedStatus.value
-
-    const { data } = await useApi().get<Page<LoanApplication>>('/loan-applications', { params })
-    applicationsPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar solicitudes', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  currentPage.value = 1
-  void loadApplications()
-}
-
-function resetFilters() {
-  searchQuery.value = ''
-  selectedStatus.value = ''
-  currentPage.value = 1
-  void loadApplications()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadApplications()
-}
-
-const totalPages = ref(1)
-watch(
-  () => applicationsPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / applicationsPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 function getRecommendationBadge(rec?: string) {
   switch (rec) {
@@ -118,6 +62,8 @@ function formatDti(dti?: string): string {
   const val = Number(dti) * 100
   return `${val.toFixed(1)}%`
 }
+
+
 
 onMounted(() => {
   void loadApplications()
@@ -252,82 +198,58 @@ onMounted(() => {
 
         <div v-else>
           <TableGenerator
-            :columns="[
-              { key: 'id', label: 'ID' },
-              { key: 'createdAt', label: 'Fecha y Hora' },
-              { key: 'customer', label: 'Cliente' },
-              { key: 'product', label: 'Producto' },
-              { key: 'amount', label: 'Monto / Plazo' },
-              { key: 'dti', label: 'DTI Motor' },
-              { key: 'recommendation', label: 'Recomendación' },
-              { key: 'status', label: 'Estado' },
-              { key: 'action', label: 'Acción', headerClass: 'text-right' },
-            ]"
+            :columns="applicationColumns"
             :rows="applicationsPage.items"
             row-key="id"
           >
-            <template #row="{ row: app }">
-              <td class="px-4 py-3 font-mono text-xs font-bold">
-                {{ app.id }}
-              </td>
-              <td class="px-4 py-3 text-xs whitespace-nowrap text-muted-foreground">
-                {{ formatInstant(app.createdAt) }}
-              </td>
-              <td class="px-4 py-3 font-medium text-foreground">
-                <RouterLink
-                  :to="{ name: 'customer-detail', params: { id: app.customerId } }"
-                  class="hover:underline flex items-center gap-1 text-primary"
-                >
-                  {{ app.customerName }}
+            <template #cell-customer="{ row: app }">
+              <RouterLink
+                :to="{ name: 'customer-detail', params: { id: app.customerId } }"
+                class="hover:underline flex items-center gap-1 text-primary"
+              >
+                {{ app.customerName }}
+              </RouterLink>
+              <span class="text-[11px] text-muted-foreground block font-normal">
+                Canal: {{ app.originatedFrom }}
+              </span>
+            </template>
+            <template #cell-amount="{ row: app }">
+              <div class="font-bold text-foreground">
+                <MoneyText :amount="app.requestedAmount" />
+              </div>
+              <div class="text-[11px] text-muted-foreground">
+                {{ app.term }} cuotas {{ app.frequency.toLowerCase() }}
+              </div>
+            </template>
+            <template #cell-dti="{ row: app }">
+              <span
+                :class="
+                  Number(app.dtiRatio ?? 0) > 0.5
+                    ? 'text-destructive font-bold'
+                    : Number(app.dtiRatio ?? 0) > 0.35
+                      ? 'text-warning font-bold'
+                      : 'text-success'
+                "
+              >
+                {{ formatDti(app.dtiRatio) }}
+              </span>
+            </template>
+            <template #cell-recommendation="{ row: app }">
+              <Badge
+                variant="outline"
+                class="text-[10px]"
+                :class="getRecommendationBadge(app.systemRecommendation).class"
+              >
+                {{ getRecommendationBadge(app.systemRecommendation).label }}
+              </Badge>
+            </template>
+            <template #cell-action="{ row: app }">
+              <Button variant="outline" size="sm" class="h-8 gap-1 text-xs" as-child>
+                <RouterLink :to="{ name: 'application-detail', params: { id: app.id } }">
+                  <Eye class="size-3.5" />
+                  <span>Evaluar</span>
                 </RouterLink>
-                <span class="text-[11px] text-muted-foreground block font-normal">
-                  Canal: {{ app.originatedFrom }}
-                </span>
-              </td>
-              <td class="px-4 py-3 text-xs font-medium">
-                {{ app.productName }}
-              </td>
-              <td class="px-4 py-3 text-xs font-mono">
-                <div class="font-bold text-foreground">
-                  <MoneyText :amount="app.requestedAmount" />
-                </div>
-                <div class="text-[11px] text-muted-foreground">
-                  {{ app.term }} cuotas {{ app.frequency.toLowerCase() }}
-                </div>
-              </td>
-              <td class="px-4 py-3 text-xs font-mono font-semibold">
-                <span
-                  :class="
-                    Number(app.dtiRatio ?? 0) > 0.5
-                      ? 'text-destructive font-bold'
-                      : Number(app.dtiRatio ?? 0) > 0.35
-                        ? 'text-warning font-bold'
-                        : 'text-success'
-                  "
-                >
-                  {{ formatDti(app.dtiRatio) }}
-                </span>
-              </td>
-              <td class="px-4 py-3">
-                <Badge
-                  variant="outline"
-                  class="text-[10px]"
-                  :class="getRecommendationBadge(app.systemRecommendation).class"
-                >
-                  {{ getRecommendationBadge(app.systemRecommendation).label }}
-                </Badge>
-              </td>
-              <td class="px-4 py-3">
-                <StatusBadge kind="application" :status="app.status" />
-              </td>
-              <td class="px-4 py-3 text-right">
-                <Button variant="outline" size="sm" class="h-8 gap-1 text-xs" as-child>
-                  <RouterLink :to="{ name: 'application-detail', params: { id: app.id } }">
-                    <Eye class="size-3.5" />
-                    <span>Evaluar</span>
-                  </RouterLink>
-                </Button>
-              </td>
+              </Button>
             </template>
           </TableGenerator>
         </div>

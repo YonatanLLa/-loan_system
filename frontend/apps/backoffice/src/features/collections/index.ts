@@ -1,1 +1,6 @@
 export { collectionsRoutes } from './routes'
+export * from './services'
+export * from './composables'
+export { default as AssignCollectorDialog } from './components/AssignCollectorDialog.vue'
+export { default as CollectionActionDialog } from './components/CollectionActionDialog.vue'
+export { default as WriteOffDialog } from './components/WriteOffDialog.vue'

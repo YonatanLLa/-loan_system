@@ -42,6 +42,10 @@ function createApplication(
   const errors = validateAdmission(customer.id, product, amount, body.term, body.frequency)
   if (Object.keys(errors).length > 0) return problem(400, 'Datos fuera de rango', 'La solicitud no cumple las reglas del producto.', errors)
 
+  if (body.monthlyNetIncome) customer.monthlyNetIncome = body.monthlyNetIncome
+  if (body.employerName) customer.employerName = body.employerName
+  if (body.occupation) customer.occupation = body.occupation
+
   const evaluation = evaluateDti(customer.id, product, amount, body.term, body.frequency)
   const application: LoanApplication = {
     id: nextId('app'),

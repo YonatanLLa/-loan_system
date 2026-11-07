@@ -54,17 +54,18 @@ Cada módulo cuenta con su propio archivo `.md` detallando historias de usuario,
 | [**`11-reportes-y-estados-de-cuenta.md`**](11-reportes-y-estados-de-cuenta.md) | Reportería Operativa, Financiera y Estados | US-33 (Dashboard KPIs), US-34 (Reporte Cartera/Aging), US-35 (Estado de Cuenta) |
 | [**`12-integraciones-y-conciliacion.md`**](12-integraciones-y-conciliacion.md) | Integraciones Bancarias y Conciliación | US-36 (Webhooks BCP/BBVA/Yape), US-37 (Conciliación Extractos), US-38 (Cola Reprocesos) |
 | [**`13-administracion-y-configuracion.md`**](13-administracion-y-configuracion.md) | Administración General y Configuración | US-39 (Datos de Empresa), US-40 (Canales Digitales), US-41 (Feriados y Días No Hábiles), US-42 (Catálogos y Plantillas Legales), US-43 (Gestión de Colaboradores) |
+| [**`14-modelo-negocio-v2.md`**](14-modelo-negocio-v2.md) | **Evolución del Modelo de Negocio V2** | US-44 (Centrales de Riesgo SBS/Equifax y DTI Sistémico), US-45 (*Credit Ladder* y Renovación 1-Click), US-46 (Seguro de Desgravamen, Gracia Inicial e ITF), US-47 (Tope Tasa Máxima BCRP Ley N° 31143), US-48 (Condonaciones/*Waivers* 4 Ojos), US-49 (Reestructuración con Cuota Inicial), US-50 (Liquidaciones en Lote de Pasarelas), US-51 (Débito Automático *Auto-Pay*), US-52 (Facturación Electrónica SUNAT/OSE y Notas de Crédito), US-53 (Libro Mayor de Partida Doble y Provisiones SBS), US-54 (Avales/Fiadores Solidarios y Cónyuges), US-55 (Firma Mancomunada con Doble OTP) |
 
 ---
 
 ## 4. Requerimientos por Capa
 
-Las historias de usuario anteriores están separadas por capa técnica. Cada requerimiento indica de qué historia proviene, la fase y si ya estaba especificado o es una brecha nueva frente al negocio:
+Las historias de usuario anteriores están separadas por capa técnica (incluyendo tanto el alcance **MVP / V1** como la **Evolución V2**):
 
 | Archivo | Capa | Contenido |
 |---|---|---|
-| [**`REQUERIMIENTOS_FRONTEND.md`**](REQUERIMIENTOS_FRONTEND.md) | Frontend | Backoffice (`FE-BO`), portal del cliente (`FE-CP`) y no funcionales (`FE-NF`) |
-| [**`REQUERIMIENTOS_BACKEND.md`**](REQUERIMIENTOS_BACKEND.md) | Backend | API y jobs por módulo (`BE-SEC`, `BE-CUS`, `BE-PRO`, `BE-ORI`, `BE-LOA`, `BE-PAY`, `BE-TRE`, `BE-COL`, `BE-INT`, `BE-NOT`, `BE-REP`, `BE-ADM`) y no funcionales (`BE-NF`) |
+| [**`REQUERIMIENTOS_FRONTEND.md`**](REQUERIMIENTOS_FRONTEND.md) | Frontend | Backoffice (`FE-BO-01` a `FE-BO-56`), Portal del Cliente (`FE-CP-01` a `FE-CP-29`), no funcionales (`FE-NF`) y arquitectura V2 (`Composables -> Services -> API`) |
+| [**`REQUERIMIENTOS_BACKEND.md`**](REQUERIMIENTOS_BACKEND.md) | Backend | API, puertos y jobs por módulo (`BE-SEC`, `BE-CUS`, `BE-PRO`, `BE-ORI`, `BE-LOA`, `BE-PAY`, `BE-TRE`, `BE-COL`, `BE-INT`, `BE-NOT`, `BE-REP`, `BE-ADM`, `BE-TAX`, `BE-ACC`) y no funcionales (`BE-NF`) |
 | [**`REQUERIMIENTOS_BDD.md`**](REQUERIMIENTOS_BDD.md) | Base de datos | Requerimientos del esquema (`DB`) contrastados con lo que ya existe en `database/` |
 
 ### 4.1 Cobertura de lo que pide el negocio (README)

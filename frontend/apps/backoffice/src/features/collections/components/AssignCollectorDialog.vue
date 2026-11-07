@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import { UserPlus, AlertTriangle, LoaderCircle } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
 import type { AgingRow } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { useBusyAction } from '@prestamos/ui'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -16,16 +13,12 @@ import {
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
 
-import { useApi } from '@/app/api'
+import { useAssignCollector } from '../composables'
+import type { CollectorOption } from '../services/collections.service'
+
+export type { CollectorOption }
 
 // FE-BO-34: asignar el préstamo a un gestor de cobranza.
-
-export interface CollectorOption {
-  id: string
-  fullName: string
-  email: string
-  role: string
-}
 
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
@@ -42,7 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const collectorName = ref('')
-const errorMsg = ref<string | null>(null)
+const { assign, isBusy, error: errorMsg } = useAssignCollector()
 
 watch(
   () => props.open,
@@ -53,23 +46,14 @@ watch(
   },
 )
 
-const { run: submit, isBusy } = useBusyAction(async () => {
+async function submit() {
   if (!props.row || !collectorName.value) return
-  errorMsg.value = null
-  try {
-    await useApi().post(`/loans/${props.row.loanId}/assign-collector`, {
-      collectorName: collectorName.value,
-    })
-    toast.success('Gestor asignado', {
-      description: `${props.row.customerName} quedó a cargo de ${collectorName.value}.`,
-    })
+  const success = await assign(props.row.loanId, collectorName.value, props.row.customerName)
+  if (success) {
     emit('assigned')
     emit('update:open', false)
-  } catch (error) {
-    errorMsg.value = toApiError(error).detail
-    toast.error('No se pudo asignar', { description: errorMsg.value })
   }
-})
+}
 </script>
 
 <template>

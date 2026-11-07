@@ -3,9 +3,6 @@ import { Package } from '@lucide/vue'
 
 import { PERMISSIONS } from '@/app/permissions'
 
-// Pantalla provisional hasta que la feature tenga sus páginas en ./pages.
-const placeholder = () => import('@/shared/components/FeaturePlaceholder.vue')
-
 export const productsRoutes: RouteRecordRaw[] = [
   {
     path: 'productos',

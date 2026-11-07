@@ -1,50 +1,42 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import {
   Users,
   Search,
   UserPlus,
-  RefreshCw,
   ChevronLeft,
   ChevronRight,
   Eye,
   Pencil,
   X,
-  ShieldCheck,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type { Customer, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import type { Customer } from '@prestamos/api-client'
+import { EmptyState, PageHeader, TableGenerator, type TableColumn } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 import CustomerFormSheet from '../components/CustomerFormSheet.vue'
 
 // FE-BO-06: Lista y búsqueda de clientes por documento o nombre; alta y edición.
 
-const loading = ref(false)
-const customersPage = ref<Page<Customer>>({
-  items: [],
-  total: 0,
-  page: 1,
-  pageSize: 10,
-})
-
-const searchQuery = ref('')
-const selectedKycStatus = ref('')
-const currentPage = ref(1)
+const {
+  loading,
+  customersPage,
+  searchQuery,
+  selectedKycStatus,
+  totalPages,
+  loadCustomers,
+  onSearch,
+  resetFilters,
+  goToPage,
+} = useCustomers()
 
 // Modal de Alta / Edición
 const isFormOpen = ref(false)
@@ -55,57 +47,20 @@ function openCreate() {
   isFormOpen.value = true
 }
 
+const customerColumns: TableColumn<Customer>[] = [
+  { key: 'document', label: 'Documento', cellClass: 'font-mono text-xs' },
+  { key: 'customer', label: 'Cliente' },
+  { key: 'contact', label: 'Contacto', cellClass: 'text-xs' },
+  { key: 'monthlyNetIncome', label: 'Ingreso Neto', kind: 'money', cellClass: 'text-xs font-medium' },
+  { key: 'kycStatus', label: 'Estado KYC', kind: 'status', statusKind: 'kyc' },
+  { key: 'createdAt', label: 'Registro', kind: 'datetime', cellClass: 'text-xs text-muted-foreground' },
+  { key: 'actions', label: 'Acciones', align: 'right' },
+]
+
 function openEdit(customer: Customer) {
   customerToEdit.value = customer
   isFormOpen.value = true
 }
-
-async function loadCustomers() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: currentPage.value,
-      pageSize: customersPage.value.pageSize,
-    }
-    if (searchQuery.value.trim()) params.q = searchQuery.value.trim()
-    if (selectedKycStatus.value) params.kycStatus = selectedKycStatus.value
-
-    const { data } = await useApi().get<Page<Customer>>('/customers', { params })
-    customersPage.value = data
-  } catch (error) {
-    const apiError = toApiError(error)
-    toast.error('Error al cargar clientes', { description: apiError.detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function onSearch() {
-  currentPage.value = 1
-  void loadCustomers()
-}
-
-function resetFilters() {
-  searchQuery.value = ''
-  selectedKycStatus.value = ''
-  currentPage.value = 1
-  void loadCustomers()
-}
-
-function goToPage(p: number) {
-  if (p < 1 || p > totalPages.value) return
-  currentPage.value = p
-  void loadCustomers()
-}
-
-const totalPages = ref(1)
-watch(
-  () => customersPage.value.total,
-  (total) => {
-    totalPages.value = Math.max(1, Math.ceil(total / customersPage.value.pageSize))
-  },
-  { immediate: true },
-)
 
 function onCustomerSaved() {
   void loadCustomers()
@@ -206,61 +161,42 @@ onMounted(() => {
         <!-- Lista -->
         <div v-else>
           <TableGenerator
-            :columns="[
-              { key: 'document', label: 'Documento' },
-              { key: 'customer', label: 'Cliente' },
-              { key: 'contact', label: 'Contacto' },
-              { key: 'income', label: 'Ingreso Neto' },
-              { key: 'kyc', label: 'Estado KYC' },
-              { key: 'createdAt', label: 'Registro' },
-              { key: 'actions', label: 'Acciones', headerClass: 'text-right' },
-            ]"
+            :columns="customerColumns"
             :rows="customersPage.items"
             row-key="id"
           >
-            <template #row="{ row: customer }">
-              <td class="px-4 py-3 font-mono text-xs">
-                <span class="font-semibold text-foreground">{{ customer.docType }}:</span>
-                {{ customer.docNumber }}
-              </td>
-              <td class="px-4 py-3">
-                <div class="font-medium text-foreground">{{ customer.fullName }}</div>
-                <div class="text-xs text-muted-foreground">
-                  {{ customer.occupation || customer.personType }}
-                </div>
-              </td>
-              <td class="px-4 py-3 text-xs">
-                <div>{{ customer.phone }}</div>
-                <div class="text-muted-foreground truncate max-w-[180px]">{{ customer.email }}</div>
-              </td>
-              <td class="px-4 py-3 text-xs font-medium">
-                <MoneyText :amount="customer.monthlyNetIncome" />
-              </td>
-              <td class="px-4 py-3">
-                <StatusBadge kind="kyc" :status="customer.kycStatus" />
-              </td>
-              <td class="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                {{ formatInstant(customer.createdAt) }}
-              </td>
-              <td class="px-4 py-3 text-right">
-                <div class="flex items-center justify-end gap-1">
-                  <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
-                    <RouterLink :to="{ name: 'customer-detail', params: { id: customer.id } }">
-                      <Eye class="size-3.5" />
-                      <span>Ficha 360</span>
-                    </RouterLink>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    class="size-8 text-muted-foreground hover:text-foreground"
-                    title="Editar datos del cliente"
-                    @click="openEdit(customer)"
-                  >
-                    <Pencil class="size-3.5" />
-                  </Button>
-                </div>
-              </td>
+            <template #cell-document="{ row: customer }">
+              <span class="font-semibold text-foreground">{{ customer.docType }}:</span>
+              {{ customer.docNumber }}
+            </template>
+            <template #cell-customer="{ row: customer }">
+              <div class="font-medium text-foreground">{{ customer.fullName }}</div>
+              <div class="text-xs text-muted-foreground">
+                {{ customer.occupation || customer.personType }}
+              </div>
+            </template>
+            <template #cell-contact="{ row: customer }">
+              <div>{{ customer.phone }}</div>
+              <div class="text-muted-foreground truncate max-w-[180px]">{{ customer.email }}</div>
+            </template>
+            <template #cell-actions="{ row: customer }">
+              <div class="flex items-center justify-end gap-1">
+                <Button variant="ghost" size="sm" class="h-8 gap-1 text-xs" as-child>
+                  <RouterLink :to="{ name: 'customer-detail', params: { id: customer.id } }">
+                    <Eye class="size-3.5" />
+                    <span>Ficha 360</span>
+                  </RouterLink>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  class="size-8 text-muted-foreground hover:text-foreground"
+                  title="Editar datos del cliente"
+                  @click="openEdit(customer)"
+                >
+                  <Pencil class="size-3.5" />
+                </Button>
+              </div>
             </template>
           </TableGenerator>
         </div>

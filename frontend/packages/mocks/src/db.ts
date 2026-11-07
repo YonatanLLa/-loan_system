@@ -2,22 +2,28 @@ import type {
   AmortizationMethod,
   AuditLogEntry,
   BankStatementLine,
+  ClientNotification,
   CollectionAction,
   Company,
   CompanyBankAccount,
+  ComplaintClaimRecord,
   Customer,
   CustomerBankAccount,
   Disbursement,
+  GlobalParameters,
   Holiday,
   InstallmentStatus,
   IntegrationEvent,
+  InternalAccountTransfer,
   LoanApplication,
   LoanProduct,
   LoanStatus,
+  NotificationPreferences,
   PaymentFrequency,
   PaymentMethodConfig,
   PaymentMethodType,
   PaymentStatus,
+  RefundRequest,
 } from '@prestamos/api-client'
 
 import type { Cents } from './money'
@@ -125,12 +131,18 @@ export interface Db {
   payments: PaymentRec[]
   disbursements: DisbursementRec[]
   statements: BankStatementLine[]
+  internalTransfers: InternalAccountTransfer[]
   actions: CollectionAction[]
   events: IntegrationEvent[]
   audit: AuditLogEntry[]
   holidays: Holiday[]
   paymentMethods: PaymentMethodConfig[]
+  refundRequests: RefundRequest[]
+  notifications: ClientNotification[]
+  notificationPreferences: Map<string, NotificationPreferences>
+  complaints: ComplaintClaimRecord[]
   company: Company
+  parameters: GlobalParameters
   idempotency: Map<string, { status: number; body: unknown }>
   counters: Map<string, number>
 }
@@ -149,11 +161,16 @@ export function createEmptyDb(): Db {
     payments: [],
     disbursements: [],
     statements: [],
+    internalTransfers: [],
     actions: [],
     events: [],
     audit: [],
     holidays: [],
     paymentMethods: [],
+    refundRequests: [],
+    notifications: [],
+    notificationPreferences: new Map(),
+    complaints: [],
     company: {
       legalName: '',
       tradeName: '',
@@ -163,6 +180,14 @@ export function createEmptyDb(): Db {
       supportEmail: '',
       legalRepName: '',
       defaultCurrency: 'PEN',
+    },
+    parameters: {
+      collectionAllowedHoursStart: '08:00',
+      collectionAllowedHoursEnd: '20:00',
+      bankAccountChangeHoldHours: 24,
+      prepaymentQuoteValidityDays: 3,
+      maxDtiRatioPercent: 50,
+      alertOverdueDaysThreshold: 90,
     },
     idempotency: new Map(),
     counters: new Map(),

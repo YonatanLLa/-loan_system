@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import type { Company, Holiday, LoanProduct, PaymentMethodConfig } from '@prestamos/api-client'
 
-import { db, nextId, recordAudit } from '../db'
+import { db, nextId, nowIso, recordAudit } from '../db'
 import { matches, notFound, paginate, problem, readJson, secured } from '../http-utils'
 import { toCents } from '../money'
 
@@ -149,6 +149,81 @@ export const catalogHandlers = [
         userName: user.fullName,
       })
       return HttpResponse.json(method)
+    }),
+  ),
+
+  // Usuarios internos del backoffice (FE-BO-41).
+  http.get(
+    '*/api/admin/users',
+    secured('admin.manage', () => {
+      const users = db.users
+        .filter((u) => u.role !== 'ROLE_CLIENT')
+        .map((u) => ({
+          id: u.id,
+          email: u.email,
+          fullName: u.fullName,
+          role: u.role,
+          permissions: u.permissions,
+          customerId: u.customerId,
+          createdAt: nowIso(),
+        }))
+      return HttpResponse.json(users)
+    }),
+  ),
+
+  http.post(
+    '*/api/admin/users',
+    secured('admin.manage', async ({ request, user }) => {
+      const body = await readJson<{ email: string; fullName: string; role: string; password?: string; permissions?: string[] }>(request)
+      if (!body?.email?.trim() || !body?.fullName?.trim() || !body?.role) {
+        return problem(400, 'Datos incompletos', 'Indica correo, nombre completo y rol.')
+      }
+      if (db.users.some((u) => u.email.toLowerCase() === body.email.trim().toLowerCase())) {
+        return problem(409, 'Correo duplicado', 'Ya existe un usuario con ese correo electrónico.')
+      }
+      const newUser = {
+        id: nextId('usr'),
+        email: body.email.trim().toLowerCase(),
+        fullName: body.fullName.trim(),
+        role: body.role,
+        password: body.password || 'Demo1234!',
+        permissions: body.permissions || ['dashboard.view'],
+      }
+      db.users.push(newUser)
+      recordAudit({
+        entityName: 'users',
+        entityId: newUser.id,
+        action: 'CREATE',
+        after: { email: newUser.email, role: newUser.role },
+        userName: user.fullName,
+      })
+      const { password: _, ...result } = newUser
+      return HttpResponse.json(result, { status: 201 })
+    }),
+  ),
+
+  // Parámetros globales del negocio (FE-BO-42).
+  http.get(
+    '*/api/admin/parameters',
+    secured('admin.manage', () => HttpResponse.json(db.parameters)),
+  ),
+
+  http.put(
+    '*/api/admin/parameters',
+    secured('admin.manage', async ({ request, user }) => {
+      const body = await readJson<Partial<typeof db.parameters>>(request)
+      if (!body) return problem(400, 'Solicitud inválida', 'Cuerpo inválido.')
+      const before = { ...db.parameters }
+      db.parameters = { ...db.parameters, ...body }
+      recordAudit({
+        entityName: 'parameters',
+        entityId: 'global',
+        action: 'UPDATE',
+        before,
+        after: { ...db.parameters },
+        userName: user.fullName,
+      })
+      return HttpResponse.json(db.parameters)
     }),
   ),
 

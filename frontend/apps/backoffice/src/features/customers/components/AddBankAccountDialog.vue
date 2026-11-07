@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { Building2, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 
 // FE-BO-09: Cuentas bancarias del cliente: alta de cuenta o billetera digital.
 
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'added', account: CustomerBankAccount): void
 }>()
 
+const { createBankAccount } = useCustomers()
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
@@ -41,6 +42,21 @@ const form = ref({
 })
 
 const isWallet = computed(() => form.value.accountType === 'BILLETERA_DIGITAL')
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      form.value = {
+        bankName: 'BCP',
+        accountType: 'CUENTA_AHORRO',
+        cci: '',
+        phoneWallet: '',
+      }
+    }
+  },
+)
 
 function onAccountTypeChange() {
   if (isWallet.value) {
@@ -78,10 +94,7 @@ async function onSubmit() {
       phoneWallet: isWallet.value ? form.value.phoneWallet : undefined,
     }
 
-    const { data } = await useApi().post<CustomerBankAccount>(
-      `/customers/${props.customerId}/bank-accounts`,
-      payload,
-    )
+    const data = await createBankAccount(props.customerId, payload)
 
     toast.success('Cuenta registrada', {
       description: `Se agregó la cuenta ${data.bankName} (${data.accountNumberMasked}) para desembolsos.`,

@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { MessageSquarePlus, AlertTriangle, LoaderCircle } from '@lucide/vue'
+import { MessageSquarePlus, AlertTriangle, LoaderCircle, Phone, MessageCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { AgingRow, CollectionAction } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { MoneyText, StatusBadge, useBusyAction } from '@prestamos/ui'
+import { MoneyText, StatusBadge } from '@prestamos/ui'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -18,7 +17,7 @@ import {
 import { Input } from '@prestamos/ui/components/ui/input'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useCollectionActions } from '../composables'
 
 // FE-BO-33: registrar gestiones y promesas; las incumplidas quedan resaltadas.
 
@@ -55,14 +54,20 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
-const history = ref<CollectionAction[]>([])
-const loadingHistory = ref(false)
+const {
+  history,
+  loading: loadingHistory,
+  isSubmitting: isBusy,
+  error: errorMsg,
+  loadHistory,
+  recordAction,
+} = useCollectionActions()
+
 const actionType = ref<CollectionAction['actionType']>('LLAMADA_TELEFONICA')
 const note = ref('')
 const nextActionAt = ref('')
 const promiseAmount = ref('')
 const promiseDate = ref('')
-const errorMsg = ref<string | null>(null)
 
 const isPromise = computed(
   () => actionType.value === 'PROMESA_DE_PAGO' || actionType.value === 'ACUERDO_DE_PAGO_DIGITAL',
@@ -74,44 +79,29 @@ const canSubmit = computed(() => {
   return true
 })
 
-async function loadHistory() {
-  if (!props.row) return
-  loadingHistory.value = true
-  try {
-    const { data } = await useApi().get<CollectionAction[]>(
-      `/loans/${props.row.loanId}/collection-actions`,
-    )
-    history.value = data
-  } catch (error) {
-    toast.error('No se pudo cargar la bitácora', { description: toApiError(error).detail })
-  } finally {
-    loadingHistory.value = false
-  }
-}
-
 watch(
   () => [props.open, props.row?.loanId] as const,
-  ([open]) => {
+  ([open, loanId]) => {
     if (!open) return
     actionType.value = 'LLAMADA_TELEFONICA'
     note.value = ''
     nextActionAt.value = ''
     promiseAmount.value = ''
     promiseDate.value = ''
-    errorMsg.value = null
-    void loadHistory()
+    if (loanId) {
+      void loadHistory(loanId)
+    }
   },
 )
 
-const { run: submit, isBusy } = useBusyAction(async () => {
+async function submit() {
   if (!props.row || !canSubmit.value) return
-  errorMsg.value = null
   try {
-    await useApi().post('/collections/actions', {
+    await recordAction({
       loanId: props.row.loanId,
       actionType: actionType.value,
       note: note.value.trim(),
-      nextActionAt: nextActionAt.value ? new Date(nextActionAt.value).toISOString() : undefined,
+      nextActionAt: nextActionAt.value || undefined,
       promiseAmount: isPromise.value ? promiseAmount.value.trim() : undefined,
       promiseDate: isPromise.value ? promiseDate.value : undefined,
     })
@@ -122,12 +112,10 @@ const { run: submit, isBusy } = useBusyAction(async () => {
     promiseAmount.value = ''
     promiseDate.value = ''
     emit('saved')
-    await loadHistory()
-  } catch (error) {
-    errorMsg.value = toApiError(error).detail
-    toast.error('No se pudo registrar la gestión', { description: errorMsg.value })
+  } catch {
+    // El composable gestiona el mensaje de error
   }
-})
+}
 </script>
 
 <template>
@@ -141,8 +129,27 @@ const { run: submit, isBusy } = useBusyAction(async () => {
           <MessageSquarePlus class="size-5" />
           <CardTitle class="text-lg">Gestión de cobranza</CardTitle>
         </div>
-        <CardDescription>
-          {{ row.customerName }} · {{ row.loanId }} · {{ row.phone }}
+        <CardDescription class="flex flex-wrap items-center gap-2">
+          <span>{{ row.customerName }} · {{ row.loanId }}</span>
+          <span class="text-muted-foreground">·</span>
+          <a
+            :href="`tel:${row.phone}`"
+            class="inline-flex items-center gap-1 font-mono text-primary hover:underline"
+            title="Llamar"
+          >
+            <Phone class="size-3" />
+            {{ row.phone }}
+          </a>
+          <a
+            :href="`https://wa.me/51${row.phone.replace(/\D/g, '')}`"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+            title="Abrir WhatsApp"
+          >
+            <MessageCircle class="size-3" />
+            WhatsApp
+          </a>
         </CardDescription>
       </CardHeader>
 
@@ -230,7 +237,32 @@ const { run: submit, isBusy } = useBusyAction(async () => {
           </div>
 
           <div class="space-y-1.5">
-            <label for="actionNote" class="font-medium">Detalle del contacto</label>
+            <div class="flex items-center justify-between">
+              <label for="actionNote" class="font-medium">Detalle del contacto</label>
+              <div class="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  class="rounded border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  @click="note = 'Cliente no contesta la llamada. Se envía recordatorio por WhatsApp.'"
+                >
+                  Sin respuesta
+                </button>
+                <button
+                  type="button"
+                  class="rounded border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  @click="note = 'Cliente manifiesta problemas temporales de liquidez y solicita facilidad.'"
+                >
+                  Falta liquidez
+                </button>
+                <button
+                  type="button"
+                  class="rounded border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground hover:bg-muted hover:text-foreground"
+                  @click="note = 'Compromiso de pago acordado con el titular.'"
+                >
+                  Compromiso
+                </button>
+              </div>
+            </div>
             <textarea
               id="actionNote"
               v-model="note"

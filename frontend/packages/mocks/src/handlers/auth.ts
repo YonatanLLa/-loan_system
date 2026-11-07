@@ -67,11 +67,17 @@ async function login(request: Request, client: boolean): Promise<Response> {
     const customer = candidate.customerId
       ? db.customers.find((c) => c.id === candidate.customerId)
       : undefined
-    return client && (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
+    return (
+      client && (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
+    )
   })
 
   if (user && failures(user.id) >= MAX_FAILED) {
-    return problem(423, 'Cuenta bloqueada', 'Demasiados intentos fallidos. Inténtalo en 15 minutos.')
+    return problem(
+      423,
+      'Cuenta bloqueada',
+      'Demasiados intentos fallidos. Inténtalo en 15 minutos.',
+    )
   }
   if (!user || user.password !== body?.password) {
     if (user) db.counters.set(failureKey(user.id), failures(user.id) + 1)
@@ -96,14 +102,50 @@ export const authHandlers = [
   http.post('*/api/auth/login', ({ request }) => login(request, false)),
   http.post('*/api/client/login', ({ request }) => login(request, true)),
 
-  // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada o refreshToken móvil.
-  http.post('*/api/auth/refresh', async ({ request }) => {
+  // Envío y verificación de OTP (FE-CP-01, FE-CP-09, FE-CP-18).
+  http.post('*/api/auth/otp/send', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ phone: string; purpose: string }>(request)
+    if (!body?.phone || !/^9\d{8}$/.test(body.phone)) {
+      return problem(
+        400,
+        'Celular inválido',
+        'Indica un celular peruano de 9 dígitos que empiece con 9.',
+      )
+    }
+    return HttpResponse.json({
+      message: 'Código de verificación enviado exitosamente por SMS/WhatsApp.',
+      expiresInSeconds: 120,
+      demoCode: '123456',
+    })
+  }),
+
+  http.post('*/api/auth/otp/verify', async ({ request }) => {
+    await wait()
+    const body = await readJson<{ phone: string; code: string; purpose: string }>(request)
+    if (!body?.code?.trim() || !body?.phone) {
+      return problem(400, 'Código requerido', 'Ingresa el código OTP recibido.')
+    }
+    if (body.code.trim() !== '123456') {
+      return problem(
+        400,
+        'Código incorrecto',
+        'El código OTP es inválido o expiró. Usa 123456 en entorno demo.',
+      )
+    }
+    return HttpResponse.json({ verified: true, message: 'Identidad confirmada exitosamente.' })
+  }),
+
+  // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
+  http.post('*/api/auth/refresh', async () => {
     await wait()
     const body = await readJson<{ refreshToken?: string }>(request)
     const user =
       db.users.find((u) => u.id === refreshSession.userId) ??
       (body?.refreshToken ? db.users.find((u) => u.id === 'usr-100') : undefined)
-    return user ? HttpResponse.json(issueToken(user)) : problem(401, 'Sesión no válida', 'Inicia sesión.')
+    return user
+      ? HttpResponse.json(issueToken(user))
+      : problem(401, 'Sesión no válida', 'Inicia sesión.')
   }),
 
   http.post('*/api/auth/logout', async () => {
@@ -152,17 +194,23 @@ export const authHandlers = [
     })
   }),
 
-  http.get('*/api/me', secured(null, ({ user }) => HttpResponse.json(toMe(user)))),
+  http.get(
+    '*/api/me',
+    secured(null, ({ user }) => HttpResponse.json(toMe(user))),
+  ),
 
   http.post('*/api/client/register', async ({ request }) => {
     await wait()
     const body = await readJson<RegisterBody>(request)
     if (!body) return problem(400, 'Solicitud inválida', 'Cuerpo inválido.')
     const errors: Record<string, string[]> = {}
-    if (!/^\d{8}$/.test(body.docNumber) && body.docType === 'DNI') errors.DocNumber = ['El DNI tiene 8 dígitos']
+    if (!/^\d{8}$/.test(body.docNumber) && body.docType === 'DNI')
+      errors.DocNumber = ['El DNI tiene 8 dígitos']
     if (!/^9\d{8}$/.test(body.phone)) errors.Phone = ['El celular tiene 9 dígitos y empieza con 9']
-    if ((body.password ?? '').length < 8) errors.Password = ['La contraseña debe tener al menos 8 caracteres']
-    if (Object.keys(errors).length > 0) return problem(400, 'Datos inválidos', 'Revisa los campos.', errors)
+    if ((body.password ?? '').length < 8)
+      errors.Password = ['La contraseña debe tener al menos 8 caracteres']
+    if (Object.keys(errors).length > 0)
+      return problem(400, 'Datos inválidos', 'Revisa los campos.', errors)
     if (db.customers.some((c) => c.docType === body.docType && c.docNumber === body.docNumber)) {
       return problem(409, 'Documento duplicado', 'Ya existe un cliente con ese documento.')
     }
@@ -186,7 +234,7 @@ export const authHandlers = [
       creditBalance: '0.00',
       createdAt: nowIso(),
     })
-    db.users.push({
+    const newUser = {
       id: nextId('usr'),
       email: body.email,
       password: body.password,
@@ -194,8 +242,19 @@ export const authHandlers = [
       role: 'ROLE_CLIENT',
       permissions: ['client.portal'],
       customerId,
+    }
+    db.users.push(newUser)
+    const token = issueToken(newUser)
+    remember(newUser.id)
+    recordAudit({
+      entityName: 'customers',
+      entityId: customerId,
+      action: 'CREATE',
+      after: { docNumber: body.docNumber },
     })
-    recordAudit({ entityName: 'customers', entityId: customerId, action: 'CREATE', after: { docNumber: body.docNumber } })
-    return HttpResponse.json({ customerId, kycStatus: 'PENDING' }, { status: 201 })
+    return HttpResponse.json(
+      { customerId, kycStatus: 'PENDING', accessToken: token.accessToken },
+      { status: 201 },
+    )
   }),
 ]

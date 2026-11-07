@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { RotateCcw, AlertTriangle, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
@@ -14,9 +14,9 @@ import {
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { usePayments } from '../composables/usePayments'
 
 // FE-BO-23: Reverso de pago con motivo obligatorio y prevención de doble reverso (409).
 
@@ -30,8 +30,19 @@ const emit = defineEmits<{
   (e: 'reversed'): void
 }>()
 
+const { reversePayment } = usePayments()
 const reason = ref('')
 const errorMsg = ref<string | null>(null)
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      reason.value = ''
+      errorMsg.value = null
+    }
+  },
+)
 
 const { run: submitReversal, isBusy } = useBusyAction(async () => {
   if (!props.payment) return
@@ -43,9 +54,7 @@ const { run: submitReversal, isBusy } = useBusyAction(async () => {
   }
 
   try {
-    await useApi().post(`/payments/${props.payment.id}/reverse`, {
-      reason: reason.value.trim(),
-    })
+    await reversePayment(props.payment.id, reason.value.trim())
 
     toast.success('Pago revertido', {
       description: `El pago #${props.payment.id} fue revertido y los saldos del préstamo fueron restituidos.`,

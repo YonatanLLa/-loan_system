@@ -1,36 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  AlertTriangle,
   ArrowLeft,
   Building2,
   Calendar,
   CheckCircle2,
-  Clock,
   CreditCard,
-  DollarSign,
   FileBadge,
-  FileCheck2,
   FileText,
   Mail,
   MapPin,
   Pencil,
   Phone,
-  RefreshCw,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
   Star,
-  User,
   UserCheck,
-  XCircle,
 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { Customer360, CustomerBankAccount, KycStatus } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
-import { MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import { MoneyText, StatusBadge, TableGenerator, type TableColumn } from '@prestamos/ui'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
@@ -44,16 +37,18 @@ import {
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
 import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 import CustomerFormSheet from '../components/CustomerFormSheet.vue'
 import KycDecisionDialog from '../components/KycDecisionDialog.vue'
 import AddBankAccountDialog from '../components/AddBankAccountDialog.vue'
+import CreditBalanceModal from '../components/CreditBalanceModal.vue'
 
-// FE-BO-08, FE-BO-09, FE-BO-10: Expediente KYC, cuentas bancarias y Ficha 360 del cliente.
+// FE-BO-08, FE-BO-09, FE-BO-10, FE-BO-24: Expediente KYC, cuentas bancarias, saldo a favor y Ficha 360 del cliente.
 
 const route = useRoute()
 const router = useRouter()
 const customerId = computed(() => route.params.id as string)
+const { getCustomer360, verifyBankAccount, makePrimaryBankAccount } = useCustomers()
 
 const loading = ref(true)
 const customer = ref<Customer360 | null>(null)
@@ -63,12 +58,12 @@ const activeTab = ref<'kyc' | 'accounts' | 'loans' | 'applications'>('kyc')
 const isEditOpen = ref(false)
 const isKycModalOpen = ref(false)
 const isAddAccountOpen = ref(false)
+const isCreditBalanceOpen = ref(false)
 
 async function loadCustomer() {
   loading.value = true
   try {
-    const { data } = await useApi().get<Customer360>(`/customers/${customerId.value}`)
-    customer.value = data
+    customer.value = await getCustomer360(customerId.value)
   } catch (error) {
     const apiError = toApiError(error)
     toast.error('Error al cargar ficha 360', { description: apiError.detail })
@@ -80,9 +75,7 @@ async function loadCustomer() {
 
 async function verifyAccount(account: CustomerBankAccount) {
   try {
-    const { data } = await useApi().post<CustomerBankAccount>(
-      `/customer-bank-accounts/${account.id}/verify`,
-    )
+    const data = await verifyBankAccount(account.id)
     toast.success('Cuenta verificada', {
       description: `La cuenta ${data.bankName} (${data.accountNumberMasked}) fue verificada contra el titular.`,
     })
@@ -95,7 +88,7 @@ async function verifyAccount(account: CustomerBankAccount) {
 
 async function makePrimaryAccount(account: CustomerBankAccount) {
   try {
-    await useApi().post(`/customer-bank-accounts/${account.id}/make-primary`)
+    await makePrimaryBankAccount(account.id)
     toast.success('Cuenta principal actualizada', {
       description: `Los desembolsos se realizarán por defecto a ${account.bankName} (${account.accountNumberMasked}).`,
     })
@@ -116,6 +109,42 @@ function onKycDecided(newStatus: KycStatus) {
 function onAccountAdded() {
   void loadCustomer()
 }
+
+const customerLoanColumns: TableColumn<Customer360['loans'][number]>[] = [
+  { key: 'id', label: 'Código', kind: 'mono', cellClass: 'text-xs font-semibold' },
+  { key: 'productName', label: 'Producto', cellClass: 'font-medium' },
+  { key: 'principal', label: 'Monto Capital', kind: 'money', cellClass: 'text-xs' },
+  {
+    key: 'outstandingPrincipal',
+    label: 'Saldo Insoluto',
+    kind: 'money',
+    cellClass: 'text-xs font-bold text-foreground',
+  },
+  { key: 'nextDueDate', label: 'Próximo Vencimiento', kind: 'date', cellClass: 'text-xs text-muted-foreground' },
+  {
+    key: 'daysLate',
+    label: 'Días Atraso',
+    value: (loan) => (loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día'),
+    cellClass: (loan) =>
+      loan.daysLate > 0 ? 'text-destructive font-bold text-xs' : 'text-muted-foreground text-xs font-semibold',
+  },
+  { key: 'status', label: 'Estado', kind: 'status', statusKind: 'loan' },
+  { key: 'action', label: 'Ver', align: 'right' },
+]
+
+const customerApplicationColumns: TableColumn<Customer360['applications'][number]>[] = [
+  { key: 'id', label: 'ID Solicitud', kind: 'mono', cellClass: 'text-xs font-medium' },
+  { key: 'productName', label: 'Producto' },
+  { key: 'requestedAmount', label: 'Monto Solicitado', kind: 'money', cellClass: 'text-xs font-semibold' },
+  { key: 'createdAt', label: 'Fecha Solicitud', kind: 'datetime', cellClass: 'text-xs text-muted-foreground' },
+  { key: 'status', label: 'Estado', kind: 'status', statusKind: 'application' },
+]
+
+watch(customerId, (newId, oldId) => {
+  if (newId && oldId && newId !== oldId) {
+    void loadCustomer()
+  }
+})
 
 onMounted(() => {
   void loadCustomer()
@@ -260,7 +289,18 @@ onMounted(() => {
         <!-- Saldo a Favor -->
         <Card>
           <CardHeader class="pb-2">
-            <CardDescription class="text-xs">Saldo a Favor</CardDescription>
+            <div class="flex items-center justify-between">
+              <CardDescription class="text-xs">Saldo a Favor (FE-BO-24)</CardDescription>
+              <Button
+                v-if="Number(customer.creditBalance) > 0"
+                variant="outline"
+                size="sm"
+                class="h-6 px-2 text-[11px]"
+                @click="isCreditBalanceOpen = true"
+              >
+                Disponer saldo
+              </Button>
+            </div>
             <CardTitle class="text-xl font-bold text-primary">
               <MoneyText :amount="customer.creditBalance" />
             </CardTitle>
@@ -602,63 +642,20 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div
-                v-if="customer.loans.length === 0"
-                class="p-8 text-center text-xs text-muted-foreground"
+              <TableGenerator
+                :columns="customerLoanColumns"
+                :rows="customer.loans"
+                row-key="id"
+                empty-text="El cliente no cuenta con préstamos registrados."
               >
-                El cliente no cuenta con préstamos registrados.
-              </div>
-              <div v-else>
-                <TableGenerator
-                  :columns="[
-                    { key: 'id', label: 'Código' },
-                    { key: 'product', label: 'Producto' },
-                    { key: 'principal', label: 'Monto Capital' },
-                    { key: 'outstanding', label: 'Saldo Insoluto' },
-                    { key: 'nextDueDate', label: 'Próximo Vencimiento' },
-                    { key: 'daysLate', label: 'Días Atraso' },
-                    { key: 'status', label: 'Estado' },
-                    { key: 'action', label: 'Ver', headerClass: 'text-right' },
-                  ]"
-                  :rows="customer.loans"
-                  row-key="id"
-                >
-                  <template #row="{ row: loan }">
-                    <td class="px-4 py-3 font-mono text-xs font-semibold">
-                      {{ loan.id }}
-                    </td>
-                    <td class="px-4 py-3 font-medium">{{ loan.productName }}</td>
-                    <td class="px-4 py-3 font-mono text-xs">
-                      <MoneyText :amount="loan.principal" />
-                    </td>
-                    <td class="px-4 py-3 font-mono text-xs font-bold text-foreground">
-                      <MoneyText :amount="loan.outstandingPrincipal" />
-                    </td>
-                    <td class="px-4 py-3 text-xs text-muted-foreground">
-                      {{ loan.nextDueDate ? formatBusinessDate(loan.nextDueDate) : '—' }}
-                    </td>
-                    <td class="px-4 py-3 text-xs font-semibold">
-                      <span
-                        :class="
-                          loan.daysLate > 0 ? 'text-destructive font-bold' : 'text-muted-foreground'
-                        "
-                      >
-                        {{ loan.daysLate > 0 ? `${loan.daysLate} días` : 'Al día' }}
-                      </span>
-                    </td>
-                    <td class="px-4 py-3">
-                      <StatusBadge kind="loan" :status="loan.status" />
-                    </td>
-                    <td class="px-4 py-3 text-right">
-                      <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
-                        <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
-                          Detalle
-                        </RouterLink>
-                      </Button>
-                    </td>
-                  </template>
-                </TableGenerator>
-              </div>
+                <template #cell-action="{ row: loan }">
+                  <Button variant="ghost" size="sm" class="h-8 text-xs" as-child>
+                    <RouterLink :to="{ name: 'loans', query: { q: loan.id } }">
+                      Detalle
+                    </RouterLink>
+                  </Button>
+                </template>
+              </TableGenerator>
             </CardContent>
           </Card>
         </div>
@@ -675,39 +672,12 @@ onMounted(() => {
               </CardDescription>
             </CardHeader>
             <CardContent class="p-0">
-              <div
-                v-if="customer.applications.length === 0"
-                class="p-8 text-center text-xs text-muted-foreground"
-              >
-                No hay solicitudes de crédito registradas para este cliente.
-              </div>
-              <div v-else>
-                <TableGenerator
-                  :columns="[
-                    { key: 'id', label: 'ID Solicitud' },
-                    { key: 'product', label: 'Producto' },
-                    { key: 'amount', label: 'Monto Solicitado' },
-                    { key: 'createdAt', label: 'Fecha Solicitud' },
-                    { key: 'status', label: 'Estado' },
-                  ]"
-                  :rows="customer.applications"
-                  row-key="id"
-                >
-                  <template #row="{ row: app }">
-                    <td class="px-4 py-3 font-mono text-xs font-medium">{{ app.id }}</td>
-                    <td class="px-4 py-3">{{ app.productName }}</td>
-                    <td class="px-4 py-3 font-mono text-xs font-semibold">
-                      <MoneyText :amount="app.requestedAmount" />
-                    </td>
-                    <td class="px-4 py-3 text-xs text-muted-foreground">
-                      {{ formatInstant(app.createdAt) }}
-                    </td>
-                    <td class="px-4 py-3">
-                      <StatusBadge kind="application" :status="app.status" />
-                    </td>
-                  </template>
-                </TableGenerator>
-              </div>
+              <TableGenerator
+                :columns="customerApplicationColumns"
+                :rows="customer.applications"
+                row-key="id"
+                empty-text="No hay solicitudes de crédito registradas para este cliente."
+              />
             </CardContent>
           </Card>
         </div>
@@ -733,6 +703,12 @@ onMounted(() => {
         :customer-id="customer.id"
         :customer-name="customer.fullName"
         @added="onAccountAdded"
+      />
+
+      <CreditBalanceModal
+        v-model:open="isCreditBalanceOpen"
+        :customer="customer"
+        @processed="loadCustomer"
       />
     </template>
   </div>

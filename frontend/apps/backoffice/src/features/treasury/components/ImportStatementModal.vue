@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import { UploadCloud, CheckCircle2, Clock, AlertTriangle, LoaderCircle, FileText } from '@lucide/vue'
+import { ref, watch } from 'vue'
+import { UploadCloud, CheckCircle2, LoaderCircle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { CompanyBankAccount } from '@prestamos/api-client'
@@ -9,14 +9,12 @@ import { useBusyAction } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 
 // FE-BO-29: Importar extractos bancarios con conciliación y match automático.
 
@@ -29,6 +27,8 @@ const emit = defineEmits<{
   (e: 'update:open', val: boolean): void
   (e: 'imported'): void
 }>()
+
+const { importStatement } = useTreasury()
 
 const selectedAccountId = ref(props.companyAccounts[0]?.id ?? 'bca-001')
 const rawLines = ref(
@@ -43,6 +43,28 @@ const importResult = ref<{
   pending: number
   duplicated: number
 } | null>(null)
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      importResult.value = null
+      if (props.companyAccounts.length > 0 && !selectedAccountId.value) {
+        selectedAccountId.value = props.companyAccounts[0]?.id ?? 'bca-001'
+      }
+    }
+  },
+)
+
+watch(
+  () => props.companyAccounts,
+  (accounts) => {
+    if (accounts.length > 0 && !accounts.some((a) => a.id === selectedAccountId.value)) {
+      selectedAccountId.value = accounts[0]?.id ?? 'bca-001'
+    }
+  },
+  { immediate: true },
+)
 
 const { run: submitImport, isBusy } = useBusyAction(async () => {
   importResult.value = null
@@ -62,12 +84,7 @@ const { run: submitImport, isBusy } = useBusyAction(async () => {
         }
       })
 
-    const { data } = await useApi().post<{
-      imported: number
-      matched: number
-      pending: number
-      duplicated: number
-    }>('/reconciliation/import', {
+    const data = await importStatement({
       bankAccountId: selectedAccountId.value,
       lines: parsedLines,
     })

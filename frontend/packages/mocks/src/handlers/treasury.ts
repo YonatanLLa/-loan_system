@@ -1,5 +1,11 @@
 import { http, HttpResponse } from 'msw'
-import type { BankStatementLine, CompanyBankAccount, DailyBalance } from '@prestamos/api-client'
+import type {
+  BankStatementLine,
+  CompanyBankAccount,
+  CreateInternalTransferRequest,
+  DailyBalance,
+  InternalAccountTransfer,
+} from '@prestamos/api-client'
 
 import { today } from '../dates'
 import { db, nextId, nowIso, recordAudit } from '../db'
@@ -62,9 +68,19 @@ export const treasuryHandlers = [
         .filter((d) => d.companyBankAccountId === bankAccountId && d.status === 'COMPLETED' && d.confirmedAt?.startsWith(date))
         .map((d) => toCents(d.amount)),
     )
+    const transfersIn = sum(
+      db.internalTransfers
+        .filter((t) => t.destinationBankAccountId === bankAccountId && t.transferDate === date)
+        .map((t) => toCents(t.amount)),
+    )
+    const transfersOut = sum(
+      db.internalTransfers
+        .filter((t) => t.sourceBankAccountId === bankAccountId && t.transferDate === date)
+        .map((t) => toCents(t.amount)),
+    )
     const lines = db.statements.filter((s) => s.companyBankAccountId === bankAccountId && s.valueDate === date)
     const statement = sum(lines.map((l) => toCents(l.amount)))
-    const expected = collected - disbursed
+    const expected = collected - disbursed + transfersIn - transfersOut
     const issues = lines
       .filter((l) => l.reconciliationStatus !== 'CONCILIADO_AUTOMATICO')
       .map((l) => `${l.operationNumber}: ${l.description}`)
@@ -76,8 +92,97 @@ export const treasuryHandlers = [
       difference: fromCents(statement - expected),
       result: statement === expected && issues.length === 0 ? 'CUADRADO' : 'DESCUADRADO',
       issues,
+      internalTransfersIn: fromCents(transfersIn),
+      internalTransfersOut: fromCents(transfersOut),
     }
     return HttpResponse.json(result)
+  })),
+
+  // Transferencias internas entre cuentas propias de la empresa (Fondeo / Barrido de Tesorería — RF-24.5, RF-24.6).
+  http.get('*/api/treasury/internal-transfers', secured('treasury.read', ({ url }) => {
+    const items = [...db.internalTransfers].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    return HttpResponse.json(paginate(items, url))
+  })),
+
+  http.post('*/api/treasury/internal-transfers', secured('treasury.read', async ({ request, user }) => {
+    const body = await readJson<CreateInternalTransferRequest>(request)
+    if (!body?.sourceBankAccountId || !body?.destinationBankAccountId) {
+      return problem(400, 'Datos inválidos', 'Debes seleccionar la cuenta de origen y la cuenta de destino.')
+    }
+    if (body.sourceBankAccountId === body.destinationBankAccountId) {
+      return problem(422, 'Cuentas idénticas', 'La cuenta de origen y la cuenta de destino deben ser distintas.')
+    }
+    const source = db.companyAccounts.find((a) => a.id === body.sourceBankAccountId)
+    const destination = db.companyAccounts.find((a) => a.id === body.destinationBankAccountId)
+    if (!source || !destination) return notFound('Una de las cuentas corporativas')
+    if (!source.isActive || !destination.isActive) {
+      return problem(422, 'Cuenta inactiva', 'Ambas cuentas corporativas deben estar activas para transferir fondos.')
+    }
+    if (source.currency !== destination.currency) {
+      return problem(422, 'Monedas distintas', 'Las transferencias internas directas requieren cuentas en la misma moneda.')
+    }
+    const cents = toCents(body.amount)
+    if (cents <= 0) {
+      return problem(400, 'Monto inválido', 'El monto de la transferencia debe ser mayor a cero.')
+    }
+    if (!body.bankOperationNumber?.trim()) {
+      return problem(400, 'Falta número de operación', 'Ingresa el número de operación bancaria del fondeo.')
+    }
+
+    const opNum = body.bankOperationNumber.trim()
+    const transferDate = body.transferDate || today()
+    const transfer: InternalAccountTransfer = {
+      id: nextId('itr'),
+      sourceBankAccountId: source.id,
+      sourceBankName: `${source.bankName} (${source.accountNumberMasked})`,
+      destinationBankAccountId: destination.id,
+      destinationBankName: `${destination.bankName} (${destination.accountNumberMasked})`,
+      currency: source.currency,
+      amount: fromCents(cents),
+      transferDate,
+      bankOperationNumber: opNum,
+      notes: body.notes?.trim() || undefined,
+      createdBy: user.fullName,
+      createdAt: nowIso(),
+    }
+    db.internalTransfers.unshift(transfer)
+
+    // Asientos simétricos en extractos para mantener el cuadre diario consistente (RF-24.6)
+    db.statements.unshift(
+      {
+        id: nextId('stm'),
+        companyBankAccountId: source.id,
+        operationNumber: opNum,
+        valueDate: transferDate,
+        amount: `-${fromCents(cents)}`,
+        description: `FONDEO ENVIADO A ${destination.bankName.toUpperCase()} (${destination.accountNumberMasked})`,
+        reconciliationStatus: 'CONCILIADO_AUTOMATICO',
+      },
+      {
+        id: nextId('stm'),
+        companyBankAccountId: destination.id,
+        operationNumber: opNum,
+        valueDate: transferDate,
+        amount: fromCents(cents),
+        description: `FONDEO RECIBIDO DESDE ${source.bankName.toUpperCase()} (${source.accountNumberMasked})`,
+        reconciliationStatus: 'CONCILIADO_AUTOMATICO',
+      },
+    )
+
+    recordAudit({
+      entityName: 'internal_account_transfers',
+      entityId: transfer.id,
+      action: 'CREATE',
+      after: {
+        source: transfer.sourceBankName,
+        destination: transfer.destinationBankName,
+        amount: transfer.amount,
+        operationNumber: transfer.bankOperationNumber,
+      },
+      userName: user.fullName,
+    })
+
+    return HttpResponse.json(transfer, { status: 201 })
   })),
 
   http.get('*/api/reconciliation', secured('treasury.read', ({ url }) => {

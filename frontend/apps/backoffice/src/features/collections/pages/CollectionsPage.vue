@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import {
   PhoneCall,
   Search,
@@ -10,31 +10,23 @@ import {
   ShieldAlert,
   Receipt,
   AlertTriangle,
+  Phone,
+  MessageCircle,
 } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 
-import type {
-  AgingBucket,
-  AgingRow,
-  LoanProduct,
-  Page,
-  ReceivableItem,
-} from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
-import { EmptyState, MoneyText, PageHeader, StatusBadge, TableGenerator } from '@prestamos/ui'
+import type { AgingBucket, AgingRow } from '@prestamos/api-client'
+import { EmptyState, PageHeader, TableGenerator } from '@prestamos/ui'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Card, CardContent } from '@prestamos/ui/components/ui/card'
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate } from '@prestamos/utils'
 
-import { useApi } from '@/app/api'
-import AssignCollectorDialog, {
-  type CollectorOption,
-} from '../components/AssignCollectorDialog.vue'
+import AssignCollectorDialog from '../components/AssignCollectorDialog.vue'
 import CollectionActionDialog from '../components/CollectionActionDialog.vue'
 import WriteOffDialog from '../components/WriteOffDialog.vue'
+import { useAging, useCollectionsCatalogs, useReceivables } from '../composables'
+import { BUCKET_LABEL, agingColumns, receivableColumns } from '../utils/collectionsColumns'
 
 // FE-BO-32 a FE-BO-36: aging, gestiones, asignación, castigo y cuentas por cobrar.
 
@@ -47,132 +39,52 @@ const BUCKETS: { id: AgingBucket | ''; label: string }[] = [
   { id: 'TRAMO_4', label: '> 90' },
 ]
 
-const BUCKET_LABEL: Record<AgingBucket, string> = {
-  PREVENTIVO: 'Preventivo',
-  TRAMO_1: '1–30 días',
-  TRAMO_2: '31–60 días',
-  TRAMO_3: '61–90 días',
-  TRAMO_4: 'Más de 90 días',
-}
-
 const selectClass =
   'flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring'
 
 const activeTab = ref<'aging' | 'receivables'>('aging')
-const loading = ref(false)
 
-const agingPage = ref<Page<AgingRow>>({ items: [], total: 0, page: 1, pageSize: 10 })
-const bucket = ref<AgingBucket | ''>('')
-const assignedTo = ref('')
-const productName = ref('')
-const minAmount = ref('')
-const maxAmount = ref('')
-const agingQuery = ref('')
-const agingPageNumber = ref(1)
-const bucketCounts = ref<Record<string, number>>({})
+// Composables para lógica reactiva y peticiones a la API
+const {
+  pageData: agingPage,
+  totalPages: agingPages,
+  currentPage: agingPageNumber,
+  bucketCounts,
+  loading: agingLoading,
+  bucket,
+  assignedTo,
+  productName,
+  minAmount,
+  maxAmount,
+  query: agingQuery,
+  applyFilters: applyAgingFilters,
+  chooseBucket,
+  setPage: setAgingPage,
+  refresh: refreshAging,
+} = useAging()
 
-const receivablesPage = ref<Page<ReceivableItem>>({ items: [], total: 0, page: 1, pageSize: 10 })
-const receivableType = ref<'' | 'VENCIDA' | 'PENDIENTE'>('')
-const receivableQuery = ref('')
-const receivablePageNumber = ref(1)
+const {
+  pageData: receivablesPage,
+  totalPages: receivablePages,
+  currentPage: receivablePageNumber,
+  loading: receivableLoading,
+  type: receivableType,
+  query: receivableQuery,
+  applyFilters: applyReceivableFilters,
+  setPage: setReceivablePage,
+  loadReceivables,
+} = useReceivables()
 
-const collectors = ref<CollectorOption[]>([])
-const products = ref<LoanProduct[]>([])
+const {
+  collectors,
+  products,
+  loadCatalogs,
+} = useCollectionsCatalogs()
 
 const actionOpen = ref(false)
 const assignOpen = ref(false)
 const writeOffOpen = ref(false)
 const selected = ref<AgingRow | null>(null)
-
-const agingPages = computed(() =>
-  Math.max(1, Math.ceil(agingPage.value.total / agingPage.value.pageSize)),
-)
-const receivablePages = computed(() =>
-  Math.max(1, Math.ceil(receivablesPage.value.total / receivablesPage.value.pageSize)),
-)
-
-async function loadCatalogs() {
-  try {
-    const [people, catalog] = await Promise.all([
-      useApi().get<CollectorOption[]>('/collections/collectors'),
-      useApi().get<LoanProduct[]>('/loan-products', { params: { status: 'ACTIVO' } }),
-    ])
-    collectors.value = people.data
-    products.value = catalog.data
-  } catch (error) {
-    toast.error('No se pudieron cargar los filtros', { description: toApiError(error).detail })
-  }
-}
-
-async function loadBucketCounts() {
-  try {
-    const { data } = await useApi().get<Page<AgingRow>>('/collections/aging', {
-      params: { page: 1, pageSize: 100 },
-    })
-    const counts: Record<string, number> = { '': data.total }
-    for (const row of data.items) counts[row.bucket] = (counts[row.bucket] ?? 0) + 1
-    bucketCounts.value = counts
-  } catch {
-    bucketCounts.value = {}
-  }
-}
-
-async function loadAging() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: agingPageNumber.value,
-      pageSize: agingPage.value.pageSize,
-    }
-    if (bucket.value) params.bucket = bucket.value
-    if (assignedTo.value) params.assignedTo = assignedTo.value
-    if (productName.value) params.productName = productName.value
-    if (minAmount.value.trim()) params.minAmount = minAmount.value.trim()
-    if (maxAmount.value.trim()) params.maxAmount = maxAmount.value.trim()
-    if (agingQuery.value.trim()) params.q = agingQuery.value.trim()
-    const { data } = await useApi().get<Page<AgingRow>>('/collections/aging', { params })
-    agingPage.value = data
-  } catch (error) {
-    toast.error('Error al cargar el aging', { description: toApiError(error).detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadReceivables() {
-  loading.value = true
-  try {
-    const params: Record<string, string | number> = {
-      page: receivablePageNumber.value,
-      pageSize: receivablesPage.value.pageSize,
-    }
-    if (receivableType.value) params.type = receivableType.value
-    if (receivableQuery.value.trim()) params.q = receivableQuery.value.trim()
-    const { data } = await useApi().get<Page<ReceivableItem>>('/collections/receivables', {
-      params,
-    })
-    receivablesPage.value = data
-  } catch (error) {
-    toast.error('Error al cargar cuentas por cobrar', { description: toApiError(error).detail })
-  } finally {
-    loading.value = false
-  }
-}
-
-function applyAgingFilters() {
-  agingPageNumber.value = 1
-  void loadAging()
-}
-
-function chooseBucket(next: AgingBucket | '') {
-  bucket.value = next
-  applyAgingFilters()
-}
-
-function applyReceivableFilters() {
-  receivablePageNumber.value = 1
-  void loadReceivables()
-}
 
 function openAction(row: AgingRow) {
   selected.value = row
@@ -190,13 +102,12 @@ function openWriteOff(row: AgingRow) {
 }
 
 async function refreshAfterMutation() {
-  await Promise.all([loadAging(), loadBucketCounts()])
+  await refreshAging()
 }
 
 onMounted(() => {
   void loadCatalogs()
-  void loadAging()
-  void loadBucketCounts()
+  void refreshAging()
   void loadReceivables()
 })
 </script>
@@ -282,7 +193,7 @@ onMounted(() => {
             <Input v-model="minAmount" class="h-9" placeholder="Monto mín." inputmode="decimal" />
             <div class="flex gap-2">
               <Input v-model="maxAmount" class="h-9" placeholder="Monto máx." inputmode="decimal" />
-              <Button type="submit" size="sm" class="h-9" :disabled="loading">Filtrar</Button>
+              <Button type="submit" size="sm" class="h-9" :disabled="agingLoading">Filtrar</Button>
             </div>
           </form>
         </CardContent>
@@ -290,7 +201,7 @@ onMounted(() => {
 
       <Card>
         <CardContent class="p-0">
-          <div v-if="loading" class="space-y-3 p-6">
+          <div v-if="agingLoading" class="space-y-3 p-6">
             <Skeleton class="h-10 w-full" />
             <Skeleton class="h-12 w-full" />
             <Skeleton class="h-12 w-full" />
@@ -304,16 +215,7 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'customer', label: 'Cliente' },
-                { key: 'bucket', label: 'Tramo' },
-                { key: 'daysLate', label: 'Atraso' },
-                { key: 'overdueInstallments', label: 'Cuotas vencidas' },
-                { key: 'overduePrincipal', label: 'Capital impago' },
-                { key: 'totalDue', label: 'Total exigible' },
-                { key: 'assignedTo', label: 'Gestor' },
-                { key: 'actions', label: 'Acciones', headerClass: 'text-right' },
-              ]"
+              :columns="agingColumns"
               :rows="agingPage.items"
               row-key="loanId"
               body-class="divide-y text-xs"
@@ -324,65 +226,79 @@ onMounted(() => {
                 })
               "
             >
-              <template #row="{ row }">
-                <td class="px-4 py-3">
+              <template #cell-customer="{ row }">
+                <RouterLink
+                  :to="{ name: 'customer-detail', params: { id: row.customerId } }"
+                  class="font-medium text-foreground hover:underline"
+                >
+                  {{ row.customerName }}
+                </RouterLink>
+                <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <a
+                    :href="`tel:${row.phone}`"
+                    class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
+                    title="Llamar"
+                  >
+                    <Phone class="size-3" />
+                    {{ row.phone }}
+                  </a>
+                  <span>·</span>
+                  <a
+                    :href="`https://wa.me/51${row.phone.replace(/\D/g, '')}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    title="Abrir WhatsApp"
+                  >
+                    <MessageCircle class="size-3" />
+                    WhatsApp
+                  </a>
+                  <span>·</span>
                   <RouterLink
-                    :to="{ name: 'customer-detail', params: { id: row.customerId } }"
-                    class="font-medium text-foreground hover:underline"
+                    :to="{ name: 'loan-detail', params: { id: row.loanId } }"
+                    class="font-mono hover:underline"
                   >
-                    {{ row.customerName }}
+                    {{ row.loanId }}
                   </RouterLink>
-                  <span class="block text-[11px] text-muted-foreground">
-                    {{ row.phone }} ·
-                    <RouterLink
-                      :to="{ name: 'loan-detail', params: { id: row.loanId } }"
-                      class="hover:underline"
-                    >
-                      {{ row.loanId }}
-                    </RouterLink>
-                  </span>
-                  <span class="mt-1 block text-[11px] text-muted-foreground">{{
-                    row.productName
-                  }}</span>
-                  <Badge
-                    v-if="row.hasBrokenPromise"
+                </span>
+                <span class="mt-1 block text-[11px] text-muted-foreground">{{
+                  row.productName
+                }}</span>
+                <Badge
+                  v-if="row.hasBrokenPromise"
+                  variant="outline"
+                  class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                >
+                  <AlertTriangle class="mr-1 size-3" />
+                  Promesa incumplida
+                </Badge>
+              </template>
+
+              <template #cell-bucket="{ row }">
+                <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
+              </template>
+
+              <template #cell-actions="{ row }">
+                <div class="flex justify-end gap-1">
+                  <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
+                    <MessageSquarePlus class="size-3.5" />
+                    <span class="sr-only">Registrar gestión</span>
+                  </Button>
+                  <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
+                    <UserPlus class="size-3.5" />
+                    <span class="sr-only">Asignar gestor</span>
+                  </Button>
+                  <Button
+                    v-if="row.daysLate > 90"
+                    size="sm"
                     variant="outline"
-                    class="mt-1 border-destructive/40 bg-destructive/10 text-destructive"
+                    class="h-8 text-destructive"
+                    @click="openWriteOff(row)"
                   >
-                    <AlertTriangle class="mr-1 size-3" />
-                    Promesa incumplida
-                  </Badge>
-                </td>
-                <td class="px-4 py-3">
-                  <Badge variant="outline">{{ BUCKET_LABEL[row.bucket] }}</Badge>
-                </td>
-                <td class="px-4 py-3 font-medium">{{ row.daysLate }} días</td>
-                <td class="px-4 py-3">{{ row.overdueInstallments }}</td>
-                <td class="px-4 py-3"><MoneyText :amount="row.overduePrincipal" /></td>
-                <td class="px-4 py-3 font-semibold"><MoneyText :amount="row.totalDue" /></td>
-                <td class="px-4 py-3">{{ row.assignedTo || 'Sin asignar' }}</td>
-                <td class="px-4 py-3">
-                  <div class="flex justify-end gap-1">
-                    <Button size="sm" variant="outline" class="h-8" @click="openAction(row)">
-                      <MessageSquarePlus class="size-3.5" />
-                      <span class="sr-only">Registrar gestión</span>
-                    </Button>
-                    <Button size="sm" variant="outline" class="h-8" @click="openAssign(row)">
-                      <UserPlus class="size-3.5" />
-                      <span class="sr-only">Asignar gestor</span>
-                    </Button>
-                    <Button
-                      v-if="row.daysLate > 90"
-                      size="sm"
-                      variant="outline"
-                      class="h-8 text-destructive"
-                      @click="openWriteOff(row)"
-                    >
-                      <ShieldAlert class="size-3.5" />
-                      <span class="sr-only">Castigar</span>
-                    </Button>
-                  </div>
-                </td>
+                    <ShieldAlert class="size-3.5" />
+                    <span class="sr-only">Castigar</span>
+                  </Button>
+                </div>
               </template>
             </TableGenerator>
           </div>
@@ -396,11 +312,8 @@ onMounted(() => {
                 variant="outline"
                 size="sm"
                 class="h-8"
-                :disabled="agingPage.page <= 1 || loading"
-                @click="
-                  agingPageNumber = agingPage.page - 1;
-                  loadAging();
-                "
+                :disabled="agingPage.page <= 1 || agingLoading"
+                @click="setAgingPage(agingPageNumber - 1)"
               >
                 <ChevronLeft class="size-4" />
               </Button>
@@ -409,11 +322,8 @@ onMounted(() => {
                 variant="outline"
                 size="sm"
                 class="h-8"
-                :disabled="agingPage.page >= agingPages || loading"
-                @click="
-                  agingPageNumber = agingPage.page + 1;
-                  loadAging();
-                "
+                :disabled="agingPage.page >= agingPages || agingLoading"
+                @click="setAgingPage(agingPageNumber + 1)"
               >
                 <ChevronRight class="size-4" />
               </Button>
@@ -446,14 +356,14 @@ onMounted(() => {
               <option value="VENCIDA">Solo cuotas vencidas</option>
               <option value="PENDIENTE">Solo por vencer</option>
             </select>
-            <Button type="submit" size="sm" class="h-9" :disabled="loading">Filtrar</Button>
+            <Button type="submit" size="sm" class="h-9" :disabled="receivableLoading">Filtrar</Button>
           </form>
         </CardContent>
       </Card>
 
       <Card>
         <CardContent class="p-0">
-          <div v-if="loading" class="space-y-3 p-6">
+          <div v-if="receivableLoading" class="space-y-3 p-6">
             <Skeleton class="h-10 w-full" />
             <Skeleton class="h-12 w-full" />
           </div>
@@ -466,35 +376,43 @@ onMounted(() => {
           </div>
           <div v-else>
             <TableGenerator
-              :columns="[
-                { key: 'customer', label: 'Cliente' },
-                { key: 'installment', label: 'Cuota' },
-                { key: 'dueDate', label: 'Vencimiento' },
-                { key: 'daysLate', label: 'Atraso' },
-                { key: 'amount', label: 'Saldo de la cuota' },
-                { key: 'outstandingPrincipal', label: 'Capital pendiente del préstamo' },
-                { key: 'status', label: 'Estado' },
-              ]"
+              :columns="receivableColumns"
               :rows="receivablesPage.items"
               :row-key="(item) => `${item.loanId}-${item.installmentNumber}`"
               body-class="divide-y text-xs"
-              :row-class="''"
             >
-              <template #row="{ row: item }">
-                <td class="px-4 py-3">
-                  <span class="font-medium text-foreground">{{ item.customerName }}</span>
-                  <span class="block text-[11px] text-muted-foreground">
-                    {{ item.phone }} · {{ item.loanId }} · {{ item.productName }}
-                  </span>
-                </td>
-                <td class="px-4 py-3">N.º {{ item.installmentNumber }}</td>
-                <td class="px-4 py-3">{{ formatBusinessDate(item.dueDate) }}</td>
-                <td class="px-4 py-3">{{ item.daysLate > 0 ? `${item.daysLate} días` : '—' }}</td>
-                <td class="px-4 py-3 font-semibold"><MoneyText :amount="item.amount" /></td>
-                <td class="px-4 py-3"><MoneyText :amount="item.outstandingPrincipal" /></td>
-                <td class="px-4 py-3">
-                  <StatusBadge kind="receivable" :status="item.status" />
-                </td>
+              <template #cell-customer="{ row: item }">
+                <span class="font-medium text-foreground">{{ item.customerName }}</span>
+                <span class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+                  <a
+                    :href="`tel:${item.phone}`"
+                    class="inline-flex items-center gap-1 font-mono hover:text-primary hover:underline"
+                    title="Llamar"
+                  >
+                    <Phone class="size-3" />
+                    {{ item.phone }}
+                  </a>
+                  <span>·</span>
+                  <a
+                    :href="`https://wa.me/51${item.phone.replace(/\D/g, '')}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    title="Abrir WhatsApp"
+                  >
+                    <MessageCircle class="size-3" />
+                    WhatsApp
+                  </a>
+                  <span>·</span>
+                  <RouterLink
+                    :to="{ name: 'loan-detail', params: { id: item.loanId } }"
+                    class="font-mono hover:underline"
+                  >
+                    {{ item.loanId }}
+                  </RouterLink>
+                  <span>·</span>
+                  <span>{{ item.productName }}</span>
+                </span>
               </template>
             </TableGenerator>
           </div>
@@ -508,11 +426,8 @@ onMounted(() => {
                 variant="outline"
                 size="sm"
                 class="h-8"
-                :disabled="receivablesPage.page <= 1 || loading"
-                @click="
-                  receivablePageNumber = receivablesPage.page - 1;
-                  loadReceivables();
-                "
+                :disabled="receivablesPage.page <= 1 || receivableLoading"
+                @click="setReceivablePage(receivablePageNumber - 1)"
               >
                 <ChevronLeft class="size-4" />
               </Button>
@@ -521,11 +436,8 @@ onMounted(() => {
                 variant="outline"
                 size="sm"
                 class="h-8"
-                :disabled="receivablesPage.page >= receivablePages || loading"
-                @click="
-                  receivablePageNumber = receivablesPage.page + 1;
-                  loadReceivables();
-                "
+                :disabled="receivablesPage.page >= receivablePages || receivableLoading"
+                @click="setReceivablePage(receivablePageNumber + 1)"
               >
                 <ChevronRight class="size-4" />
               </Button>

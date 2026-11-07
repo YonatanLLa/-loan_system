@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { Building2, LoaderCircle, AlertTriangle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
-import type { CompanyBankAccount } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
 import { Button } from '@prestamos/ui/components/ui/button'
 import { Input } from '@prestamos/ui/components/ui/input'
@@ -16,7 +15,7 @@ import {
 } from '@prestamos/ui/components/ui/card'
 import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useTreasury } from '../composables/useTreasury'
 
 // FE-BO-27: Alta y configuración de cuentas bancarias de la Fintech (uso, moneda, activación).
 
@@ -29,6 +28,7 @@ const emit = defineEmits<{
   (e: 'saved'): void
 }>()
 
+const { createCompanyAccount } = useTreasury()
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
@@ -40,6 +40,23 @@ const form = ref({
   isDisbursement: true,
   isCollection: true,
 })
+
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) {
+      errorMsg.value = null
+      form.value = {
+        bankName: 'BCP',
+        cci: '',
+        accountNumberMasked: '',
+        currency: 'PEN',
+        isDisbursement: true,
+        isCollection: true,
+      }
+    }
+  },
+)
 
 async function onSubmit() {
   errorMsg.value = null
@@ -60,7 +77,7 @@ async function onSubmit() {
       isCollection: form.value.isCollection,
     }
 
-    await useApi().post('/treasury/bank-accounts', payload)
+    await createCompanyAccount(payload)
     toast.success('Cuenta corporativa registrada', {
       description: `La cuenta ${payload.bankName} (${payload.currency}) fue añadida al catálogo de tesorería.`,
     })

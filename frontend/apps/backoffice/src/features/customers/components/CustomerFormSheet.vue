@@ -16,7 +16,7 @@ import {
 } from '@prestamos/ui/components/ui/sheet'
 import { Alert, AlertDescription, AlertTitle } from '@prestamos/ui/components/ui/alert'
 
-import { useApi } from '@/app/api'
+import { useCustomers } from '../composables/useCustomers'
 
 // FE-BO-06 y FE-BO-07: Alta y edición de clientes con validación por tipo de documento y manejo de 409 duplicado.
 
@@ -30,6 +30,7 @@ const emit = defineEmits<{
   (e: 'saved', customer: Customer): void
 }>()
 
+const { saveCustomer } = useCustomers()
 const isEditing = computed(() => !!props.customerToEdit)
 const isSubmitting = ref(false)
 const duplicateDocError = ref<string | null>(null)
@@ -158,17 +159,14 @@ async function onSubmit() {
 
   try {
     if (isEditing.value && props.customerToEdit) {
-      const { data } = await useApi().put<Customer>(
-        `/customers/${props.customerToEdit.id}`,
-        form.value,
-      )
+      const data = await saveCustomer(form.value, props.customerToEdit.id)
       toast.success('Cliente actualizado', {
         description: `Los datos de ${data.fullName} se guardaron exitosamente.`,
       })
       emit('saved', data)
       emit('update:open', false)
     } else {
-      const { data } = await useApi().post<Customer>('/customers', form.value)
+      const data = await saveCustomer(form.value)
       toast.success('Cliente registrado', {
         description: `${data.fullName} ha sido dado de alta exitosamente.`,
       })

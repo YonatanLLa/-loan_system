@@ -4,8 +4,8 @@ using StackExchange.Redis;
 namespace LoanSystem.Common.Adapters.Http.Idempotency;
 
 /// <summary>
-/// Redis-backed store shared by every API instance. The in-progress marker is claimed with
-/// SET NX, so only one concurrent request per key can run.
+/// Almacén respaldado por Redis y compartido por todas las instancias de la API. La marca de
+/// "en curso" se reserva con SET NX, así que solo una petición concurrente por clave puede ejecutarse.
 /// </summary>
 public sealed class RedisIdempotencyStore : IIdempotencyStore
 {
@@ -22,7 +22,7 @@ public sealed class RedisIdempotencyStore : IIdempotencyStore
         var db = _redis.GetDatabase();
         var marker = Serialize(new StoredEntry(requestHash, null, null, null));
 
-        // Two attempts: the existing entry may expire or be released between SET NX and GET
+        // Dos intentos: la entrada existente puede expirar o liberarse entre el SET NX y el GET
         for (var attempt = 0; attempt < 2; attempt++)
         {
             if (await db.StringSetAsync(key, marker, inProgressTtl, When.NotExists))
@@ -64,6 +64,6 @@ public sealed class RedisIdempotencyStore : IIdempotencyStore
 
     private static string Serialize(StoredEntry entry) => JsonSerializer.Serialize(entry, SerializerOptions);
 
-    // StatusCode == null means "in progress"
+    // StatusCode == null significa "en curso"
     private sealed record StoredEntry(string RequestHash, int? StatusCode, string? ContentType, string? Body);
 }

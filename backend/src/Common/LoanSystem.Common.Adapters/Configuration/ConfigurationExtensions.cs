@@ -5,8 +5,8 @@ namespace LoanSystem.Common.Adapters.Configuration;
 public static class ConfigurationExtensions
 {
     /// <summary>
-    /// Reads a connection string and fails fast when it is missing. There is intentionally no
-    /// fallback in code: local values live in appsettings.Development.json or environment variables.
+    /// Lee una cadena de conexión y falla de inmediato si no existe. A propósito no hay
+    /// valor por defecto en código: los valores locales van en appsettings.Development.json o en variables de entorno.
     /// </summary>
     public static string GetRequiredConnectionString(this IConfiguration configuration, string name)
     {
@@ -21,7 +21,7 @@ public static class ConfigurationExtensions
         return value;
     }
 
-    /// <summary>Reads a configuration value and fails fast when it is missing.</summary>
+    /// <summary>Lee un valor de configuración y falla de inmediato si no existe.</summary>
     public static string GetRequiredValue(this IConfiguration configuration, string key)
     {
         var value = configuration[key];

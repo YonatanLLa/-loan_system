@@ -22,7 +22,7 @@
 ### ¿Qué se agrega aquí conforme crece el módulo?
 - En `Outbound/Authentication/`: Implementaciones concretas de `IJwtTokenGenerator` y `IPasswordHasher`.
 - En `Outbound/Persistence/`: Configuraciones EF Core (`IEntityTypeConfiguration<User>`, etc.) y `UserRepository`.
-- En `Inbound/Http/`: Endpoints de administración de usuarios protegidos con `.RequireAuthorization("ADMIN")`.
+- En `Inbound/Http/`: Endpoints de administración de usuarios protegidos con `.RequireAuthorization("ROLE_ADMIN")`.
 
 ---
 
@@ -31,4 +31,4 @@
 1. **Aislamiento de Credenciales y Tokens en el Esquema `security`:**
    Los hashes de contraseñas (`password_hash`), permisos y `refresh_tokens` son altamente sensibles. Al confinarlos en el esquema `security` bajo el control exclusivo de `SecurityDbContext`, ningún otro módulo de negocio (`Customers`, `Loans`, `Reports`, etc.) puede consultar ni exponer accidentalmente credenciales en sus consultas.
 2. **Integración Limpia con JWT + 6 Políticas RBAC en `WebApi`:**
-   `Security.Adapters` emite los claims estándar de rol que `LoanSystem.WebApi` valida en su middleware de autorización para las políticas `ADMIN`, `ANALYST`, `APPROVER`, `CASHIER`, `COLLECTOR` y `CUSTOMER`.
+   `Security.Adapters` emite los claims estándar de rol que `LoanSystem.WebApi` valida en su middleware de autorización para las políticas `ROLE_ADMIN`, `ROLE_ANALYST`, `ROLE_OPERATOR`, `ROLE_COLLECTOR`, `ROLE_AUDITOR` y `ROLE_CLIENT`.

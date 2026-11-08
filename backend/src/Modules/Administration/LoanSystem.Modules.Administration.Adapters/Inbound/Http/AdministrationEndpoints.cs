@@ -1,3 +1,4 @@
+using LoanSystem.Common.Core.Application;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -11,7 +12,8 @@ public static class AdministrationEndpoints
         var group = app.MapGroup("/api/administration")
             .WithTags("Administration");
 
-        group.MapGet("/ping", () => Results.Ok(new { Module = "Administration", Status = "Ready" }));
+        group.MapGet("/ping", () => Results.Ok(new { Module = "Administration", Status = "Ready" }))
+            .RequireAuthorization(SecurityPolicies.Admin);
 
         return app;
     }

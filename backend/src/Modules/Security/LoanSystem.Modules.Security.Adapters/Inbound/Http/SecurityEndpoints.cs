@@ -1,4 +1,5 @@
 using LoanSystem.Common.Adapters.Http;
+using LoanSystem.Common.Core.Application;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using Microsoft.AspNetCore.Builder;
@@ -14,7 +15,8 @@ public static class SecurityEndpoints
         var group = app.MapGroup("/api/security")
             .WithTags("Security");
 
-        group.MapGet("/ping", () => Results.Ok(new { Module = "Security", Status = "Ready" }));
+        group.MapGet("/ping", () => Results.Ok(new { Module = "Security", Status = "Ready" }))
+            .RequireAuthorization(SecurityPolicies.Admin);
 
         var auth = app.MapGroup("/api/auth")
             .WithTags("Security");

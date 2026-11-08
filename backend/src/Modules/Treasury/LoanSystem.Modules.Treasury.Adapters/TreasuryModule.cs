@@ -1,4 +1,5 @@
 using LoanSystem.Common.Adapters.Configuration;
+using LoanSystem.Common.Adapters.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,8 +16,9 @@ public static class TreasuryModule
     {
         var connectionString = configuration.GetRequiredConnectionString("Database");
 
-        services.AddDbContext<TreasuryDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddAuditLogging();
+        services.AddDbContext<TreasuryDbContext>((sp, options) =>
+            options.UseNpgsql(connectionString).UseAuditLog(sp));
         services.AddScoped<ITreasuryUnitOfWork>(sp => sp.GetRequiredService<TreasuryDbContext>());
         services.AddScoped<ITreasuryOutbox>(sp => sp.GetRequiredService<TreasuryDbContext>());
 

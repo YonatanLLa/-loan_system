@@ -1,4 +1,5 @@
 using LoanSystem.Common.Adapters.Configuration;
+using LoanSystem.Common.Adapters.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,8 +16,9 @@ public static class NotificationsModule
     {
         var connectionString = configuration.GetRequiredConnectionString("Database");
 
-        services.AddDbContext<NotificationsDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddAuditLogging();
+        services.AddDbContext<NotificationsDbContext>((sp, options) =>
+            options.UseNpgsql(connectionString).UseAuditLog(sp));
         services.AddScoped<INotificationsUnitOfWork>(sp => sp.GetRequiredService<NotificationsDbContext>());
         services.AddScoped<INotificationsOutbox>(sp => sp.GetRequiredService<NotificationsDbContext>());
 

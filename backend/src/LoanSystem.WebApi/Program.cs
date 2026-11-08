@@ -1,7 +1,9 @@
+using System.Net;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using LoanSystem.Common.Adapters.Clock;
@@ -43,6 +45,25 @@ builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUserProvider>();
 builder.Services.AddSingleton<IClock, SystemClock>();
+// El interceptor de auditoría (BE-SEC-07) lo registra cada módulo con AddAuditLogging()
+
+// IP real del cliente detrás de un proxy/balanceador (BE-SEC-07: user_ip de la auditoría).
+// Solo se confía en X-Forwarded-* si vienen de los proxies o redes configurados;
+// sin configuración se mantiene el valor por defecto del framework (solo loopback).
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+
+    foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    {
+        options.KnownProxies.Add(IPAddress.Parse(proxy));
+    }
+
+    foreach (var network in builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    }
+});
 
 // Soporte de Idempotency-Key: Redis si ConnectionStrings:Redis está configurado; en memoria en caso contrario
 var idempotencyUsesRedis = builder.Services.AddIdempotency(builder.Configuration);
@@ -105,6 +126,9 @@ if (!idempotencyUsesRedis)
     app.Logger.LogWarning(
         "ConnectionStrings:Redis is not configured: idempotency keys are stored in memory and are not shared between API instances.");
 }
+
+// Primero: el resto del pipeline (auditoría, logs) ve la IP real del cliente
+app.UseForwardedHeaders();
 
 app.UseExceptionHandler();
 

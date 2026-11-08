@@ -104,7 +104,9 @@ public static class Program
             "seeds/12_seed_data.sql",
             // New scripts are APPENDED: DbUp journals scripts by their ordered name (001_, 002_, ...),
             // so inserting in the middle would rename already-applied scripts.
-            "migrations/13_outbox_messages.sql"
+            "migrations/13_outbox_messages.sql",
+            "migrations/14_audit_logs_user_agent.sql",
+            "migrations/15_audit_logs_append_only.sql"
         };
 
         var list = new List<(string Name, string Path)>();

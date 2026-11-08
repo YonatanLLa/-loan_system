@@ -58,6 +58,36 @@ public static class SecurityEndpoints
         .WithName("GetCurrentUser")
         .WithSummary("Return the currently authenticated user's profile, role and effective permissions (BE-SEC-04)");
 
+        app.MapPost("/api/users/{id:guid}/suspend", async (Guid id, ISuspendUserUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new SuspendUserRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization(SecurityPolicies.Admin)
+        .WithTags("Security")
+        .WithName("SuspendUser")
+        .WithSummary("Suspend a user and immediately invalidate all their active refresh tokens (BE-SEC-06)");
+
+        app.MapPost("/api/users/{id:guid}/activate", async (Guid id, IActivateUserUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new ActivateUserRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization(SecurityPolicies.Admin)
+        .WithTags("Security")
+        .WithName("ActivateUser")
+        .WithSummary("Reactivate a suspended user account (BE-SEC-06)");
+
+        app.MapGet("/api/audit-logs", async ([AsParameters] AuditLogQuery query, IQueryAuditLogsUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(query, ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization(SecurityPolicies.Auditor)
+        .WithTags("Security")
+        .WithName("QueryAuditLogs")
+        .WithSummary("Query immutable audit log entries with filters and pagination (BE-SEC-08)");
+
         return app;
     }
 }

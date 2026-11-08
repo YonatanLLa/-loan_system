@@ -17,6 +17,7 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
     private readonly IClientInfoProvider _clientInfo;
     private readonly ISecurityUnitOfWork _unitOfWork;
     private readonly IClock _clock;
+    private readonly IAuditContext _audit;
     private readonly TimeSpan _refreshLifetime;
 
     public RefreshTokenUseCase(
@@ -26,6 +27,7 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
         IClientInfoProvider clientInfo,
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
+        IAuditContext audit,
         int refreshTokenDays)
     {
         _refreshTokens = refreshTokens;
@@ -34,6 +36,7 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
         _clientInfo = clientInfo;
         _unitOfWork = unitOfWork;
         _clock = clock;
+        _audit = audit;
         _refreshLifetime = TimeSpan.FromDays(refreshTokenDays);
     }
 
@@ -50,6 +53,9 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
         var user = await _users.FindByIdAsync(current.UserId, ct);
         if (user is null || !user.IsActive)
             return InvalidRefreshToken;
+
+        // Anonymous request: attribute any audited change to the token's owner (BE-SEC-07)
+        _audit.SetActor(user.Id);
 
         // Rotation: the presented token is revoked and replaced by a brand-new pair.
         current.Revoke(_clock);

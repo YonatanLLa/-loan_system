@@ -1,4 +1,5 @@
 using LoanSystem.Common.Adapters.Configuration;
+using LoanSystem.Common.Adapters.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,8 +14,9 @@ public static class LoansModule
     {
         var connectionString = configuration.GetRequiredConnectionString("Database");
 
-        services.AddDbContext<LoansDbContext>(options =>
-            options.UseNpgsql(connectionString));
+        services.AddAuditLogging();
+        services.AddDbContext<LoansDbContext>((sp, options) =>
+            options.UseNpgsql(connectionString).UseAuditLog(sp));
         services.AddScoped<ILoansUnitOfWork>(sp => sp.GetRequiredService<LoansDbContext>());
         services.AddScoped<ILoansOutbox>(sp => sp.GetRequiredService<LoansDbContext>());
 

@@ -20,3 +20,9 @@ public sealed record MeResponse(
     string Email,
     string Role,
     IReadOnlyCollection<string> Permissions);
+
+/// <summary>Request to suspend a user and invalidate all their sessions (BE-SEC-06).</summary>
+public sealed record SuspendUserRequest(Guid UserId);
+
+/// <summary>Request to reactivate a suspended user account (BE-SEC-06).</summary>
+public sealed record ActivateUserRequest(Guid UserId);

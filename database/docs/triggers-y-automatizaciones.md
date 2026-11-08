@@ -45,13 +45,13 @@ Todas las funciones residen en `database/functions/fn_updated_at.sql` y se carga
   RETURNS TRIGGER LANGUAGE plpgsql AS $$
   BEGIN
       RAISE EXCEPTION
-          'audit_logs es append-only: las operaciones UPDATE y DELETE están prohibidas.';
+          'audit_logs es append-only: las operaciones UPDATE, DELETE y TRUNCATE están prohibidas.';
   END;
   $$;
   ```
 - **Triggers asociados:**
-  - `tg_audit_log_no_update`: `BEFORE UPDATE ON audit_logs FOR EACH ROW`
-  - `tg_audit_log_no_delete`: `BEFORE DELETE ON audit_logs FOR EACH ROW`
+  - `tg_audit_logs_immutable`: `BEFORE UPDATE OR DELETE ON audit_logs FOR EACH ROW EXECUTE FUNCTION fn_audit_log_immutable()` (migración `15_audit_logs_append_only.sql`)
+  - `tg_audit_logs_immutable_truncate`: `BEFORE TRUNCATE ON audit_logs FOR EACH STATEMENT EXECUTE FUNCTION fn_audit_log_immutable()` (migración `15_audit_logs_append_only.sql`)
 
 ---
 

@@ -33,7 +33,7 @@ export const auditService = {
     if (filters.from) params.from = filters.from
     if (filters.to) params.to = filters.to
 
-    const { data } = await useApi().get<Page<AuditLogEntry>>('/audit', { params })
+    const { data } = await useApi().get<Page<AuditLogEntry>>('/audit-logs', { params })
     return data
   },
 }

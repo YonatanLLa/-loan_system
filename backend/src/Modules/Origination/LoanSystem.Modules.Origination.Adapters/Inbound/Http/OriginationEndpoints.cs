@@ -1,3 +1,4 @@
+using LoanSystem.Common.Core.Application;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -11,7 +12,8 @@ public static class OriginationEndpoints
         var group = app.MapGroup("/api/origination")
             .WithTags("Origination");
 
-        group.MapGet("/ping", () => Results.Ok(new { Module = "Origination", Status = "Ready" }));
+        group.MapGet("/ping", () => Results.Ok(new { Module = "Origination", Status = "Ready" }))
+            .RequireAuthorization(SecurityPolicies.Analyst);
 
         return app;
     }

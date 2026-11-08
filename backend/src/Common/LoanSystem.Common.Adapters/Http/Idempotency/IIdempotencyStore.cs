@@ -2,13 +2,13 @@ namespace LoanSystem.Common.Adapters.Http.Idempotency;
 
 public enum IdempotencyBeginStatus
 {
-    /// <summary>The key was free: the caller owns it and must Complete or Release it.</summary>
+    /// <summary>La clave estaba libre: quien llama pasa a ser su dueño y debe completarla (Complete) o liberarla (Release).</summary>
     Started,
-    /// <summary>Another request with the same key is still running.</summary>
+    /// <summary>Otra petición con la misma clave todavía se está ejecutando.</summary>
     InProgress,
-    /// <summary>A response is already stored for this key and request.</summary>
+    /// <summary>Ya hay una respuesta guardada para esta clave y esta petición.</summary>
     Completed,
-    /// <summary>The key was used with a different request body.</summary>
+    /// <summary>La clave ya se usó con un cuerpo de petición distinto.</summary>
     HashMismatch
 }
 
@@ -24,13 +24,13 @@ public sealed record IdempotencyBeginResult(IdempotencyBeginStatus Status, Cache
 
 public interface IIdempotencyStore
 {
-    /// <summary>Atomically claims the key with an in-progress marker that expires after <paramref name="inProgressTtl"/>.</summary>
+    /// <summary>Reserva la clave de forma atómica con una marca de "en curso" que expira tras <paramref name="inProgressTtl"/>.</summary>
     Task<IdempotencyBeginResult> TryBeginAsync(string key, string requestHash, TimeSpan inProgressTtl, CancellationToken ct = default);
 
-    /// <summary>Stores the final response for the key (replaces the in-progress marker).</summary>
+    /// <summary>Guarda la respuesta final de la clave (reemplaza la marca de "en curso").</summary>
     Task CompleteAsync(string key, string requestHash, CachedResponse response, TimeSpan ttl, CancellationToken ct = default);
 
-    /// <summary>Frees the key so the request can be retried (used on 5xx or exceptions).</summary>
+    /// <summary>Libera la clave para que la petición se pueda reintentar (se usa ante errores 5xx o excepciones).</summary>
     Task ReleaseAsync(string key, CancellationToken ct = default);
 }
 
@@ -41,9 +41,9 @@ public sealed class IdempotencyOptions
     public string HeaderName { get; set; } = "Idempotency-Key";
     public int MaxKeyLength { get; set; } = 255;
 
-    /// <summary>How long a completed response is replayed.</summary>
+    /// <summary>Tiempo durante el cual se reenvía una respuesta ya completada.</summary>
     public TimeSpan ResponseTtl { get; set; } = TimeSpan.FromHours(24);
 
-    /// <summary>How long a key stays locked while its first request runs (protects against crashed requests).</summary>
+    /// <summary>Tiempo que la clave queda bloqueada mientras se ejecuta su primera petición (protege ante peticiones que se cayeron).</summary>
     public TimeSpan InProgressTtl { get; set; } = TimeSpan.FromMinutes(2);
 }

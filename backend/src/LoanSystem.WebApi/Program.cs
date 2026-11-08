@@ -1,12 +1,14 @@
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using LoanSystem.Common.Adapters.Clock;
 using LoanSystem.Common.Adapters.Configuration;
 using LoanSystem.Common.Adapters.Http;
 using LoanSystem.Common.Adapters.Http.Idempotency;
+using LoanSystem.Common.Core.Application;
 using LoanSystem.Common.Core.Ports.Outbound;
 using LoanSystem.Modules.Security.Adapters;
 using LoanSystem.Modules.Security.Adapters.Inbound.Http;
@@ -35,18 +37,18 @@ using LoanSystem.Modules.Reports.Adapters.Inbound.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Core infrastructure services
+// Servicios base de infraestructura
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, CurrentUserProvider>();
 builder.Services.AddSingleton<IClock, SystemClock>();
 
-// Idempotency-Key support: Redis when ConnectionStrings:Redis is set, in-memory otherwise
+// Soporte de Idempotency-Key: Redis si ConnectionStrings:Redis está configurado; en memoria en caso contrario
 var idempotencyUsesRedis = builder.Services.AddIdempotency(builder.Configuration);
 
-// Authentication & Authorization (Roles)
-// The signing key has no code default: it must come from configuration (Development file, env var or secret store)
+// Autenticación y autorización (roles)
+// La clave de firma no tiene valor por defecto en código: debe venir de configuración (archivo de Development, variable de entorno o almacén de secretos)
 var jwtKey = builder.Configuration.GetRequiredValue("Jwt:Key");
 var jwtKeyBytes = Encoding.UTF8.GetBytes(jwtKey);
 if (jwtKeyBytes.Length < 32)
@@ -72,15 +74,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ROLE_ADMIN", p => p.RequireRole("ROLE_ADMIN"));
-    options.AddPolicy("ROLE_ANALYST", p => p.RequireRole("ROLE_ADMIN", "ROLE_ANALYST"));
-    options.AddPolicy("ROLE_OPERATOR", p => p.RequireRole("ROLE_ADMIN", "ROLE_OPERATOR"));
-    options.AddPolicy("ROLE_COLLECTOR", p => p.RequireRole("ROLE_ADMIN", "ROLE_COLLECTOR"));
-    options.AddPolicy("ROLE_AUDITOR", p => p.RequireRole("ROLE_ADMIN", "ROLE_AUDITOR"));
-    options.AddPolicy("ROLE_CLIENT", p => p.RequireRole("ROLE_CLIENT"));
+    options.AddPolicy(SecurityPolicies.Admin, p => p.RequireRole(SecurityPolicies.Admin));
+    options.AddPolicy(SecurityPolicies.Analyst, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Analyst));
+    options.AddPolicy(SecurityPolicies.Operator, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Operator));
+    options.AddPolicy(SecurityPolicies.Collector, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Collector));
+    options.AddPolicy(SecurityPolicies.Auditor, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Auditor));
+    options.AddPolicy(SecurityPolicies.Client, p => p.RequireRole(SecurityPolicies.Client));
+
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
 });
 
-// Register all 12 modules
+// Registro de los 12 módulos
 builder.Services.AddSecurityModule(builder.Configuration);
 builder.Services.AddCustomersModule(builder.Configuration);
 builder.Services.AddProductsModule(builder.Configuration);
@@ -107,7 +111,7 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// After authentication: idempotency keys are scoped to the authenticated user
+// Después de la autenticación: las claves de idempotencia se asocian al usuario autenticado
 app.UseMiddleware<IdempotencyMiddleware>();
 
 if (app.Environment.IsDevelopment())
@@ -126,9 +130,10 @@ app.MapGet("/health", () => Results.Ok(new
     Timestamp = DateTimeOffset.UtcNow,
     Service = "LoanSystem.WebApi"
 }))
-.WithTags("Health");
+.WithTags("Health")
+.AllowAnonymous();
 
-// Map endpoints for all 12 modules
+// Mapeo de endpoints de los 12 módulos
 app.MapSecurityEndpoints();
 app.MapCustomersEndpoints();
 app.MapProductsEndpoints();
@@ -144,5 +149,5 @@ app.MapReportsEndpoints();
 
 app.Run();
 
-// Required for WebApplicationFactory in integration tests
+// Necesario para WebApplicationFactory en los tests de integración
 public partial class Program { }

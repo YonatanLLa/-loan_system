@@ -1,3 +1,4 @@
+using LoanSystem.Common.Core.Application;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
@@ -11,7 +12,8 @@ public static class CollectionsEndpoints
         var group = app.MapGroup("/api/collections")
             .WithTags("Collections");
 
-        group.MapGet("/ping", () => Results.Ok(new { Module = "Collections", Status = "Ready" }));
+        group.MapGet("/ping", () => Results.Ok(new { Module = "Collections", Status = "Ready" }))
+            .RequireAuthorization(SecurityPolicies.Collector);
 
         return app;
     }

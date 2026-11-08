@@ -1,7 +1,7 @@
 # LoanSystem.Modules.Administration.Adapters
 
 ## 1. ¿Para qué sirve?
-`LoanSystem.Modules.Administration.Adapters` es la **Capa de Adaptadores (Entrada y Salida)** del módulo de Administración (`Administration`). Conecta el núcleo `LoanSystem.Modules.Administration.Core` con la API HTTP bajo `/api/v1/administration` (orientada principalmente al rol RBAC `ADMIN`) y con la base de datos PostgreSQL 17 en el esquema `admin`.
+`LoanSystem.Modules.Administration.Adapters` es la **Capa de Adaptadores (Entrada y Salida)** del módulo de Administración (`Administration`). Conecta el núcleo `LoanSystem.Modules.Administration.Core` con la API HTTP bajo `/api/v1/administration` (orientada principalmente al rol RBAC `ROLE_ADMIN`) y con la base de datos PostgreSQL 17 en el esquema `admin`.
 
 ---
 
@@ -22,7 +22,7 @@
   - Configura el esquema por defecto **`admin`** (`modelBuilder.HasDefaultSchema("admin")`), el cual aloja las tablas definidas en `database/migrations/01_admin_config.sql` (`system_parameters`, `branches`, `holidays`, `document_sequences`, `audit_log`).
 
 ### ¿Qué se agrega aquí conforme crece el módulo?
-- En `Inbound/Http/`: Endpoints protegidos con `.RequireAuthorization("ADMIN")` y soporte de `Idempotency-Key` para actualizar parámetros del sistema, dar de alta sucursales, gestionar el calendario de feriados y consultar el `audit_log`.
+- En `Inbound/Http/`: Endpoints protegidos con `.RequireAuthorization("ROLE_ADMIN")` y soporte de `Idempotency-Key` para actualizar parámetros del sistema, dar de alta sucursales, gestionar el calendario de feriados y consultar el `audit_log`.
 - En `Outbound/Persistence/`: Configuraciones `IEntityTypeConfiguration<T>` y repositorios concretos que implementen los puertos de `Administration.Core`.
 
 ---

@@ -90,6 +90,39 @@ public class UserLockoutTests
         user.LastLoginAt.ShouldBe(afterWindow.UtcNow);
     }
 
+    [Fact]
+    public void Suspend_SetsStatusToInactive()
+    {
+        var user = CreateActiveUser();
+
+        user.Suspend();
+
+        user.Status.ShouldBe(UserStatus.INACTIVE);
+        user.IsActive.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Activate_RestoresActiveStatusAndResetsLockoutCounters()
+    {
+        var user = CreateActiveUser();
+        var clock = new FakeClock();
+        for (var i = 0; i < 5; i++)
+        {
+            user.RegisterFailedLogin(clock, maxAttempts: 5, Window);
+        }
+        user.Suspend();
+        user.Status.ShouldBe(UserStatus.INACTIVE);
+        user.FailedLoginCount.ShouldBe((short)5);
+        user.LockedUntil.ShouldNotBeNull();
+
+        user.Activate();
+
+        user.Status.ShouldBe(UserStatus.ACTIVE);
+        user.IsActive.ShouldBeTrue();
+        user.FailedLoginCount.ShouldBe((short)0);
+        user.LockedUntil.ShouldBeNull();
+    }
+
     private sealed class FakeClock(DateTimeOffset? now = null) : IClock
     {
         public DateTimeOffset UtcNow { get; } = now ?? new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);

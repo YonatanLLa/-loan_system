@@ -23,7 +23,7 @@ CREATE OR REPLACE FUNCTION fn_audit_log_immutable()
 RETURNS TRIGGER LANGUAGE plpgsql AS $$
 BEGIN
     RAISE EXCEPTION
-        'audit_logs es append-only: las operaciones UPDATE y DELETE están prohibidas.';
+        'audit_logs es append-only: las operaciones UPDATE, DELETE y TRUNCATE están prohibidas.';
 END;
 $$;
 

@@ -17,6 +17,8 @@ public abstract class ModuleDbContext : DbContext, IUnitOfWork, IOutbox
 
     protected ModuleDbContext(DbContextOptions options) : base(options) { }
 
+    public DbSet<AuditLogRecord> AuditLogs => Set<AuditLogRecord>();
+
     public async Task<ITransactionScope> BeginTransactionAsync(CancellationToken ct = default)
     {
         var transaction = await Database.BeginTransactionAsync(ct);
@@ -45,5 +47,6 @@ public abstract class ModuleDbContext : DbContext, IUnitOfWork, IOutbox
     {
         base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
+        modelBuilder.ApplyConfiguration(new AuditLogRecordConfiguration());
     }
 }

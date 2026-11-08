@@ -65,6 +65,16 @@ internal sealed class User : AggregateRoot<Guid>
         LastLoginAt = clock.UtcNow;
     }
 
+    /// <summary>Suspends the user account, preventing further authentication and revoking active sessions (BE-SEC-06).</summary>
+    public void Suspend() => Status = UserStatus.INACTIVE;
+
+    /// <summary>Reactivates a suspended user account and resets lockout counters (BE-SEC-06).</summary>
+    public void Activate()
+    {
+        ResetFailedLogins();
+        Status = UserStatus.ACTIVE;
+    }
+
     /// <summary>Reconstitutes a user from known state. Used by tests and future seeding paths.</summary>
     internal static User Reconstitute(
         Guid id, string email, string passwordHash, string fullName, SecurityRole role, UserStatus status) =>

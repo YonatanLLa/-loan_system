@@ -41,6 +41,8 @@ BEGIN;
 \ir migrations/09_collections_notifications.sql
 \ir migrations/10_integrations_reconciliation.sql
 \ir migrations/13_outbox_messages.sql
+\ir migrations/14_audit_logs_user_agent.sql
+\ir migrations/15_audit_logs_append_only.sql
 
 -- ── PASO 4: Índices ──────────────────────────────────────────────────────────
 \echo '[4/5] Índices de rendimiento...'

@@ -41,6 +41,8 @@ internal sealed class SecurityDbContext : ModuleDbContext, ISecurityUnitOfWork, 
         modelBuilder.Entity<RefreshToken>(entity =>
         {
             entity.ToTable("refresh_tokens");
+            // High-volume technical rows (one per login/refresh): kept out of audit_logs (BE-SEC-07)
+            entity.ExcludeFromAudit();
             entity.HasKey(t => t.Id);
             entity.Property(t => t.Id).HasColumnName("id");
             entity.Property(t => t.UserId).HasColumnName("user_id");

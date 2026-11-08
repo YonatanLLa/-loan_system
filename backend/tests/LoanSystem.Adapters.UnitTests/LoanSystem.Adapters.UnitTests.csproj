@@ -10,9 +10,11 @@
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Shouldly" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Security\LoanSystem.Modules.Security.Adapters\LoanSystem.Modules.Security.Adapters.csproj" />
   </ItemGroup>
 </Project>

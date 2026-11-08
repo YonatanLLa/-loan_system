@@ -22,6 +22,8 @@ public class SecurityAuthUseCasesTests
     private readonly FakeClientInfoProvider _clientInfo = new();
     private readonly FakeUnitOfWork _unitOfWork = new();
     private readonly FakeCurrentUser _currentUser = new();
+    private readonly FakeStatusTracker _statusTracker = new();
+    private readonly FakeAuditContext _audit = new();
 
     private User AddActiveUser()
     {
@@ -32,16 +34,22 @@ public class SecurityAuthUseCasesTests
     }
 
     private LoginUseCase CreateLogin() =>
-        new(_users, _refreshTokens, _hasher, _jwt, _clientInfo, _unitOfWork, _clock, refreshTokenDays: 14);
+        new(_users, _refreshTokens, _hasher, _jwt, _clientInfo, _unitOfWork, _clock, _audit, refreshTokenDays: 14);
 
     private RefreshTokenUseCase CreateRefresh() =>
-        new(_refreshTokens, _users, _jwt, _clientInfo, _unitOfWork, _clock, refreshTokenDays: 14);
+        new(_refreshTokens, _users, _jwt, _clientInfo, _unitOfWork, _clock, _audit, refreshTokenDays: 14);
 
     private LogoutUseCase CreateLogout() =>
         new(_refreshTokens, _currentUser, _unitOfWork, _clock);
 
     private GetCurrentUserUseCase CreateGetMe() =>
         new(_currentUser, _users);
+
+    private SuspendUserUseCase CreateSuspend() =>
+        new(_users, _refreshTokens, _currentUser, _unitOfWork, _clock, _statusTracker, _audit);
+
+    private ActivateUserUseCase CreateActivate() =>
+        new(_users, _statusTracker, _unitOfWork, _audit);
 
     [Fact]
     public async Task Login_WithValidCredentials_ReturnsTokensAndPersists()
@@ -289,7 +297,242 @@ public class SecurityAuthUseCasesTests
         result.Error.Type.ShouldBe(ErrorType.Unauthorized);
     }
 
+    [Fact]
+    public async Task Suspend_SetsStatusToInactiveAndRevokesAllRefreshTokens()
+    {
+        var targetUser = AddActiveUser();
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        var (_, hash1) = RefreshTokenHasher.Create();
+        var (_, hash2) = RefreshTokenHasher.Create();
+        var token1 = RefreshToken.Issue(targetUser.Id, hash1, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        var token2 = RefreshToken.Issue(targetUser.Id, hash2, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(token1);
+        _refreshTokens.Seed(token2);
+
+        var result = await CreateSuspend().ExecuteAsync(new SuspendUserRequest(targetUser.Id));
+
+        result.IsSuccess.ShouldBeTrue();
+        targetUser.Status.ShouldBe(UserStatus.INACTIVE);
+        targetUser.IsActive.ShouldBeFalse();
+        token1.IsActive(_clock).ShouldBeFalse();
+        token2.IsActive(_clock).ShouldBeFalse();
+        _unitOfWork.SaveChangesCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Suspend_WithUnknownUser_ReturnsNotFound()
+    {
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        var result = await CreateSuspend().ExecuteAsync(new SuspendUserRequest(Guid.NewGuid()));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.NotFound);
+        result.Error.Code.ShouldBe("Security.UserNotFound");
+    }
+
+    [Fact]
+    public async Task Suspend_Self_ReturnsConflict()
+    {
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        var result = await CreateSuspend().ExecuteAsync(new SuspendUserRequest(admin.Id));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Conflict);
+        result.Error.Code.ShouldBe("Security.CannotSuspendSelf");
+    }
+
+    [Fact]
+    public async Task Login_WithSuspendedUser_ReturnsForbidden()
+    {
+        var user = AddActiveUser();
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        await CreateSuspend().ExecuteAsync(new SuspendUserRequest(user.Id));
+
+        var result = await CreateLogin().ExecuteAsync(new LoginRequest(Email, Password));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Forbidden);
+        result.Error.Code.ShouldBe("Security.UserNotActive");
+    }
+
+    [Fact]
+    public async Task Refresh_WithSuspendedUserToken_ReturnsUnauthorized()
+    {
+        var user = AddActiveUser();
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        var (raw, hash) = RefreshTokenHasher.Create();
+        var token = RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(token);
+
+        await CreateSuspend().ExecuteAsync(new SuspendUserRequest(user.Id));
+
+        var result = await CreateRefresh().ExecuteAsync(new RefreshRequest(raw));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        result.Error.Code.ShouldBe("Security.InvalidRefreshToken");
+    }
+
+    [Fact]
+    public async Task GetCurrentUser_WithSuspendedUser_ReturnsForbidden()
+    {
+        var user = AddActiveUser();
+        _currentUser.Authenticate(user);
+
+        user.Suspend();
+
+        var result = await CreateGetMe().ExecuteAsync();
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Forbidden);
+        result.Error.Code.ShouldBe("Security.UserNotActive");
+    }
+
+    [Fact]
+    public async Task SuspendUser_CallsStatusTrackerInvalidateUser()
+    {
+        var user = AddActiveUser();
+        var admin = User.Reconstitute(
+            Guid.NewGuid(), "admin@loan.test", _hasher.Hash(Password), "Admin", SecurityRole.ROLE_ADMIN, UserStatus.ACTIVE);
+        _users.Add(admin);
+        _currentUser.Authenticate(admin);
+
+        var result = await CreateSuspend().ExecuteAsync(new SuspendUserRequest(user.Id));
+
+        result.IsSuccess.ShouldBeTrue();
+        _statusTracker.InvalidatedUsers.ShouldContain(user.Id);
+    }
+
+    [Fact]
+    public async Task ActivateUser_WithValidUser_RestoresActiveStatusAndCallsTracker()
+    {
+        var user = AddActiveUser();
+        user.Suspend();
+        user.Status.ShouldBe(UserStatus.INACTIVE);
+
+        var result = await CreateActivate().ExecuteAsync(new ActivateUserRequest(user.Id));
+
+        result.IsSuccess.ShouldBeTrue();
+        user.Status.ShouldBe(UserStatus.ACTIVE);
+        user.IsActive.ShouldBeTrue();
+        _statusTracker.ActivatedUsers.ShouldContain(user.Id);
+        _unitOfWork.SaveChangesCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task ActivateUser_WithEmptyGuid_ReturnsValidation()
+    {
+        var result = await CreateActivate().ExecuteAsync(new ActivateUserRequest(Guid.Empty));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Code.ShouldBe("Security.InvalidUserId");
+    }
+
+    [Fact]
+    public async Task ActivateUser_WithNonExistentUser_ReturnsNotFound()
+    {
+        var result = await CreateActivate().ExecuteAsync(new ActivateUserRequest(Guid.NewGuid()));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.NotFound);
+        result.Error.Code.ShouldBe("Security.UserNotFound");
+    }
+
     // ----- Fakes -------------------------------------------------------------
+
+    [Fact]
+    public async Task Login_Success_SetsLoginActionAndActor()
+    {
+        var user = AddActiveUser();
+
+        await CreateLogin().ExecuteAsync(new LoginRequest(Email, Password));
+
+        _audit.Action.ShouldBe("LOGIN");
+        _audit.ActorId.ShouldBe(user.Id);
+    }
+
+    [Fact]
+    public async Task Login_WrongPassword_SetsLoginFailedWithoutActor()
+    {
+        AddActiveUser();
+
+        await CreateLogin().ExecuteAsync(new LoginRequest(Email, "wrong-password"));
+
+        _audit.Action.ShouldBe("LOGIN_FAILED");
+        _audit.ActorId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Refresh_SetsActorToTokenOwner()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        _refreshTokens.Seed(RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null));
+
+        var result = await CreateRefresh().ExecuteAsync(new RefreshRequest(raw));
+
+        result.IsSuccess.ShouldBeTrue();
+        _audit.ActorId.ShouldBe(user.Id);
+    }
+
+    [Fact]
+    public async Task Suspend_SetsSuspendAuditAction()
+    {
+        var target = AddActiveUser();
+
+        await CreateSuspend().ExecuteAsync(new SuspendUserRequest(target.Id));
+
+        _audit.Action.ShouldBe("SUSPEND");
+    }
+
+    [Fact]
+    public async Task Activate_SetsActivateAuditAction()
+    {
+        var target = AddActiveUser();
+        target.Suspend();
+
+        await CreateActivate().ExecuteAsync(new ActivateUserRequest(target.Id));
+
+        _audit.Action.ShouldBe("ACTIVATE");
+    }
+
+    private sealed class FakeAuditContext : IAuditContext
+    {
+        public string? Action { get; private set; }
+        public Guid? ActorId { get; private set; }
+        public void SetAction(string action) => Action = action;
+        public void SetActor(Guid userId) => ActorId = userId;
+    }
+
+    private sealed class FakeStatusTracker : IUserStatusTracker
+    {
+        public List<Guid> InvalidatedUsers { get; } = [];
+        public List<Guid> ActivatedUsers { get; } = [];
+
+        public void InvalidateUser(Guid userId) => InvalidatedUsers.Add(userId);
+        public void ActivateUser(Guid userId) => ActivatedUsers.Add(userId);
+    }
 
     private sealed class FakeClock(DateTimeOffset? now = null) : IClock
     {

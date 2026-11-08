@@ -40,6 +40,7 @@ internal sealed class LoginUseCase : ILoginUseCase
     private readonly IClientInfoProvider _clientInfo;
     private readonly ISecurityUnitOfWork _unitOfWork;
     private readonly IClock _clock;
+    private readonly IAuditContext _audit;
     private readonly TimeSpan _refreshLifetime;
     private readonly int _maxFailedAttempts;
     private readonly TimeSpan _lockWindow;
@@ -52,6 +53,7 @@ internal sealed class LoginUseCase : ILoginUseCase
         IClientInfoProvider clientInfo,
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
+        IAuditContext audit,
         int refreshTokenDays,
         int maxFailedAttempts = DefaultMaxFailedAttempts,
         int lockWindowMinutes = DefaultLockWindowMinutes)
@@ -63,6 +65,7 @@ internal sealed class LoginUseCase : ILoginUseCase
         _clientInfo = clientInfo;
         _unitOfWork = unitOfWork;
         _clock = clock;
+        _audit = audit;
         _refreshLifetime = TimeSpan.FromDays(refreshTokenDays);
         _maxFailedAttempts = maxFailedAttempts;
         _lockWindow = TimeSpan.FromMinutes(lockWindowMinutes);
@@ -82,6 +85,8 @@ internal sealed class LoginUseCase : ILoginUseCase
 
         if (!_passwordHasher.Verify(request.Password, user.PasswordHash))
         {
+            // Sin actor: quien falla la contraseña no está identificado (BE-SEC-07)
+            _audit.SetAction("LOGIN_FAILED");
             var isNowLocked = user.RegisterFailedLogin(_clock, _maxFailedAttempts, _lockWindow);
             await _unitOfWork.SaveChangesAsync(ct);
             return isNowLocked ? AccountLocked : InvalidCredentials;
@@ -92,6 +97,9 @@ internal sealed class LoginUseCase : ILoginUseCase
 
         // TODO(auth-hardening) #3: re-hashear la contraseña si el WorkFactor cambió.
         user.RecordSuccessfulLogin(_clock);
+        // La petición es anónima: se atribuye el cambio al usuario que inicia sesión (BE-SEC-07)
+        _audit.SetAction("LOGIN");
+        _audit.SetActor(user.Id);
         var tokens = TokenIssuer.Issue(user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime);
 
         await _unitOfWork.SaveChangesAsync(ct);

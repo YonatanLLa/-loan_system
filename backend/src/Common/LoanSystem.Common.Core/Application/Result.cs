@@ -22,6 +22,8 @@ public class Result
 
     public static Result<TValue> Success<TValue>(TValue value) => new(value, true, Error.None);
     public static Result<TValue> Failure<TValue>(Error error) => new(default, false, error);
+
+    public static implicit operator Result(Error error) => Failure(error);
 }
 
 public class Result<TValue> : Result
@@ -38,8 +40,12 @@ public class Result<TValue> : Result
         ? _value!
         : throw new InvalidOperationException("The value of a failure result cannot be accessed.");
 
-    public static implicit operator Result<TValue>(TValue? value) =>
-        value is not null ? Success(value) : Failure<TValue>(Error.NullValue);
+    // A null value here is a programming error, not a business failure:
+    // return an explicit Error (e.g. Error.NotFound) instead of relying on null.
+    public static implicit operator Result<TValue>(TValue value) =>
+        value is not null
+            ? Success(value)
+            : throw new ArgumentNullException(nameof(value), "Cannot create a successful result from a null value. Return an explicit Error instead.");
 
     public static implicit operator Result<TValue>(Error error) => Failure<TValue>(error);
 }

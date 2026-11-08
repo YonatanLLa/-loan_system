@@ -64,6 +64,10 @@ public static class SecurityModule
             sp.GetRequiredService<IClock>(),
             refreshTokenDays));
 
+        // Use cases (BE-SEC-04)
+        services.AddScoped<ILogoutUseCase, LogoutUseCase>();
+        services.AddScoped<IGetCurrentUserUseCase, GetCurrentUserUseCase>();
+
         return services;
     }
 }

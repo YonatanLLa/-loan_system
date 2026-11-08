@@ -37,6 +37,25 @@ public static class SecurityEndpoints
         .WithName("RefreshToken")
         .WithSummary("Rotate a refresh token: revokes the one presented and issues a new token pair (BE-SEC-01)");
 
+        auth.MapPost("/logout", async (LogoutRequest? request, ILogoutUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(request ?? new LogoutRequest(), ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization()
+        .WithName("Logout")
+        .WithSummary("Revoke the refresh token or all active sessions of the authenticated user (BE-SEC-04)");
+
+        app.MapGet("/api/me", async (IGetCurrentUserUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization()
+        .WithTags("Security")
+        .WithName("GetCurrentUser")
+        .WithSummary("Return the currently authenticated user's profile, role and effective permissions (BE-SEC-04)");
+
         return app;
     }
 }

@@ -35,6 +35,7 @@ public static class ProblemDetailsResultMapper
             ErrorType.Unauthorized => StatusCodes.Status401Unauthorized,
             ErrorType.Forbidden => StatusCodes.Status403Forbidden,
             ErrorType.Unprocessable => StatusCodes.Status422UnprocessableEntity,
+            ErrorType.Locked => StatusCodes.Status423Locked,
             _ => StatusCodes.Status500InternalServerError
         };
 

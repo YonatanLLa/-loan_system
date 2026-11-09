@@ -188,6 +188,18 @@ const handleConfirmRefund = async () => {
             >
               KYC Verificado
             </Badge>
+            <Badge
+              v-else-if="profile?.kycStatus === 'PENDING'"
+              class="bg-amber-100 text-amber-800"
+            >
+              KYC Pendiente
+            </Badge>
+            <Badge
+              v-else-if="profile?.kycStatus === 'REJECTED'"
+              class="bg-rose-100 text-rose-800"
+            >
+              KYC Rechazado
+            </Badge>
           </div>
           <CardDescription>Información registrada en tu onboarding.</CardDescription>
         </CardHeader>
@@ -294,6 +306,9 @@ const handleConfirmRefund = async () => {
                     </Badge>
                     <Badge v-if="acc.isVerified" variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
                       Verificada
+                    </Badge>
+                    <Badge v-else variant="outline" class="border-amber-200 bg-amber-50 text-amber-700 text-[10px]">
+                      Pendiente de Verificación
                     </Badge>
                   </div>
                   <p class="text-slate-600 font-mono text-[11px]">

@@ -7,9 +7,10 @@ import type {
   NotificationPreferences,
   PartialPrepaymentSimulation,
   RefundRequest,
+  SimulateRequest,
 } from '@prestamos/api-client'
 
-import { today } from '../dates'
+import { addDays, today } from '../dates'
 import { db, nextId, nowIso, recordAudit } from '../db'
 import {
   activeInstallments,
@@ -21,8 +22,9 @@ import {
   simulateLoan,
   toInstallmentDto,
   toLoanDto,
+  toPaymentDto,
 } from '../domain'
-import { notFound, pdfResponse, problem, readJson, secured } from '../http-utils'
+import { idempotent, notFound, pdfResponse, problem, readJson, secured } from '../http-utils'
 import { fromCents, sum, toCents } from '../money'
 import { buildSchedule, periodRate } from '../schedule'
 import { createLoanRecord } from '../seed'

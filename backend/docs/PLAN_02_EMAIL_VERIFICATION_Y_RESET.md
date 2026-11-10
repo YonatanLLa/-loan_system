@@ -147,7 +147,7 @@ public sealed record ResendVerificationRequest(string Email);
 
 ### Adapters / Outbound/Persistence
 - **`AccountTokenRepository.cs`** (EF Core sobre `SecurityDbContext`).
-- **`SecurityDbContext.cs`** (editar): `DbSet<AccountToken>`, `HasPostgresEnum<AccountTokenPurpose>("public","account_token_purpose", EnumNameTranslator)`, mapeo de la tabla `account_tokens` (columnas snake_case) y las nuevas columnas de `users` (`email_verified`, `email_verified_at`).
+- **`SecurityDbContext.cs`** (editar): `DbSet<AccountToken>`, `HasPostgresEnum<AccountTokenPurpose>("public","account_token_purpose", EnumNameTranslator)`, mapeo de la tabla `account_tokens` (columnas snake_case; todo secreto que el interceptor no reconozca por nombre se marca con `.IsAuditSensitive()`) y las nuevas columnas de `users` (`email_verified`, `email_verified_at`).
 - **`SecurityModule.cs`** (editar): `npgsql.MapEnum<AccountTokenPurpose>("account_token_purpose","public", ...)`.
 
 ### Adapters / Inbound/Http (`SecurityEndpoints.cs`, editar)

@@ -11,6 +11,7 @@ namespace LoanSystem.Common.Adapters.Persistence;
 public static class AuditLogExtensions
 {
     internal const string ExcludedAnnotation = "LoanSystem:Audit:Excluded";
+    internal const string SensitiveAnnotation = "LoanSystem:Audit:Sensitive";
 
     /// <summary>
     /// Registers the audit interceptor and the per-request <see cref="IAuditContext"/>.
@@ -40,4 +41,17 @@ public static class AuditLogExtensions
 
     internal static bool IsExcludedFromAudit(this IReadOnlyEntityType entityType) =>
         entityType.FindAnnotation(ExcludedAnnotation)?.Value is true;
+
+    /// <summary>
+    /// Marks a property whose value must never reach the audit trail: it is logged as [REDACTED].
+    /// Use it for secrets whose name the interceptor's naming rules would not catch (e.g. InvitationCode, ApiKey).
+    /// </summary>
+    public static PropertyBuilder<TProperty> IsAuditSensitive<TProperty>(this PropertyBuilder<TProperty> builder)
+    {
+        builder.HasAnnotation(SensitiveAnnotation, true);
+        return builder;
+    }
+
+    internal static bool IsAuditSensitive(this IReadOnlyProperty property) =>
+        property.FindAnnotation(SensitiveAnnotation)?.Value is true;
 }

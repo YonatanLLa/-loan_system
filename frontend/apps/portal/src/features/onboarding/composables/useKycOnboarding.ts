@@ -137,7 +137,19 @@ export function useKycOnboarding() {
     }
   }
 
+  const userKycStatus = computed(() => session.user?.kycStatus || 'NOT_SUBMITTED')
+
+  function retryKyc() {
+    dniFront.value = null
+    dniBack.value = null
+    selfie.value = null
+    currentStep.value = 1
+    session.updateKycStatus('NOT_SUBMITTED')
+  }
+
   return {
+    userKycStatus,
+    retryKyc,
     currentStep,
     isBusy,
     errorMessage,

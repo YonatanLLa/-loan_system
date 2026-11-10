@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import {
   AlertCircle,
   ArrowRight,
@@ -820,6 +820,13 @@ const paymentMethods: {
                 <Wallet class="mr-2 h-5 w-5" />
                 <span>Pagar Liquidación Total (S/ {{ quote.totalToPay }})</span>
               </Button>
+
+              <RouterLink
+                :to="{ path: '/prestamos', query: { loanId: selectedLoanId } }"
+                class="text-xs text-primary hover:underline text-center block pt-1 font-medium"
+              >
+                Consultar Estado de Cuenta Oficial y Movimientos Históricos →
+              </RouterLink>
             </div>
           </div>
         </CardContent>

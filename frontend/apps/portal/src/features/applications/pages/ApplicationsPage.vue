@@ -7,6 +7,7 @@ import {
   Clock,
   FileCheck2,
   FilePlus,
+  Info,
   ShieldAlert,
   Sparkles,
 } from '@lucide/vue'
@@ -179,6 +180,20 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- Información sobre avances o datos complementarios requeridos (Requisito 7) -->
+          <div
+            v-if="app.decisionNotes && app.status !== 'RECHAZADO'"
+            class="p-3.5 rounded-xl border border-amber-300 bg-amber-50/70 text-xs text-amber-950 space-y-1.5"
+          >
+            <div class="flex items-center gap-2 font-bold text-amber-900">
+              <Info class="size-4 text-amber-600" />
+              <span>Avance de Evaluación / Datos Requeridos</span>
+            </div>
+            <p class="text-[11px] text-amber-900 leading-relaxed">
+              {{ app.decisionNotes }}
+            </p>
           </div>
 
           <!-- Acciones según estado -->

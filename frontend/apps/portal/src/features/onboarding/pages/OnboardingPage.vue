@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { RouterLink } from 'vue-router'
 import {
   AlertCircle,
   ArrowLeft,
@@ -6,9 +7,12 @@ import {
   Building2,
   Camera,
   CheckCircle2,
+  Clock,
   FileCheck2,
+  FilePlus,
   IdCard,
   LoaderCircle,
+  RotateCcw,
   Smartphone,
   Sparkles,
   UserCheck,
@@ -33,6 +37,8 @@ import { useKycOnboarding } from '../composables'
 // FE-CP-03 a FE-CP-05: Expediente KYC móvil, consentimientos legales y cuenta de desembolso.
 
 const {
+  userKycStatus,
+  retryKyc,
   currentStep,
   isBusy,
   errorMessage,
@@ -72,6 +78,85 @@ const PERU_BANKS = [
 
 <template>
   <div class="space-y-4 py-2">
+    <!-- ESTADO: IDENTIDAD VERIFICADA / APROBADA (Requisito 2) -->
+    <Card v-if="userKycStatus === 'VERIFIED'" class="shadow-md border-success/30 bg-success/5 text-center p-6 space-y-4">
+      <div class="mx-auto size-14 rounded-full bg-success/20 flex items-center justify-center text-success">
+        <CheckCircle2 class="size-8" />
+      </div>
+      <div class="space-y-1">
+        <Badge class="bg-emerald-100 text-emerald-800 font-semibold mb-1">
+          KYC Verificado / Aprobado
+        </Badge>
+        <h2 class="text-lg font-bold text-foreground">Identidad Verificada Exitosamente</h2>
+        <p class="text-xs text-muted-foreground max-w-sm mx-auto">
+          Tus fotografías de DNI por ambos lados y prueba de vida biométrica han sido aprobadas conforme a la Ley N° 29733. Tu cuenta está habilitada para solicitar créditos.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2 max-w-xs mx-auto">
+        <Button as-child class="h-9 text-xs font-semibold">
+          <RouterLink to="/solicitar">
+            <FilePlus class="size-3.5 mr-1.5" />
+            Solicitar Mi Préstamo
+          </RouterLink>
+        </Button>
+        <Button as-child variant="outline" class="h-9 text-xs">
+          <RouterLink to="/inicio">
+            Ir a Inicio
+          </RouterLink>
+        </Button>
+      </div>
+    </Card>
+
+    <!-- ESTADO: IDENTIDAD EN EVALUACIÓN / PENDIENTE (Requisito 2) -->
+    <Card v-else-if="userKycStatus === 'PENDING'" class="shadow-md border-amber-200 bg-amber-50/50 text-center p-6 space-y-4">
+      <div class="mx-auto size-14 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+        <Clock class="size-8 animate-pulse" />
+      </div>
+      <div class="space-y-1">
+        <Badge class="bg-amber-100 text-amber-800 font-semibold mb-1">
+          KYC en Evaluación
+        </Badge>
+        <h2 class="text-lg font-bold text-amber-950">Verificación de Identidad en Proceso</h2>
+        <p class="text-xs text-amber-900 max-w-sm mx-auto">
+          Hemos recibido tus fotografías de DNI y selfie biométrica. Nuestro equipo de cumplimiento se encuentra validando tu expediente contra RENIEC. El resultado se reflejará en breve.
+        </p>
+      </div>
+
+      <div class="flex flex-col sm:flex-row gap-2 justify-center pt-2 max-w-xs mx-auto">
+        <Button as-child variant="outline" class="h-9 text-xs">
+          <RouterLink to="/inicio">
+            Ir a Mi Inicio
+          </RouterLink>
+        </Button>
+      </div>
+    </Card>
+
+    <!-- ESTADO: IDENTIDAD RECHAZADA (Requisito 2) -->
+    <Card v-else-if="userKycStatus === 'REJECTED'" class="shadow-md border-rose-200 bg-rose-50/50 text-center p-6 space-y-4">
+      <div class="mx-auto size-14 rounded-full bg-rose-100 flex items-center justify-center text-rose-600">
+        <AlertCircle class="size-8" />
+      </div>
+      <div class="space-y-1">
+        <Badge class="bg-rose-100 text-rose-800 font-semibold mb-1">
+          KYC Rechazado
+        </Badge>
+        <h2 class="text-lg font-bold text-rose-950">Verificación de Identidad No Aprobada</h2>
+        <p class="text-xs text-rose-900 max-w-sm mx-auto">
+          No pudimos verificar la nitidez o correspondencia de las fotos de tu documento. Por favor, asegúrate de que las fotos no tengan reflejos y tu rostro esté bien iluminado.
+        </p>
+      </div>
+
+      <div class="pt-2">
+        <Button type="button" class="h-9 text-xs font-semibold" @click="retryKyc">
+          <RotateCcw class="size-3.5 mr-1.5" />
+          Volver a Tomar Fotos
+        </Button>
+      </div>
+    </Card>
+
+    <!-- FORMULARIO SECUENCIAL DE 4 PASOS -->
+    <template v-else>
     <!-- Header y Stepper Móvil -->
     <div class="text-center space-y-1">
       <Badge variant="outline" class="font-mono text-[10px] px-2 py-0.5 border-primary/40 text-primary">
@@ -466,5 +551,6 @@ const PERU_BANKS = [
         Finalizar Verificación
       </Button>
     </div>
+    </template>
   </div>
 </template>

@@ -1,14 +1,21 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import {
+  AlertCircle,
   Calendar,
+  Clock,
   Coins,
+  FileText,
+  LoaderCircle,
+  Printer,
   Receipt,
   Wallet,
 } from '@lucide/vue'
 
+import type { AccountStatement } from '@prestamos/api-client'
 import { MoneyText, StatusBadge } from '@prestamos/ui'
+import { Alert, AlertDescription } from '@prestamos/ui/components/ui/alert'
 import { Badge } from '@prestamos/ui/components/ui/badge'
 import { Button } from '@prestamos/ui/components/ui/button'
 import {
@@ -19,14 +26,41 @@ import {
   CardTitle,
 } from '@prestamos/ui/components/ui/card'
 import { Skeleton } from '@prestamos/ui/components/ui/skeleton'
-import { formatBusinessDate } from '@prestamos/utils'
+import { formatBusinessDate, formatInstant } from '@prestamos/utils'
 
 import { useClientLoans, useLoanSchedule } from '../composables'
+import { loansService } from '../services'
 
 // FE-CP-11: Cronograma con colores (verde pagada, amarillo próxima, rojo vencida, azul parcial).
 // FE-CP-15 y FE-CP-16: Enlaces a estado de cuenta y cotización de prepago total.
 
 const route = useRoute()
+
+const isStatementModalOpen = ref(false)
+const statement = ref<AccountStatement | null>(null)
+const isStatementLoading = ref(false)
+const statementError = ref<string | null>(null)
+
+async function openStatement(loanId: string) {
+  isStatementModalOpen.value = true
+  isStatementLoading.value = true
+  statementError.value = null
+  try {
+    statement.value = await loansService.fetchLoanStatement(loanId)
+  } catch (err: any) {
+    statementError.value = err?.detail || 'No se pudo cargar el estado de cuenta.'
+  } finally {
+    isStatementLoading.value = false
+  }
+}
+
+function printStatement() {
+  try {
+    window.print?.()
+  } catch {
+    // Ignorado en entornos sin soporte de print
+  }
+}
 const {
   loans,
   selectedLoanId,
@@ -120,6 +154,19 @@ onMounted(async () => {
 
     <!-- Detalle del Préstamo y Cronograma Semaforizado -->
     <template v-else-if="activeLoan">
+      <!-- Estado de Desembolso en Trámite (Requisito 9) -->
+      <Card v-if="activeLoan.status === 'PENDIENTE_DESEMBOLSO'" class="border-primary/40 bg-primary/5 shadow-sm">
+        <CardContent class="p-4 flex items-start gap-3 text-xs">
+          <Clock class="size-5 text-primary shrink-0 mt-0.5 animate-pulse" />
+          <div class="space-y-1">
+            <span class="font-bold text-foreground block">Desembolso en Trámite</span>
+            <p class="text-muted-foreground leading-relaxed">
+              Tu contrato ha sido firmado exitosamente. La transferencia interbancaria hacia tu cuenta de desembolso registrada está en proceso de ejecución y confirmación.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Tarjeta Resumen del Crédito -->
       <Card class="shadow-md border-border">
         <CardContent class="p-4 space-y-3 text-xs">
@@ -212,6 +259,16 @@ onMounted(async () => {
                 <Coins class="size-3.5 mr-1.5" />
                 Prepago Total (FE-CP-16)
               </RouterLink>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              class="h-8 text-xs flex-1"
+              @click="openStatement(activeLoan.id)"
+            >
+              <FileText class="size-3.5 mr-1.5" />
+              Estado de Cuenta (FE-CP-15)
             </Button>
           </div>
         </CardContent>
@@ -306,5 +363,141 @@ onMounted(async () => {
         </CardContent>
       </Card>
     </template>
+
+    <!-- Modal de Estado de Cuenta Oficial (FE-CP-15 / Requisito 12) -->
+    <div
+      v-if="isStatementModalOpen"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs"
+    >
+      <Card class="w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <CardHeader class="pb-3 border-b bg-muted/10 shrink-0">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2 text-primary">
+              <FileText class="size-5" />
+              <div>
+                <CardTitle class="text-base font-bold">Estado de Cuenta Oficial</CardTitle>
+                <CardDescription class="text-xs">
+                  Resumen de movimientos, amortizaciones y saldo final conforme a normativa SBS.
+                </CardDescription>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" class="h-8 w-8 p-0" @click="isStatementModalOpen = false">
+              ✕
+            </Button>
+          </div>
+        </CardHeader>
+
+        <CardContent class="overflow-y-auto space-y-4 p-4 text-xs">
+          <!-- Loading -->
+          <div v-if="isStatementLoading" class="py-8 text-center space-y-2">
+            <LoaderCircle class="size-6 animate-spin mx-auto text-primary" />
+            <span class="text-muted-foreground block text-xs">Cargando estado de cuenta...</span>
+          </div>
+
+          <!-- Error -->
+          <Alert v-else-if="statementError" variant="destructive">
+            <AlertCircle class="size-4" />
+            <AlertDescription class="text-xs">{{ statementError }}</AlertDescription>
+          </Alert>
+
+          <!-- Datos del Estado de Cuenta -->
+          <div v-else-if="statement" class="space-y-4">
+            <!-- Encabezado Financiero -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center p-3 rounded-lg border bg-muted/10">
+              <div>
+                <span class="text-[10px] text-muted-foreground block">Titular:</span>
+                <span class="font-bold text-foreground text-xs">{{ statement.customerName }}</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-muted-foreground block">Préstamo:</span>
+                <span class="font-mono font-bold text-primary text-xs">#{{ statement.loanId }}</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-muted-foreground block">TEA Oficial:</span>
+                <span class="font-mono font-bold text-foreground text-xs">{{ (Number(statement.annualRate) * 100).toFixed(2) }}%</span>
+              </div>
+              <div>
+                <span class="text-[10px] text-muted-foreground block">Plazo:</span>
+                <span class="font-bold text-foreground text-xs">{{ statement.term }} meses</span>
+              </div>
+            </div>
+
+            <!-- Balances -->
+            <div class="grid grid-cols-3 gap-2 text-center">
+              <div class="p-3 rounded-xl border bg-background">
+                <span class="text-[10px] text-muted-foreground block">Monto Desembolsado</span>
+                <span class="text-base font-bold font-mono text-foreground"><MoneyText :amount="statement.principal" /></span>
+              </div>
+              <div class="p-3 rounded-xl border bg-success/10 border-success/30">
+                <span class="text-[10px] text-success font-semibold block">Total Pagado a la Fecha</span>
+                <span class="text-base font-bold font-mono text-success"><MoneyText :amount="statement.totalPaid" /></span>
+              </div>
+              <div class="p-3 rounded-xl border bg-primary/10 border-primary/30">
+                <span class="text-[10px] text-primary font-semibold block">Saldo Insoluto Pendiente</span>
+                <span class="text-base font-extrabold font-mono text-primary"><MoneyText :amount="statement.outstandingPrincipal" /></span>
+              </div>
+            </div>
+
+            <!-- Tabla de Movimientos Históricos -->
+            <div class="space-y-1.5">
+              <h4 class="font-semibold text-xs text-foreground">Movimientos Históricos Registrados</h4>
+              <div class="rounded-lg border overflow-hidden">
+                <table class="w-full text-left text-xs">
+                  <thead class="border-b bg-muted/30 font-semibold text-muted-foreground text-[11px]">
+                    <tr>
+                      <th class="px-3 py-2">Fecha y Hora</th>
+                      <th class="px-3 py-2">Tipo</th>
+                      <th class="px-3 py-2">Recibo / Ref.</th>
+                      <th class="px-3 py-2 text-right">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-border text-[11px]">
+                    <tr v-if="statement.movements.length === 0">
+                      <td colspan="4" class="p-4 text-center text-muted-foreground">
+                        No se registran movimientos en este período.
+                      </td>
+                    </tr>
+                    <tr v-for="(mov, idx) in statement.movements" :key="idx" class="hover:bg-muted/10">
+                      <td class="px-3 py-2">{{ formatInstant(mov.date) }}</td>
+                      <td class="px-3 py-2">
+                        <Badge
+                          variant="outline"
+                          class="text-[10px] font-semibold"
+                          :class="
+                            mov.type === 'PAGO'
+                              ? 'border-success/40 bg-success/10 text-success'
+                              : mov.type === 'DESEMBOLSO'
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-destructive/40 bg-destructive/10 text-destructive'
+                          "
+                        >
+                          {{ mov.type }}
+                        </Badge>
+                      </td>
+                      <td class="px-3 py-2 font-mono text-muted-foreground">{{ mov.receiptNumber || '-' }}</td>
+                      <td class="px-3 py-2 text-right font-mono font-bold">
+                        <span :class="mov.type === 'PAGO' ? 'text-success' : 'text-foreground'">
+                          <MoneyText :amount="mov.amount" />
+                        </span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+
+        <div class="flex items-center justify-between border-t bg-muted/20 p-3 shrink-0">
+          <Button variant="ghost" size="sm" class="h-8 text-xs" @click="isStatementModalOpen = false">
+            Cerrar
+          </Button>
+          <Button size="sm" class="h-8 text-xs" @click="printStatement">
+            <Printer class="size-3.5 mr-1.5" />
+            Imprimir / Guardar PDF
+          </Button>
+        </div>
+      </Card>
+    </div>
   </div>
 </template>

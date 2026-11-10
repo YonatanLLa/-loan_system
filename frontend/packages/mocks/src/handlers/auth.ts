@@ -137,7 +137,7 @@ export const authHandlers = [
   }),
 
   // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
-  http.post('*/api/auth/refresh', async () => {
+  http.post('*/api/auth/refresh', async ({ request }) => {
     await wait()
     const body = await readJson<{ refreshToken?: string }>(request)
     const user =

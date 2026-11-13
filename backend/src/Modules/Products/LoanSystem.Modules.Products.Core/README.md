@@ -16,8 +16,11 @@ No tiene ninguna dependencia hacia bases de datos, HTTP ni infraestructura; todo
 
 - **`Domain/FrenchAmortizationSchedule.cs`**
   - Implementa el algoritmo financiero de **Amortización Francesa (Cuota Constante)** cumpliendo estrictamente las reglas contables del sistema:
-    - Recibe el capital (`Money principal`), la tasa anual en formato decimal (`decimal annualRate`, ej. `0.24m` para 24%), el número de cuotas mensuales (`int termMonths`) y la fecha de desembolso (`DateOnly disbursementDate`).
-    - Calcula la tasa periódica mensual con **precisión intermedia de 4 decimales (`Money.RoundCalculation`)** y determina la cuota fija mediante potencias enteras sobre `decimal` (sin usar jamás `Math.Pow`, que opera en `double`).
+    - Recibe el capital (`Money principal`), la tasa anual en porcentaje (`decimal annualRatePercentage`, ej. `24m` para 24%), el número de cuotas mensuales (`int termMonths`) y el tipo de tasa (`RateType`).
+    - Convierte la tasa anual a tasa mensual con `InterestRate.ToMonthlyRate`. Para **TEA** (por defecto) usa `(1+TEA)^(1/12) − 1`, **no** `TEA/12`; ver [DECISION_01](../../../../docs/DECISION_01_TASA_EFECTIVA_TEA.md). La tasa no se redondea, y la cuota fija se calcula con potencias enteras sobre `decimal` (sin usar jamás `Math.Pow`, que opera en `double`).
+
+- **`Domain/InterestRate.cs`**
+  - `RateType` (`Efectiva` | `Nominal`, refleja el enum `rate_type` de PostgreSQL), su parser y el conversor `InterestRate.ToMonthlyRate`. La raíz duodécima de la TEA se calcula con Newton-Raphson en `decimal`.
     - Genera cada cuota (`Installment`) desglosando `Principal` (capital amortizado), `Interest` (interés del periodo redondeado a 2 decimales con `Money.RoundCurrency`) y `RemainingBalance` (saldo de capital insoluto).
     - **Ajuste de la Última Cuota (*Last-Installment Remainder Adjustment*):** En la última cuota (`number == termMonths`), ajusta el capital amortizado exactamente al saldo insoluto remanente (`remainingBalance`), garantizando la invariante financiera fundamental:
       $$\sum \text{Capital de Cuotas} = \text{Monto Principal Desembolsado}$$
@@ -25,7 +28,7 @@ No tiene ninguna dependencia hacia bases de datos, HTTP ni infraestructura; todo
 
 - **`Contracts/SimulateScheduleContracts.cs`**
   - Define los DTOs inmutables (`sealed record`) del caso de uso de simulación:
-    - `SimulateScheduleRequest(decimal Principal, string Currency, decimal AnnualInterestRate, int TermMonths, DateOnly DisbursementDate)`
+    - `SimulateScheduleRequest(decimal Amount, decimal AnnualRatePercentage, int TermMonths, string Method = "FRENCH", string RateType = "EFECTIVA")`
     - `SimulateScheduleResponse` e `InstallmentDto` con el resumen financiero (total principal, total intereses, total a pagar y detalle cuota por cuota).
 
 - **`Ports/Inbound/ISimulateScheduleUseCase.cs`**
@@ -35,7 +38,7 @@ No tiene ninguna dependencia hacia bases de datos, HTTP ni infraestructura; todo
   - Puertos de salida específicos del módulo para persistencia transaccional y publicación de eventos de integración cuando se creen o modifiquen productos crediticios en el catálogo.
 
 - **`Application/SimulateScheduleUseCase.cs`**
-  - Implementación `internal sealed` del caso de uso de simulación. Valida los parámetros de entrada (capital positivo, tasa válida, plazo mayor a cero), invoca `FrenchAmortizationSchedule.Generate(...)` y retorna un `Result<SimulateScheduleResponse>` sin lanzar excepciones de negocio.
+  - Implementación `internal sealed` del caso de uso de simulación. Valida los parámetros de entrada (capital positivo, tasa válida, plazo mayor a cero, método y tipo de tasa), invoca `FrenchAmortizationSchedule.Build(...)` y retorna un `Result<SimulateScheduleResponse>` sin lanzar excepciones de negocio.
 
 ### ¿Qué se agrega aquí conforme crece el módulo?
 - Entidades de dominio adicionales del catálogo (`LoanProduct`, `ProductFee`, reglas de elegibilidad por rango de monto/plazo).

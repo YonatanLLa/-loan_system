@@ -179,6 +179,8 @@ Tokens rotativos para renovación de sesiones JWT por dispositivo (US-01).
 | `revoked_at` | `TIMESTAMPTZ` | Sí | | Revocación explícita (logout o robo de dispositivo) |
 | `user_ip` | `INET` | Sí | | IP de origen |
 | `user_agent` | `TEXT` | Sí | | Agente de navegación o app móvil |
+| `family_id` | `UUID` | No | Índice `idx_refresh_tokens_family_id` (migración 16) | Familia (sesión): id del token del login, heredado en cada rotación. Si se reúsa un token ya rotado se revoca la familia completa |
+| `replaced_by_token_id` | `UUID` | Sí | `REFERENCES refresh_tokens(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED` (migración 16) | Token emitido al rotar este. `NULL` = nunca rotado |
 
 #### `audit_logs`
 Pista inmutable de auditoría *append-only* (US-03).

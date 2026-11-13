@@ -5,11 +5,15 @@ using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Logging;
 
 namespace LoanSystem.Modules.Security.Adapters.Inbound.Http;
 
 public static class SecurityEndpoints
 {
+    private const string RefreshTokenReusedCode = "Security.RefreshTokenReused";
+    private const string RefreshLoggerCategory = "LoanSystem.Modules.Security.RefreshToken";
+
     public static IEndpointRouteBuilder MapSecurityEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/security")
@@ -30,14 +34,24 @@ public static class SecurityEndpoints
         .WithName("Login")
         .WithSummary("Authenticate with email and password; returns a short-lived JWT and a rotating refresh token (BE-SEC-01)");
 
-        auth.MapPost("/refresh", async (RefreshRequest request, IRefreshTokenUseCase useCase, CancellationToken ct) =>
+        auth.MapPost("/refresh", async (
+            RefreshRequest request, IRefreshTokenUseCase useCase, HttpContext http, ILoggerFactory loggerFactory, CancellationToken ct) =>
         {
             var result = await useCase.ExecuteAsync(request, ct);
+            if (result.IsFailure && result.Error.Code == RefreshTokenReusedCode)
+            {
+                // Core has no logging dependency: the security signal is logged here (DECISION_02).
+                loggerFactory.CreateLogger(RefreshLoggerCategory).LogWarning(
+                    "Refresh token reuse detected: the whole token family was revoked. RemoteIp={RemoteIp} UserAgent={UserAgent}",
+                    http.Connection.RemoteIpAddress?.ToString(),
+                    http.Request.Headers.UserAgent.ToString());
+            }
+
             return result.ToHttpResult();
         })
         .AllowAnonymous()
         .WithName("RefreshToken")
-        .WithSummary("Rotate a refresh token: revokes the one presented and issues a new token pair (BE-SEC-01)");
+        .WithSummary("Rotate a refresh token: revokes the one presented and issues a new token pair in the same family; reusing an already rotated token revokes the whole family (BE-SEC-01)");
 
         auth.MapPost("/logout", async (LogoutRequest? request, ILogoutUseCase useCase, CancellationToken ct) =>
         {

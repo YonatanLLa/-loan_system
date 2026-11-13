@@ -17,12 +17,33 @@ public class FrenchAmortizationScheduleTests
     }
 
     [Fact]
-    public void Build_ShouldAmortizeFullPrincipal_AndEndWithZeroBalance()
+    public void Build_WithNominalRate_ShouldUseTnaDividedBy12()
     {
-        var schedule = FrenchAmortizationSchedule.Build(Money.From(10000m), 12m, 12);
+        // TNA 12% => 1% monthly => 888.49
+        var schedule = FrenchAmortizationSchedule.Build(Money.From(10000m), 12m, 12, RateType.Nominal);
 
         schedule.Installments.Count.ShouldBe(12);
         schedule.Installments.Take(11).ShouldAllBe(i => i.Total.Amount == 888.49m);
+        schedule.Installments.Sum(i => i.Principal.Amount).ShouldBe(10000m);
+        schedule.Installments.Last().RemainingBalance.Amount.ShouldBe(0m);
+    }
+
+    [Fact]
+    public void Build_WithEffectiveRate_ShouldUseCompoundMonthlyRate()
+    {
+        // TEA 12% => i = 1.12^(1/12) - 1 = 0.0094887929... => quota 885.62 (NOT 888.49)
+        var schedule = FrenchAmortizationSchedule.Build(Money.From(10000m), 12m, 12, RateType.Efectiva);
+
+        schedule.Installments[0].Interest.Amount.ShouldBe(94.89m);
+        schedule.Installments.Take(11).ShouldAllBe(i => i.Total.Amount == 885.62m);
+    }
+
+    [Fact]
+    public void Build_ShouldAmortizeFullPrincipal_AndEndWithZeroBalance()
+    {
+        var schedule = FrenchAmortizationSchedule.Build(Money.From(10000m), 12m, 12, RateType.Efectiva);
+
+        schedule.Installments.Count.ShouldBe(12);
         schedule.Installments.Sum(i => i.Principal.Amount).ShouldBe(10000m);
         schedule.Installments.Last().RemainingBalance.Amount.ShouldBe(0m);
         schedule.TotalPayment.Amount.ShouldBe(schedule.Principal.Amount + schedule.TotalInterest.Amount);
@@ -32,7 +53,7 @@ public class FrenchAmortizationScheduleTests
     [Fact]
     public void Build_WithZeroRate_ShouldSplitPrincipalEvenly_AndAdjustLastInstallment()
     {
-        var schedule = FrenchAmortizationSchedule.Build(Money.From(1000m), 0m, 3);
+        var schedule = FrenchAmortizationSchedule.Build(Money.From(1000m), 0m, 3, RateType.Efectiva);
 
         schedule.Installments[0].Total.Amount.ShouldBe(333.33m);
         schedule.Installments[1].Total.Amount.ShouldBe(333.33m);

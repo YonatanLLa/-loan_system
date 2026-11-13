@@ -49,9 +49,20 @@ internal sealed class SecurityDbContext : ModuleDbContext, ISecurityUnitOfWork, 
             entity.Property(t => t.TokenHash).HasColumnName("token_hash");
             entity.Property(t => t.IssuedAt).HasColumnName("issued_at");
             entity.Property(t => t.ExpiresAt).HasColumnName("expires_at");
-            entity.Property(t => t.RevokedAt).HasColumnName("revoked_at");
+            // Concurrency token: rotating/revoking a tracked token emits UPDATE ... WHERE revoked_at IS NULL,
+            // so of two concurrent refreshes with the same token only one wins; the loser gets
+            // ConcurrencyConflictException from SaveChanges (DECISION_02).
+            entity.Property(t => t.RevokedAt).HasColumnName("revoked_at").IsConcurrencyToken();
             entity.Property(t => t.UserIp).HasColumnName("user_ip");
             entity.Property(t => t.UserAgent).HasColumnName("user_agent");
+            entity.Property(t => t.FamilyId).HasColumnName("family_id");
+            entity.Property(t => t.ReplacedByTokenId).HasColumnName("replaced_by_token_id");
+            // Self-reference without navigation: lets EF order the INSERT of the new token before the
+            // UPDATE of the old one that points to it (the FK is also DEFERRABLE in migration 16).
+            entity.HasOne<RefreshToken>()
+                .WithMany()
+                .HasForeignKey(t => t.ReplacedByTokenId)
+                .OnDelete(DeleteBehavior.ClientSetNull);
         });
     }
 }

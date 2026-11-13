@@ -25,6 +25,22 @@ public abstract class ModuleDbContext : DbContext, IUnitOfWork, IOutbox
         return new EfTransactionScope(transaction);
     }
 
+    /// <summary>
+    /// Translates EF Core's <see cref="DbUpdateConcurrencyException"/> into the Core-level
+    /// <see cref="ConcurrencyConflictException"/> so use cases can handle lost races without EF Core.
+    /// </summary>
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            throw new ConcurrencyConflictException(ex.Message, ex);
+        }
+    }
+
     public void Enqueue<TEvent>(TEvent @event) where TEvent : class
     {
         ArgumentNullException.ThrowIfNull(@event);

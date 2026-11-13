@@ -82,11 +82,31 @@ public class SimulateScheduleUseCaseTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_WithFrenchMethod_ShouldReturnStandardQuota()
+    public async Task ExecuteAsync_DefaultRateType_ShouldTreatRateAsTea()
     {
+        // Default RateType = EFECTIVA: TEA 12% => monthly 0.9489% => 885.62
         var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(10000m, 12m, 12, "french"));
 
         result.IsSuccess.ShouldBeTrue();
+        result.Value.Installments[0].Total.ShouldBe(885.62m);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithNominalRateType_ShouldUseTnaDividedBy12()
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(10000m, 12m, 12, "FRENCH", "NOMINAL"));
+
+        result.IsSuccess.ShouldBeTrue();
         result.Value.Installments[0].Total.ShouldBe(888.49m);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithUnknownRateType_ShouldReturnValidationError()
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(1000m, 10m, 12, "FRENCH", "EFFECTIVE"));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Code.ShouldBe("Products.InvalidRateType");
     }
 }

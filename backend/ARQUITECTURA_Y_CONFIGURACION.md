@@ -17,7 +17,7 @@
 | **Base de datos** | PostgreSQL 17 (vía Npgsql), esquema administrado SQL-First con DbUp |
 | **Caché / idempotencia** | Redis 7 (StackExchange.Redis), con fallback en memoria |
 | **API** | ASP.NET Core Minimal APIs + OpenAPI + Scalar |
-| **Autenticación** | JWT Bearer (HMAC-SHA256) + autorización por roles |
+| **Autenticación** | JWT Bearer (**RS256** + `kid` RFC 7638 + `/.well-known/jwks.json`) + autorización por roles |
 | **Jobs / background** | Quartz.NET (zona horaria `America/Lima`) + patrón Outbox |
 | **Logging** | Serilog |
 | **Testing** | xUnit, Shouldly, NetArchTest, Testcontainers |
@@ -170,25 +170,27 @@ Servicios y pipeline configurados en `LoanSystem.WebApi`:
 - **Idempotencia:** `AddIdempotency(...)` usa Redis si `ConnectionStrings:Redis` está presente;
   de lo contrario cae a almacenamiento **en memoria** (con advertencia en logs, no apto para
   múltiples instancias).
-- **Autenticación JWT Bearer (HMAC-SHA256):**
-  - La clave `Jwt:Key` es **obligatoria** (sin valor por defecto) y debe tener **≥ 32 bytes**.
-  - Valida issuer, audience, lifetime y firma. `Jwt:Issuer` por defecto `LoanSystem.Identity`,
-    `Jwt:Audience` por defecto `LoanSystem.App`.
+- **Autenticación JWT Bearer (RS256, `AddSecurityAuthentication`):**
+  - Centralizada en el módulo `Security` (`JwtKeyRing` + `JwtTokenGenerator`), sin lógica JWT inline en `Program.cs`.
+  - Solo acepta algoritmo `RS256` (`ValidAlgorithms = ["RS256"]`), `RequireSignedTokens = true`, `TryAllIssuerSigningKeys = false`, y valida por `kid` exacto (thumbprint SHA-256 RFC 7638).
+  - Expone `GET /.well-known/jwks.json` (`AllowAnonymous`, `Cache-Control: public, max-age=300`) solo con parámetros públicos (`kty`, `use`, `alg`, `kid`, `n`, `e`).
+  - Reporta su estado en `GET /health` (`JwtKeyRingHealthCheck`: aviso si la clave activa vence en `< 14` días).
 - **Autorización por roles** (políticas):
   `ROLE_ADMIN`, `ROLE_ANALYST`, `ROLE_OPERATOR`, `ROLE_COLLECTOR`, `ROLE_AUDITOR`, `ROLE_CLIENT`
   (ADMIN tiene acceso a las políticas de los demás roles operativos).
 - **Pipeline:** `UseExceptionHandler` → `UseAuthentication` → `UseAuthorization` →
   `IdempotencyMiddleware` (tras autenticación, para alcanzar la clave al usuario).
 
-### Configuración sin secretos en el código
+### Configuración sin secretos en el código (`AddSecretManager` + `ValidateStartupSecrets`)
 
-- No hay valores por defecto para cadenas de conexión ni para la clave JWT: si faltan, la
-  aplicación **falla al arrancar** indicando qué clave configurar.
-- Variables de entorno / claves de configuración:
-  - `ConnectionStrings__Database` (o `DATABASE_URL`)
+- `AddSecretManager` soporta `Secrets:Provider = None` (default) o `KeyPerFile` (`Secrets:Path` + polling periódico por `Secrets:ReloadInterval` para rotación sin reinicio en Kubernetes).
+- Fuera de `Development`, `ValidateStartupSecrets` falla al arrancar si falta `ConnectionStrings:Database` (y en WebApi `Jwt:SigningKeys` + `Security:Mfa:EncryptionKeys`), si está presente `Jwt:Key` legado o si detecta placeholders locales (`postgrespassword`, `changeme`, etc.).
+- `appsettings.Development.json` está excluido de `dotnet publish` (`CopyToPublishDirectory="Never"`). Variables/archivos requeridos en WebApi:
+  - `ConnectionStrings__Database`
   - `ConnectionStrings__Redis` (opcional; sin Redis la idempotencia usa memoria)
-  - `Jwt__Key` (mínimo 32 bytes)
-- Los valores locales están en `appsettings.Development.json` y coinciden con `docker-compose.yml`.
+  - `Jwt__SigningKeys` (JSON con claves PKCS#8 RSA ≥ 2048 bits y ventanas `notBefore`/`notAfter`)
+  - `Security__Mfa__EncryptionKeys` (JSON con keyring versionado AES-256-GCM para TOTP `v2`)
+- En `Development`, `Jwt:SigningKeys` ausente genera una clave efímera en memoria; los secretos TOTP usan `<UserSecretsId>` de `LoanSystem.WebApi.csproj`.
 
 ---
 

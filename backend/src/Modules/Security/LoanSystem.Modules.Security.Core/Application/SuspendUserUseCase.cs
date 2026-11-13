@@ -15,6 +15,7 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
     private readonly IClock _clock;
     private readonly IUserStatusTracker _statusTracker;
     private readonly IAuditContext _audit;
+    private readonly ISecurityApprovalRequests? _approvals;
 
     public SuspendUserUseCase(
         IUserRepository users,
@@ -23,7 +24,8 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
         IUserStatusTracker statusTracker,
-        IAuditContext audit)
+        IAuditContext audit,
+        ISecurityApprovalRequests? approvals = null)
     {
         _users = users;
         _refreshTokens = refreshTokens;
@@ -32,6 +34,7 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
         _clock = clock;
         _statusTracker = statusTracker;
         _audit = audit;
+        _approvals = approvals;
     }
 
     public async Task<Result> ExecuteAsync(SuspendUserRequest request, CancellationToken ct = default)
@@ -48,7 +51,22 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
 
         user.Suspend();
         _audit.SetAction("SUSPEND");
+        _audit.SetAction("SUSPEND", "users");
         await _refreshTokens.RevokeAllForUserAsync(user.Id, _clock, ct);
+
+        if (_approvals is not null)
+        {
+            var pendingRequests = await _approvals.FindPendingByRequesterAsync(user.Id, ct);
+            if (pendingRequests.Count > 0)
+            {
+                _audit.SetAction("CANCEL", "approval_requests");
+                foreach (var pending in pendingRequests)
+                {
+                    pending.CancelBySystem(_clock, "Requester account was suspended.");
+                }
+            }
+        }
+
         await _unitOfWork.SaveChangesAsync(ct);
         _statusTracker.InvalidateUser(user.Id);
 

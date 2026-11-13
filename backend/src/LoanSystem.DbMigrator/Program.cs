@@ -1,5 +1,6 @@
 using DbUp;
 using DbUp.Engine;
+using Microsoft.Extensions.Configuration;
 
 namespace LoanSystem.DbMigrator;
 
@@ -11,9 +12,11 @@ public static class Program
         Console.WriteLine(" LoanSystem Database Migrator (DbUp - PostgreSQL)");
         Console.WriteLine("=================================================");
 
-        // No fallback in code: the connection string must come from an argument or the environment.
+        var configuration = BuildConfiguration();
+
+        // No fallback in code: the connection string must come from an argument, environment, or secret store.
         string? connectionString = args.FirstOrDefault(a => !a.StartsWith("--"))
-            ?? Environment.GetEnvironmentVariable("ConnectionStrings__Database")
+            ?? configuration["ConnectionStrings:Database"]
             ?? Environment.GetEnvironmentVariable("DATABASE_URL");
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -106,7 +109,9 @@ public static class Program
             // so inserting in the middle would rename already-applied scripts.
             "migrations/13_outbox_messages.sql",
             "migrations/14_audit_logs_user_agent.sql",
-            "migrations/15_audit_logs_append_only.sql"
+            "migrations/15_audit_logs_append_only.sql",
+            "migrations/16_users_mfa.sql",
+            "migrations/17_approval_requests.sql"
         };
 
         var list = new List<(string Name, string Path)>();
@@ -162,5 +167,27 @@ public static class Program
         {
             return "Custom Connection String";
         }
+    }
+
+    private static IConfiguration BuildConfiguration()
+    {
+        var builder = new ConfigurationBuilder()
+            .AddEnvironmentVariables();
+
+        var preConfig = builder.Build();
+        var provider = preConfig["Secrets:Provider"];
+        if (string.Equals(provider, "KeyPerFile", StringComparison.OrdinalIgnoreCase))
+        {
+            var path = preConfig["Secrets:Path"];
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new InvalidOperationException(
+                    "Configuration value 'Secrets:Path' is required when 'Secrets:Provider' is 'KeyPerFile'.");
+            }
+
+            builder.AddKeyPerFile(Path.GetFullPath(path), optional: false);
+        }
+
+        return builder.Build();
     }
 }

@@ -28,7 +28,34 @@ public static class SecurityEndpoints
         })
         .AllowAnonymous()
         .WithName("Login")
-        .WithSummary("Authenticate with email and password; returns a short-lived JWT and a rotating refresh token (BE-SEC-01)");
+        .WithSummary("Authenticate with email and password; returns tokens or an MFA challenge for privileged roles (BE-SEC-01, BE-SEC-03)");
+
+        auth.MapPost("/mfa/verify", async (MfaVerifyRequest request, IVerifyMfaUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(request, ct);
+            return result.ToHttpResult();
+        })
+        .AllowAnonymous()
+        .WithName("VerifyMfa")
+        .WithSummary("Verify a TOTP or recovery code for an active MFA challenge and issue tokens (BE-SEC-03)");
+
+        auth.MapPost("/mfa/enroll", async (MfaEnrollRequest request, IBeginMfaEnrollmentUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(request, ct);
+            return result.ToHttpResult();
+        })
+        .AllowAnonymous()
+        .WithName("BeginMfaEnrollment")
+        .WithSummary("Generate a TOTP secret and otpauth URI for mandatory first-login MFA enrollment (BE-SEC-03)");
+
+        auth.MapPost("/mfa/enroll/confirm", async (MfaEnrollConfirmRequest request, IConfirmMfaEnrollmentUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(request, ct);
+            return result.ToHttpResult();
+        })
+        .AllowAnonymous()
+        .WithName("ConfirmMfaEnrollment")
+        .WithSummary("Confirm MFA enrollment with a TOTP code, issue tokens, and return single-use recovery codes (BE-SEC-03)");
 
         auth.MapPost("/refresh", async (RefreshRequest request, IRefreshTokenUseCase useCase, CancellationToken ct) =>
         {
@@ -78,6 +105,32 @@ public static class SecurityEndpoints
         .WithName("ActivateUser")
         .WithSummary("Reactivate a suspended user account (BE-SEC-06)");
 
+        app.MapPost("/api/users/{id:guid}/mfa/reset", async (Guid id, IResetUserMfaUseCase useCase, CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new ResetUserMfaRequest(id), ct);
+            return result.ToHttpResult();
+        })
+        .RequireAuthorization(SecurityPolicies.Admin)
+        .WithTags("Security")
+        .WithName("ResetUserMfa")
+        .WithSummary("Reset a user's MFA configuration and revoke their active sessions (BE-SEC-03)");
+
+        app.MapPut("/api/users/{id:guid}/role", async (
+            Guid id,
+            ChangeUserRoleRequest body,
+            IRequestUserRoleChangeUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(new RequestUserRoleChangeCommand(id, body.NewRole, body.Reason), ct);
+            return result.IsSuccess
+                ? Results.Accepted($"/api/approvals/{result.Value.Id}", result.Value)
+                : result.ToHttpResult();
+        })
+        .RequireAuthorization(SecurityPolicies.Admin)
+        .WithTags("Security")
+        .WithName("RequestUserRoleChange")
+        .WithSummary("Submit a four-eyes approval request to change a user's RBAC role (BE-SEC-09)");
+
         app.MapGet("/api/audit-logs", async ([AsParameters] AuditLogQuery query, IQueryAuditLogsUseCase useCase, CancellationToken ct) =>
         {
             var result = await useCase.ExecuteAsync(query, ct);
@@ -87,6 +140,26 @@ public static class SecurityEndpoints
         .WithTags("Security")
         .WithName("QueryAuditLogs")
         .WithSummary("Query immutable audit log entries with filters and pagination (BE-SEC-08)");
+
+        app.MapGet("/.well-known/jwks.json", async (
+            HttpContext httpContext,
+            IGetJwksUseCase useCase,
+            CancellationToken ct) =>
+        {
+            var result = await useCase.ExecuteAsync(ct);
+            if (result.IsSuccess)
+            {
+                httpContext.Response.Headers.CacheControl = "public, max-age=300";
+            }
+
+            return result.ToHttpResult();
+        })
+        .AllowAnonymous()
+        .WithTags("Security")
+        .WithName("GetJwks")
+        .WithSummary("Publish active and retained RS256 public signing keys (JWKS) for JWT verification (BE-SEC-10)");
+
+        app.MapApprovalsEndpoints();
 
         return app;
     }

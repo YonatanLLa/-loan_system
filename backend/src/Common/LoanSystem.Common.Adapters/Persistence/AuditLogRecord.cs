@@ -15,10 +15,11 @@ public sealed class AuditLogRecord
     public Guid? UserId { get; set; }
     public IPAddress? UserIp { get; set; }
     public string? UserAgent { get; set; }
+    public Guid? ApprovalRequestId { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
-/// <summary>Maps <see cref="AuditLogRecord"/> to database/migrations/02_security_users.sql and 14_audit_logs_user_agent.sql.</summary>
+/// <summary>Maps <see cref="AuditLogRecord"/> to database/migrations/02_security_users.sql, 14 and 17.</summary>
 internal sealed class AuditLogRecordConfiguration : IEntityTypeConfiguration<AuditLogRecord>
 {
     public void Configure(EntityTypeBuilder<AuditLogRecord> builder)
@@ -35,6 +36,7 @@ internal sealed class AuditLogRecordConfiguration : IEntityTypeConfiguration<Aud
         builder.Property(a => a.UserId).HasColumnName("user_id");
         builder.Property(a => a.UserIp).HasColumnName("user_ip");
         builder.Property(a => a.UserAgent).HasColumnName("user_agent");
+        builder.Property(a => a.ApprovalRequestId).HasColumnName("approval_request_id");
         builder.Property(a => a.CreatedAt).HasColumnName("created_at");
     }
 }

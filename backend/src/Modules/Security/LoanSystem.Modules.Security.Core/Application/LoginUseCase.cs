@@ -8,20 +8,10 @@ using LoanSystem.Modules.Security.Core.Ports.Outbound;
 namespace LoanSystem.Modules.Security.Core.Application;
 
 // TODO(auth-hardening): pendientes de seguridad a revisar al terminar el módulo de auth.
-//  1. [ALTA] Ataque de tiempo / enumeración de emails: si el usuario no existe se responde
-//     en ~5 ms (sin bcrypt) y si existe en ~250 ms. Aunque el mensaje sea el mismo, el tiempo
-//     delata qué emails están registrados. Solución: cuando user es null, verificar igual
-//     contra un hash ficticio (dummy BCrypt hash) para igualar el tiempo de respuesta.
-//  2. [MEDIA] Límite de 72 bytes de BCrypt: BCrypt ignora todo lo que pasa del byte 72.
-//     Validar largo máximo de contraseña (ej. 64 chars) al registrar / cambiar / resetear
-//     contraseña (ver backend/docs/PLAN_02_EMAIL_VERIFICATION_Y_RESET.md).
-//  3. [BAJA] Re-hash al subir el WorkFactor: en login exitoso, si
-//     BCrypt.PasswordNeedsRehash(hash, WorkFactor) es true, re-hashear y guardar.
-//     Requiere exponer un NeedsRehash(...) en IPasswordHasher (BcryptPasswordHasher).
-//  4. [BAJA] IsLockedOut se evalúa antes de verificar la contraseña: revela que el email
-//     existe y está bloqueado sin conocer la contraseña. Evaluar si se acepta el riesgo.
-//  5. [BAJA] Constantes duplicadas: DefaultMaxFailedAttempts / DefaultLockWindowMinutes
-//     también están en SecurityModule. Unificar en una clase SecurityOptions con IOptions<T>.
+//  1. [ALTA] Ataque de tiempo / enumeración de emails: cuando user es null, verificar contra hash ficticio.
+//  2. [MEDIA] Límite de 72 bytes de BCrypt: validar largo máximo de contraseña (ej. 64 chars).
+//  3. [BAJA] Re-hash al subir el WorkFactor.
+//  4. [BAJA] IsLockedOut se evalúa antes de verificar la contraseña.
 internal sealed class LoginUseCase : ILoginUseCase
 {
     private const int DefaultMaxFailedAttempts = 5;
@@ -35,6 +25,7 @@ internal sealed class LoginUseCase : ILoginUseCase
 
     private readonly IUserRepository _users;
     private readonly IRefreshTokenRepository _refreshTokens;
+    private readonly IMfaChallengeRepository? _mfaChallenges;
     private readonly IPasswordHasher _passwordHasher;
     private readonly IJwtTokenGenerator _jwt;
     private readonly IClientInfoProvider _clientInfo;
@@ -44,6 +35,7 @@ internal sealed class LoginUseCase : ILoginUseCase
     private readonly TimeSpan _refreshLifetime;
     private readonly int _maxFailedAttempts;
     private readonly TimeSpan _lockWindow;
+    private readonly MfaOptions _mfaOptions;
 
     public LoginUseCase(
         IUserRepository users,
@@ -56,10 +48,13 @@ internal sealed class LoginUseCase : ILoginUseCase
         IAuditContext audit,
         int refreshTokenDays,
         int maxFailedAttempts = DefaultMaxFailedAttempts,
-        int lockWindowMinutes = DefaultLockWindowMinutes)
+        int lockWindowMinutes = DefaultLockWindowMinutes,
+        IMfaChallengeRepository? mfaChallenges = null,
+        MfaOptions? mfaOptions = null)
     {
         _users = users;
         _refreshTokens = refreshTokens;
+        _mfaChallenges = mfaChallenges;
         _passwordHasher = passwordHasher;
         _jwt = jwt;
         _clientInfo = clientInfo;
@@ -69,9 +64,10 @@ internal sealed class LoginUseCase : ILoginUseCase
         _refreshLifetime = TimeSpan.FromDays(refreshTokenDays);
         _maxFailedAttempts = maxFailedAttempts;
         _lockWindow = TimeSpan.FromMinutes(lockWindowMinutes);
+        _mfaOptions = mfaOptions ?? new MfaOptions();
     }
 
-    public async Task<Result<AuthTokensResponse>> ExecuteAsync(LoginRequest request, CancellationToken ct = default)
+    public async Task<Result<LoginResponse>> ExecuteAsync(LoginRequest request, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
             return Error.Validation("Security.MissingCredentials", "Email and password are required.");
@@ -95,6 +91,34 @@ internal sealed class LoginUseCase : ILoginUseCase
         if (user.Status == UserStatus.INACTIVE)
             return Error.Forbidden("Security.UserNotActive", "The user account is not active.");
 
+        if (user.RequiresMfa(_mfaOptions.RequiredRoles))
+        {
+            if (_mfaChallenges is null)
+                throw new InvalidOperationException("IMfaChallengeRepository must be configured for MFA-required roles.");
+
+            var purpose = user.MfaEnabled ? MfaChallengePurpose.VERIFY : MfaChallengePurpose.ENROLL;
+            var lifetimeMinutes = user.MfaEnabled
+                ? _mfaOptions.ChallengeMinutes
+                : _mfaOptions.EnrollmentChallengeMinutes;
+
+            var (rawToken, tokenHash) = RefreshTokenHasher.Create();
+            var challenge = MfaChallenge.Issue(
+                user.Id,
+                tokenHash,
+                purpose,
+                _clock,
+                TimeSpan.FromMinutes(lifetimeMinutes),
+                _clientInfo.IpAddress,
+                _clientInfo.UserAgent);
+
+            _mfaChallenges.Add(challenge);
+            // Do NOT reset failed-login counter until the second factor succeeds (BE-SEC-03).
+            await _unitOfWork.SaveChangesAsync(ct);
+
+            var status = user.MfaEnabled ? "MFA_REQUIRED" : "MFA_ENROLLMENT_REQUIRED";
+            return LoginResponse.Challenge(status, rawToken, lifetimeMinutes * 60);
+        }
+
         // TODO(auth-hardening) #3: re-hashear la contraseña si el WorkFactor cambió.
         user.RecordSuccessfulLogin(_clock);
         // La petición es anónima: se atribuye el cambio al usuario que inicia sesión (BE-SEC-07)
@@ -103,6 +127,6 @@ internal sealed class LoginUseCase : ILoginUseCase
         var tokens = TokenIssuer.Issue(user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime);
 
         await _unitOfWork.SaveChangesAsync(ct);
-        return tokens;
+        return LoginResponse.Authenticated(tokens);
     }
 }

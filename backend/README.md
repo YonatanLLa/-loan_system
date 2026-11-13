@@ -77,12 +77,24 @@ docker compose up -d
 ```
 
 ### Configuración (sin secretos en el código)
-- El código **no tiene valores por defecto** para cadenas de conexión ni para la clave JWT: si faltan, la aplicación falla al arrancar con un mensaje que indica qué clave configurar.
-- Los valores locales (coinciden con `docker-compose.yml`) están en `appsettings.Development.json` de `LoanSystem.WebApi` y `LoanSystem.Workers`. `dotnet run` usa el entorno `Development` por `Properties/launchSettings.json`.
-- En otros entornos, usar variables de entorno o un gestor de secretos: `ConnectionStrings__Database`, `ConnectionStrings__Redis` (opcional; sin Redis la idempotencia usa memoria local) y `Jwt__Key` (mínimo 32 bytes).
+- El código **no tiene valores por defecto** para secretos ni credenciales: fuera de `Development`, la aplicación falla al arrancar (`ValidateStartupSecrets`) si falta algún secreto obligatorio, si queda `Jwt:Key` legado o si detecta placeholders locales (`postgrespassword`, `changeme`, etc.).
+- En `Development`:
+  - `ConnectionStrings:Database` y `ConnectionStrings:Redis` coinciden con `docker-compose.yml` vía `appsettings.Development.json` (excluido de `dotnet publish`).
+  - `Jwt:SigningKeys` no necesita configurarse localmente: si falta en `Development`, `JwtKeyRing` genera una clave RSA-3072 efímera en memoria con aviso en logs.
+  - Para probar flujos MFA TOTP persistentes en local, configura User Secrets:
+    ```powershell
+    dotnet user-secrets --project src/LoanSystem.WebApi set "Security:Mfa:EncryptionKeys" '{"active":"v1","keys":{"v1":"<BASE64_32_BYTES>"}}'
+    ```
+- En Staging / Producción (`Secrets:Provider = KeyPerFile` o variables de entorno):
+  - `ConnectionStrings__Database`
+  - `ConnectionStrings__Redis` (opcional; sin Redis la idempotencia usa memoria local)
+  - `Jwt__SigningKeys` (JSON con `{ "keys": [{ "privateKeyPem": "...PKCS#8...", "notBefore": "...", "notAfter": "..." }] }`; consultable públicamente vía `GET /.well-known/jwks.json`)
+  - `Security__Mfa__EncryptionKeys` (JSON con `{ "active": "<keyId>", "keys": { "<keyId>": "<BASE64_32_BYTES>" } }`)
+  - Nota: `LoanSystem.Workers` solo requiere `ConnectionStrings__Database` (no carga `Jwt__SigningKeys` ni `Security__Mfa__EncryptionKeys`).
+  - Scripts de rotación sin downtime y runbook: [`scripts/rotate-jwt-keys.ps1`](scripts/rotate-jwt-keys.ps1), [`scripts/rotate-jwt-keys.sh`](scripts/rotate-jwt-keys.sh) y [`docs/RUNBOOK_SECRETOS_Y_ROTACION.md`](docs/RUNBOOK_SECRETOS_Y_ROTACION.md).
 
 ### 2. Ejecutar Migraciones de Base de Datos
-Aplica los 15 scripts modulares de `database/`. La cadena de conexión se pasa como argumento o con la variable `ConnectionStrings__Database` (también `DATABASE_URL`):
+Aplica los 17 scripts modulares de `database/`. La cadena de conexión se pasa como argumento, con `ConnectionStrings__Database` (o `DATABASE_URL`), o desde `Secrets:Provider=KeyPerFile`:
 ```powershell
 dotnet run --project src/LoanSystem.DbMigrator -- "Host=localhost;Port=5432;Database=loan_system;Username=postgres;Password=postgrespassword"
 ```

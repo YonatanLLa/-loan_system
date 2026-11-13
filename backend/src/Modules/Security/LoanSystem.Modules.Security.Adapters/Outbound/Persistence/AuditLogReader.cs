@@ -73,6 +73,12 @@ internal sealed class AuditLogReader : IAuditLogReader
             parameters.Add("ToExclusiveUtc", toExclusiveUtc);
         }
 
+        if (query.ApprovalRequestId.HasValue)
+        {
+            whereClauses.Add("a.approval_request_id = @ApprovalRequestId");
+            parameters.Add("ApprovalRequestId", query.ApprovalRequestId.Value);
+        }
+
         var whereSql = whereClauses.Count > 0 ? "WHERE " + string.Join(" AND ", whereClauses) : string.Empty;
 
         var countJoin = !string.IsNullOrWhiteSpace(query.User) ? "LEFT JOIN users u ON a.user_id = u.id" : string.Empty;
@@ -95,6 +101,7 @@ internal sealed class AuditLogReader : IAuditLogReader
                 u.email AS UserEmail,
                 host(a.user_ip) AS UserIp,
                 a.user_agent AS UserAgent,
+                a.approval_request_id AS ApprovalRequestId,
                 a.created_at AS CreatedAt
             FROM audit_logs a
             LEFT JOIN users u ON a.user_id = u.id
@@ -120,7 +127,8 @@ internal sealed class AuditLogReader : IAuditLogReader
             r.UserEmail,
             r.UserIp,
             r.UserAgent,
-            r.CreatedAt
+            r.CreatedAt,
+            r.ApprovalRequestId
         )).ToList();
 
         return new PagedResult<AuditLogItem>(items, total, query.Page, query.PageSize);
@@ -155,6 +163,7 @@ internal sealed class AuditLogReader : IAuditLogReader
         public string? UserEmail { get; set; }
         public string? UserIp { get; set; }
         public string? UserAgent { get; set; }
+        public Guid? ApprovalRequestId { get; set; }
         public DateTimeOffset CreatedAt { get; set; }
     }
 }

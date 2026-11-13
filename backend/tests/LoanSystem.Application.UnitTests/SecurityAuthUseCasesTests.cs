@@ -79,7 +79,7 @@ public class SecurityAuthUseCasesTests
 
         var stored = _refreshTokens.Added[0];
         stored.TokenHash.ShouldNotBe(result.Value.RefreshToken);
-        stored.TokenHash.ShouldBe(RefreshTokenHasher.Hash(result.Value.RefreshToken));
+        stored.TokenHash.ShouldBe(RefreshTokenHasher.Hash(result.Value.RefreshToken!));
     }
 
     [Fact]
@@ -519,19 +519,26 @@ public class SecurityAuthUseCasesTests
 
     private sealed class FakeAuditContext : IAuditContext
     {
+        private readonly Dictionary<string, string> _entityActions = new(StringComparer.OrdinalIgnoreCase);
         public string? Action { get; private set; }
         public Guid? ActorId { get; private set; }
+        public Guid? ApprovalRequestId { get; private set; }
         public void SetAction(string action) => Action = action;
+        public void SetAction(string action, string entityName) => _entityActions[entityName] = action;
+        public string? GetActionForEntity(string entityName) => _entityActions.TryGetValue(entityName, out var a) ? a : null;
         public void SetActor(Guid userId) => ActorId = userId;
+        public void SetApproval(Guid approvalRequestId) => ApprovalRequestId = approvalRequestId;
     }
 
     private sealed class FakeStatusTracker : IUserStatusTracker
     {
         public List<Guid> InvalidatedUsers { get; } = [];
         public List<Guid> ActivatedUsers { get; } = [];
+        public List<Guid> EvictedUsers { get; } = [];
 
         public void InvalidateUser(Guid userId) => InvalidatedUsers.Add(userId);
         public void ActivateUser(Guid userId) => ActivatedUsers.Add(userId);
+        public void EvictUser(Guid userId) => EvictedUsers.Add(userId);
     }
 
     private sealed class FakeClock(DateTimeOffset? now = null) : IClock

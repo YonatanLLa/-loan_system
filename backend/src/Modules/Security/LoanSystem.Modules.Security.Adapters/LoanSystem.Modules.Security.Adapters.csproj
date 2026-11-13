@@ -10,6 +10,8 @@
     <PackageReference Include="BCrypt.Net-Next" />
     <PackageReference Include="Dapper" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="Otp.NET" />
+    <PackageReference Include="Quartz" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="LoanSystem.Adapters.UnitTests" />

@@ -3,5 +3,5 @@ using LoanSystem.Modules.Security.Core.Contracts;
 
 namespace LoanSystem.Modules.Security.Core.Ports.Inbound;
 
-/// <summary>Authenticates a user and issues a short-lived JWT plus a rotating refresh token (BE-SEC-01).</summary>
-public interface ILoginUseCase : IUseCase<LoginRequest, AuthTokensResponse>;
+/// <summary>Authenticates a user and issues either tokens or an MFA challenge (BE-SEC-01, BE-SEC-03).</summary>
+public interface ILoginUseCase : IUseCase<LoginRequest, LoginResponse>;

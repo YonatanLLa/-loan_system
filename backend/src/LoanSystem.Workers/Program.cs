@@ -1,7 +1,9 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Quartz;
 using LoanSystem.Common.Adapters.Clock;
+using LoanSystem.Common.Adapters.Configuration;
 using LoanSystem.Common.Adapters.Outbox;
 using LoanSystem.Common.Core.Ports.Outbound;
 using LoanSystem.Modules.Administration.Adapters;
@@ -17,10 +19,13 @@ using LoanSystem.Modules.Payments.Adapters;
 using LoanSystem.Modules.Products.Adapters;
 using LoanSystem.Modules.Reports.Adapters;
 using LoanSystem.Modules.Security.Adapters;
+using LoanSystem.Modules.Security.Adapters.Inbound.Jobs;
 using LoanSystem.Modules.Treasury.Adapters;
 using LoanSystem.Modules.Treasury.Adapters.Inbound.Jobs;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Configuration.AddSecretManager(builder.Environment);
 
 // Common Infrastructure
 builder.Services.AddSingleton<IClock, SystemClock>();
@@ -44,6 +49,7 @@ builder.Services.AddReportsModule(builder.Configuration);
 // Quartz: each module owns its jobs (inbound adapters). Schedules run in America/Lima.
 builder.Services.AddQuartz(q =>
 {
+    q.AddSecurityJobs(LimaTimeZone.Instance);       // ExpireApprovalRequestsJob hourly
     q.AddCollectionsJobs(LimaTimeZone.Instance);    // DailyMoraJob 00:05
     q.AddTreasuryJobs(LimaTimeZone.Instance);       // DailyBalanceJob 06:00, disbursements every 15 min
     q.AddNotificationsJobs(LimaTimeZone.Instance);  // DailyRemindersJob 09:00
@@ -53,4 +59,6 @@ builder.Services.AddQuartz(q =>
 builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
 var host = builder.Build();
+host.Services.GetRequiredService<IConfiguration>()
+    .ValidateStartupSecrets(host.Services.GetRequiredService<IHostEnvironment>(), requireHttpSecuritySecrets: false);
 host.Run();

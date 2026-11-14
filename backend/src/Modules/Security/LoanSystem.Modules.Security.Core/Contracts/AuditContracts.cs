@@ -16,7 +16,8 @@ public sealed record AuditLogQuery(
     DateOnly? From = null,
     DateOnly? To = null,
     int Page = 1,
-    int PageSize = 50)
+    int PageSize = 50,
+    Guid? ApprovalRequestId = null)
 {
     public string? ResolvedEntity => !string.IsNullOrWhiteSpace(Entity) ? Entity.Trim() : (!string.IsNullOrWhiteSpace(EntityName) ? EntityName.Trim() : null);
 }
@@ -36,4 +37,5 @@ public sealed record AuditLogItem(
     string? UserEmail,
     string? UserIp,
     string? UserAgent,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    Guid? ApprovalRequestId = null);

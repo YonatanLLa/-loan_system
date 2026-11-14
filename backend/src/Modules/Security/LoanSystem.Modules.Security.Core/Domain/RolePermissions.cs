@@ -17,7 +17,14 @@ internal static class RolePermissions
         "reports.read",
         "audit.read",
         "products.manage",
-        "admin.manage"
+        "admin.manage",
+        "approvals.read",
+        "approvals.payments.reverse",
+        "approvals.loans.write_off",
+        "approvals.loans.adjust",
+        "approvals.products.rates",
+        "approvals.loans.restructure",
+        "approvals.users.role"
     ];
 
     private static readonly string[] AnalystPermissions =
@@ -57,7 +64,8 @@ internal static class RolePermissions
         "customers.read",
         "loans.read",
         "payments.read",
-        "treasury.read"
+        "treasury.read",
+        "approvals.read"
     ];
 
     private static readonly string[] ClientPermissions =
@@ -76,4 +84,7 @@ internal static class RolePermissions
             SecurityRole.ROLE_CLIENT => ClientPermissions,
             _ => []
         };
+
+    public static bool HasPermission(SecurityRole role, string permission) =>
+        GetForRole(role).Contains(permission, StringComparer.Ordinal);
 }

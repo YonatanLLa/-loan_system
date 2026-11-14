@@ -10,6 +10,9 @@ namespace LoanSystem.Modules.Security.Adapters.Outbound.Providers;
 internal interface IUserStatusService
 {
     Task<bool> IsUserActiveAsync(Guid userId, CancellationToken ct = default);
+
+    Task<bool> IsUserSessionValidAsync(Guid userId, string? expectedRole, CancellationToken ct = default) =>
+        IsUserActiveAsync(userId, ct);
 }
 
 internal sealed class UserStatusService : IUserStatusService, IUserStatusTracker
@@ -26,32 +29,80 @@ internal sealed class UserStatusService : IUserStatusService, IUserStatusTracker
 
     public async Task<bool> IsUserActiveAsync(Guid userId, CancellationToken ct = default)
     {
-        var cacheKey = $"user_active:{userId}";
-        if (_cache.TryGetValue(cacheKey, out bool isActive))
+        if (_cache.TryGetValue(ActiveCacheKey(userId), out bool isActive))
         {
             return isActive;
         }
 
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
+        var state = await LoadAndCacheAsync(userId, ct);
+        return state.IsActive;
+    }
 
-        var status = await db.Users
-            .Where(u => u.Id == userId)
-            .Select(u => (UserStatus?)u.Status)
-            .FirstOrDefaultAsync(ct);
+    public async Task<bool> IsUserSessionValidAsync(Guid userId, string? expectedRole, CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(ActiveCacheKey(userId), out bool cachedActive) && !cachedActive)
+        {
+            return false;
+        }
 
-        var active = status == UserStatus.ACTIVE;
-        _cache.Set(cacheKey, active, CacheDuration);
-        return active;
+        if (!_cache.TryGetValue(StateCacheKey(userId), out UserAuthState? state) || state is null)
+        {
+            state = await LoadAndCacheAsync(userId, ct);
+        }
+
+        if (!state.IsActive)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(expectedRole)
+            && !string.Equals(expectedRole, state.Role, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     public void InvalidateUser(Guid userId)
     {
-        _cache.Set($"user_active:{userId}", false, CacheDuration);
+        _cache.Set(ActiveCacheKey(userId), false, CacheDuration);
+        _cache.Remove(StateCacheKey(userId));
     }
 
     public void ActivateUser(Guid userId)
     {
-        _cache.Set($"user_active:{userId}", true, CacheDuration);
+        _cache.Set(ActiveCacheKey(userId), true, CacheDuration);
+        _cache.Remove(StateCacheKey(userId));
     }
+
+    public void EvictUser(Guid userId)
+    {
+        _cache.Remove(ActiveCacheKey(userId));
+        _cache.Remove(StateCacheKey(userId));
+    }
+
+    private async Task<UserAuthState> LoadAndCacheAsync(Guid userId, CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SecurityDbContext>();
+
+        var userRow = await db.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new { u.Status, u.Role })
+            .FirstOrDefaultAsync(ct);
+
+        var state = userRow is null
+            ? new UserAuthState(false, null)
+            : new UserAuthState(userRow.Status == UserStatus.ACTIVE, userRow.Role.ToString());
+
+        _cache.Set(ActiveCacheKey(userId), state.IsActive, CacheDuration);
+        _cache.Set(StateCacheKey(userId), state, CacheDuration);
+        return state;
+    }
+
+    private static string ActiveCacheKey(Guid userId) => $"user_active:{userId}";
+    private static string StateCacheKey(Guid userId) => $"user_state:{userId}";
+
+    private sealed record UserAuthState(bool IsActive, string? Role);
 }

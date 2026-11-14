@@ -3,6 +3,9 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Dapper" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\LoanSystem.Modules.Administration.Core\LoanSystem.Modules.Administration.Core.csproj" />
     <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
   </ItemGroup>

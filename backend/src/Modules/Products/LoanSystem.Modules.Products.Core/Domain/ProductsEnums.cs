@@ -69,6 +69,27 @@ internal static class CommissionModeParser
     }
 }
 
+internal static class HolidayShiftParser
+{
+    public const string Supported = "NEXT, PREV";
+
+    public static bool TryParse(string? value, out HolidayShift shift)
+    {
+        switch (value?.Trim().ToUpperInvariant())
+        {
+            case "NEXT":
+                shift = HolidayShift.NEXT;
+                return true;
+            case "PREV":
+                shift = HolidayShift.PREV;
+                return true;
+            default:
+                shift = default;
+                return false;
+        }
+    }
+}
+
 internal static class AmortizationMethodParser
 {
     public const string Supported = "FRANCES (alias FRENCH), FLAT, ALEMAN, AMERICANO";

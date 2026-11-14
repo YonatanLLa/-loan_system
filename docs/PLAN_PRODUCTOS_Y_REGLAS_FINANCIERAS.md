@@ -338,8 +338,8 @@ LoanSystem.Modules.Products.Adapters/
 
 - [ ] **B1** `ProductsEnums.cs`: enums C# con miembros **idénticos** a las etiquetas PG (`FRANCES`, `FLAT`, `ALEMAN`, `AMERICANO`, `DIARIA`, `SEMANAL`, `QUINCENAL`, `MENSUAL`, `DEDUCTIVA`, `FINANCIADA`, `SALDO_CAPITAL_VENCIDO`, `CUOTA_TOTAL_VENCIDA`, `ACTIVO`, `INACTIVO`, `CONSUMO`, …), mapeados con `NpgsqlNullNameTranslator` como en Security. El enum `AmortizationMethod` actual (`French = 1`) se reemplaza; el parser acepta `"FRENCH"` como alias de `FRANCES`.
 - [ ] **B2** `ProductsDbContext.OnModelCreating`: `ApplyConfigurationsFromAssembly`, `MapEnum<...>()` de cada enum, y `ApprovalRequestConfiguration` de Common (necesario para PRO-09).
-- [ ] **B3** `ProductsOptions` (sección `Products`, §11) con `ValidateOnStart()`.
-- [ ] **B4** Feriados: crear en **Administration** el contrato público `IHolidayCalendarQuery.GetNonBusinessDatesAsync(DateOnly from, DateOnly to, ct)` (con implementación que lee `holidays` y expande `is_recurring`). Products lo consume a través de su puerto `IHolidayProvider` (adaptador `AdministrationHolidayProvider`, caché en memoria 1 h). Nunca leer la tabla `holidays` desde Products.
+- [ ] **B3** (parcial: secciones `Engine` y `Cache` con `ValidateOnStart`; `Rules` y `RateCaps` llegan con PRO-01/PRO-08) `ProductsOptions` (sección `Products`, §11) con `ValidateOnStart()`.
+- [x] **B4** Feriados: crear en **Administration** el contrato público `IHolidayCalendarQuery.GetHolidaysAsync(DateOnly from, DateOnly to, ct)` (implementado con ese nombre: devuelve solo feriados; los días de semana no hábiles los decide Products por configuración, D5) (con implementación que lee `holidays` y expande `is_recurring`). Products lo consume a través de su puerto `IHolidayProvider` (adaptador `AdministrationHolidayProvider`, caché en memoria 1 h). Nunca leer la tabla `holidays` desde Products.
 - [ ] **B5** Prueba de arquitectura: ningún módulo referencia `Products.Core.Domain` (incluido `Engine`) ni `Products.Adapters`; solo `Contracts` y `Ports.Inbound`.
 - [ ] **B6** Permisos en `Modules/Security/.../Domain/RolePermissions.cs`:
 
@@ -477,8 +477,8 @@ En todas: `S₀ = P`; `i_k` = tasa del periodo `k` (con `d_k` días; en `NOMINAL
 
 ### BE-PRO-06 — Día de pago y fechas de vencimiento
 
-- [ ] **PRO-06.1** `IBusinessCalendar` (puro): `bool IsBusinessDay(DateOnly)`. Implementación `BusinessCalendar(IReadOnlySet<DateOnly> holidays, IReadOnlySet<DayOfWeek> nonBusinessWeekdays)`. El servicio de aplicación la construye con `IHolidayProvider` para el rango `[desembolso, desembolso + plazo + 31 días]`.
-- [ ] **PRO-06.2** `DueDateGenerator.Generate(...)` → lista de `(TheoreticalDueDate, DueDate)`:
+- [x] **PRO-06.1** `IBusinessCalendar` (puro): `bool IsBusinessDay(DateOnly)`. Implementación `BusinessCalendar(IReadOnlySet<DateOnly> holidays, IReadOnlySet<DayOfWeek> nonBusinessWeekdays)`. El servicio de aplicación la construye con `IHolidayProvider` para el rango `[desembolso, desembolso + plazo + 31 días]`.
+- [x] **PRO-06.2** `DueDateGenerator.Generate(...)` → lista de `(TheoreticalDueDate, DueDate)`:
 
 | Frecuencia | Vencimiento teórico `k` |
 |---|---|
@@ -488,10 +488,10 @@ En todas: `S₀ = P`; `i_k` = tasa del periodo `k` (con `d_k` días; en `NOMINAL
 | `SEMANAL` | `desembolso + 7·k` días |
 | `DIARIA` | `k`-ésimo día **hábil** posterior al desembolso (ya es hábil; no se desplaza) |
 
-- [ ] **PRO-06.3** Desplazamiento (todas menos `DIARIA`): si el teórico no es hábil, `DueDate` = siguiente hábil (`NEXT`) o anterior hábil (`PREV`). Con `PREV`, si el resultado queda ≤ al vencimiento exigible anterior o ≤ al desembolso, se usa `NEXT`.
-- [ ] **PRO-06.4** Interés por días **teóricos** (D4): `d_k = teórico_k − teórico_{k−1}` (con `teórico_0 = desembolso`).
-- [ ] **PRO-06.5** Validaciones del producto: `payment_day` en 1–28 y solo si `MENSUAL ∈ allowed_frequencies` (si no, `400 Products.PaymentDayRequiresMonthly`); `holiday_shift_direction ∈ {NEXT, PREV}`.
-- [ ] **PRO-06.6** `MinDaysToFirstInstallment` configurable (default 15). Con `payment_day` el primer periodo queda entre 15 y 45 días.
+- [x] **PRO-06.3** Desplazamiento (todas menos `DIARIA`): si el teórico no es hábil, `DueDate` = siguiente hábil (`NEXT`) o anterior hábil (`PREV`). Con `PREV`, si el resultado queda ≤ al vencimiento exigible anterior o ≤ al desembolso, se usa `NEXT`.
+- [x] **PRO-06.4** Interés por días **teóricos** (D4): `d_k = teórico_k − teórico_{k−1}` (con `teórico_0 = desembolso`).
+- [x] **PRO-06.5** Validaciones del producto: `payment_day` en 1–28 y solo si `MENSUAL ∈ allowed_frequencies` (si no, `400 Products.PaymentDayRequiresMonthly`); `holiday_shift_direction ∈ {NEXT, PREV}`.
+- [x] **PRO-06.6** `MinDaysToFirstInstallment` configurable (default 15). Con `payment_day` el primer periodo queda entre 15 y 45 días.
 
 - **CA-06.a** Desembolso **2026-11-25**, `payment_day = 5` → el 2026-12-05 está a 10 días (< 15) → primer vencimiento **2027-01-05** (41 días).
 - **CA-06.b** Desembolso **2026-11-14**, `payment_day = 8`, feriado 2026-12-08 (martes) → teórico 2026-12-08; exigible **2026-12-09** con `NEXT` y **2026-12-07** con `PREV`; el interés de la cuota 1 se calcula por **24** días en ambos casos.

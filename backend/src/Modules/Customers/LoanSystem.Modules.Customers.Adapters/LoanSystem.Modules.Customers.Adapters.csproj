@@ -4,6 +4,16 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LoanSystem.Modules.Customers.Core\LoanSystem.Modules.Customers.Core.csproj" />
+    <ProjectReference Include="..\..\Loans\LoanSystem.Modules.Loans.Core\LoanSystem.Modules.Loans.Core.csproj" />
+    <ProjectReference Include="..\..\Origination\LoanSystem.Modules.Origination.Core\LoanSystem.Modules.Origination.Core.csproj" />
     <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Dapper" />
+    <PackageReference Include="Quartz" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoanSystem.Adapters.UnitTests" />
+    <InternalsVisibleTo Include="LoanSystem.IntegrationTests" />
   </ItemGroup>
 </Project>

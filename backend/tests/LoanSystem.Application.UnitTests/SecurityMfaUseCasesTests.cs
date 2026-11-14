@@ -5,6 +5,7 @@ using LoanSystem.Modules.Security.Core.Application;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Domain;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
 using Shouldly;
 using Xunit;
 
@@ -262,8 +263,13 @@ public class SecurityMfaUseCasesTests
     {
         public List<RefreshToken> Added { get; } = [];
         public void Add(RefreshToken token) => Added.Add(token);
-        public Task<RefreshToken?> FindActiveByHashAsync(string tokenHash, CancellationToken ct = default) =>
-            Task.FromResult(Added.FirstOrDefault(t => t.TokenHash == tokenHash && t.RevokedAt == null));
+        public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken ct = default) =>
+            Task.FromResult(Added.FirstOrDefault(t => t.TokenHash == tokenHash));
+        public Task RevokeFamilyAsync(Guid familyId, IClock clock, CancellationToken ct = default)
+        {
+            foreach (var t in Added.Where(t => t.FamilyId == familyId && t.RevokedAt == null)) t.Revoke(clock);
+            return Task.CompletedTask;
+        }
         public Task RevokeAllForUserAsync(Guid userId, IClock clock, CancellationToken ct = default)
         {
             foreach (var t in Added.Where(t => t.UserId == userId && t.RevokedAt == null)) t.Revoke(clock);

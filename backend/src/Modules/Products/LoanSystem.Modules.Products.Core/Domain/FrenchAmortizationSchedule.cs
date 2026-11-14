@@ -1,4 +1,5 @@
 using LoanSystem.Common.Core.Domain;
+using LoanSystem.Modules.Products.Core.Domain.Engine;
 
 namespace LoanSystem.Modules.Products.Core.Domain;
 
@@ -16,9 +17,9 @@ internal sealed record AmortizationSchedule(
     IReadOnlyList<ScheduleInstallment> Installments);
 
 /// <summary>
-/// French (constant installment) amortization computed exclusively with 128-bit decimal
-/// and Half-Up rounding. The last installment absorbs the residual centavo so that the
-/// amortized principal always matches the loan principal exactly.
+/// Legacy entry point for the monthly French schedule. The calculation now lives in
+/// <see cref="ScheduleEngine"/> / <see cref="FrenchStrategy"/> (BE-PRO-02); this facade keeps the original API
+/// and its expected values (DECISION_01) unchanged.
 /// </summary>
 internal static class FrenchAmortizationSchedule
 {
@@ -26,15 +27,8 @@ internal static class FrenchAmortizationSchedule
     {
         if (termMonths <= 0)
             throw new ArgumentOutOfRangeException(nameof(termMonths), "Term must be greater than zero.");
-        if (monthlyRate < 0)
-            throw new ArgumentOutOfRangeException(nameof(monthlyRate), "Rate cannot be negative.");
 
-        if (monthlyRate == 0m)
-            return principal / termMonths;
-
-        // quota = P * r * (1+r)^n / ((1+r)^n - 1)
-        var growth = InterestRate.Pow(1m + monthlyRate, termMonths);
-        return new Money(principal.Amount * monthlyRate * growth / (growth - 1m), principal.Currency);
+        return FrenchStrategy.CalculateInstallment(principal, monthlyRate, termMonths);
     }
 
     /// <param name="annualRatePercentage">Annual rate in percent (e.g. 30 = 30%).</param>
@@ -44,39 +38,22 @@ internal static class FrenchAmortizationSchedule
     /// </param>
     public static AmortizationSchedule Build(Money principal, decimal annualRatePercentage, int termMonths, RateType rateType)
     {
-        var monthlyRate = InterestRate.ToMonthlyRate(annualRatePercentage, rateType);
-        var installment = CalculateInstallment(principal, monthlyRate, termMonths);
+        if (annualRatePercentage < 0)
+            throw new ArgumentOutOfRangeException(nameof(annualRatePercentage), "Rate cannot be negative.");
 
-        var installments = new List<ScheduleInstallment>(termMonths);
-        var balance = principal;
-        var totalInterest = Money.Zero(principal.Currency);
+        var result = ScheduleEngine.Build(new ScheduleInput(
+            principal, annualRatePercentage / 100m, rateType, PaymentFrequency.MENSUAL, termMonths, AmortizationMethod.FRANCES));
 
-        for (var i = 1; i <= termMonths; i++)
-        {
-            var interest = balance * monthlyRate;
-            Money principalPart;
-            Money total;
+        if (result.IsFailure)
+            throw new InvalidOperationException(result.Error.Description);
 
-            if (i == termMonths)
-            {
-                // Residual centavo adjustment on the last installment
-                principalPart = balance;
-                total = principalPart + interest;
-            }
-            else
-            {
-                principalPart = installment - interest;
-                if (principalPart > balance)
-                    principalPart = balance;
-                total = principalPart + interest;
-            }
-
-            balance -= principalPart;
-            totalInterest += interest;
-
-            installments.Add(new ScheduleInstallment(i, principalPart, interest, total, balance));
-        }
-
-        return new AmortizationSchedule(principal, totalInterest, principal + totalInterest, installments);
+        var schedule = result.Value;
+        return new AmortizationSchedule(
+            schedule.Principal,
+            schedule.TotalInterest,
+            schedule.TotalPayable,
+            schedule.Lines
+                .Select(l => new ScheduleInstallment(l.Number, l.Principal, l.Interest, l.Total, l.RemainingBalance))
+                .ToList());
     }
 }

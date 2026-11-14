@@ -36,17 +36,17 @@ Documentos hermanos: [Frontend](REQUERIMIENTOS_FRONTEND.md) · [Base de datos](R
 
 | ID | Requerimiento | Origen | Fase | Estado |
 |---|---|---|---|---|
-| BE-CUS-01 | `POST /api/customers` y `GET /api/customers/{id}`: unicidad por tipo y número de documento (`409`) y validación con el regex del catálogo | US-04, RF-04.1–04.4 | MVP | Especificado |
-| BE-CUS-02 | Historial auditado de cambios en ingresos, dirección y teléfono | RF-04.3 | MVP | Especificado |
-| BE-CUS-03 | Carga de documentos KYC a Object Storage (solo URI y SHA-256 en BD); URLs firmadas y temporales para verlos | RF-05.1, RNF-04 | MVP | Especificado |
-| BE-CUS-04 | Estados KYC `PENDING`, `VERIFIED`, `REJECTED` y `EXPIRED`, con vencimiento (`kyc_expires_at`) | RF-05.2 | MVP | Especificado |
-| BE-CUS-05 | Verificación automática de identidad (consulta de DNI), biometría con prueba de vida y listas PEP/AML vía un puerto `IIdentityVerifier`; resultados guardados y revisables | US-05, RF-26.4, README §3.11 | MVP | Parcial (no hay proveedor ni registro de resultados) |
-| BE-CUS-06 | Bloquear todo desembolso si el KYC no está `VERIFIED` (`422`) | RF-05.3, CA-05.2 | MVP | Especificado |
-| BE-CUS-07 | Consentimientos por finalidad y versión del texto, con fecha e IP; poder revocar el de marketing | RF-05.4, Ley 29733 | MVP | Parcial (hoy un solo consentimiento) |
-| BE-CUS-08 | Ficha 360: préstamos activos e históricos, deuda consolidada, atraso máximo actual e histórico, solicitudes y alerta de mora | US-06, RF-06.1–06.2 | MVP | Especificado |
-| BE-CUS-09 | Cuentas del cliente: registrar CCI (20 dígitos) o billetera, verificar titularidad a su nombre, una sola primaria activa | Modelo digital | MVP | Nuevo |
-| BE-CUS-10 | Cambiar la cuenta de desembolso exige OTP nuevo y bloquea desembolsos hacia la cuenta nueva durante un periodo configurable (24–48 h) | ARQUITECTURA_GENERAL §9 | MVP | Nuevo |
-| BE-CUS-11 | OTP con propósito (login, contrato, cambio de cuenta), expiración, máximo de intentos y bloqueo por abuso | RF-26.2 | MVP | Parcial (sin propósito ni intentos) |
+| BE-CUS-01 | `POST /api/customers` y `GET /api/customers/{id}`: unicidad por tipo y número de documento (`409`) y validación con el regex del catálogo | US-04, RF-04.1–04.4 | MVP | Implementado |
+| BE-CUS-02 | Historial auditado de cambios en ingresos, dirección y teléfono | RF-04.3 | MVP | Implementado |
+| BE-CUS-03 | Carga de documentos KYC a Object Storage (solo URI y SHA-256 en BD); URLs firmadas y temporales para verlos | RF-05.1, RNF-04 | MVP | Implementado |
+| BE-CUS-04 | Estados KYC `PENDING`, `VERIFIED`, `REJECTED` y `EXPIRED`, con vencimiento (`kyc_expires_at`) | RF-05.2 | MVP | Implementado |
+| BE-CUS-05 | Verificación automática de identidad (consulta de DNI), biometría con prueba de vida y listas PEP/AML vía un puerto `IIdentityVerifier`; resultados guardados y revisables | US-05, RF-26.4, README §3.11 | MVP | Implementado |
+| BE-CUS-06 | Bloquear todo desembolso si el KYC no está `VERIFIED` (`422`) | RF-05.3, CA-05.2 | MVP | Implementado |
+| BE-CUS-07 | Consentimientos por finalidad y versión del texto, con fecha e IP; poder revocar el de marketing | RF-05.4, Ley 29733 | MVP | Implementado |
+| BE-CUS-08 | Ficha 360: préstamos activos e históricos, deuda consolidada, atraso máximo actual e histórico, solicitudes y alerta de mora | US-06, RF-06.1–06.2 | MVP | Implementado |
+| BE-CUS-09 | Cuentas del cliente: registrar CCI (20 dígitos) o billetera, verificar titularidad a su nombre, una sola primaria activa | Modelo digital | MVP | Implementado |
+| BE-CUS-10 | Cambiar la cuenta de desembolso exige OTP nuevo y bloquea desembolsos hacia la cuenta nueva durante un periodo configurable (24–48 h) | ARQUITECTURA_GENERAL §9 | MVP | Implementado |
+| BE-CUS-11 | OTP con propósito (login, contrato, cambio de cuenta), expiración, máximo de intentos y bloqueo por abuso | RF-26.2 | MVP | Implementado |
 
 ## 3. Products
 

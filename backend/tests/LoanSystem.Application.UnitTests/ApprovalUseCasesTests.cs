@@ -277,7 +277,7 @@ public class ApprovalUseCasesTests
 
         _currentUser.Authenticate(adminB);
         var approve = await CreateApprove().ExecuteAsync(
-            new ApproveApprovalCommand(req.Value.Id, "Aprobado", ValidCode));
+            new ApproveApprovalCommand(req.Value.Id, "Aprobado", ValidTotp));
 
         approve.IsSuccess.ShouldBeTrue();
         adminB.MfaSecretEncrypted.ShouldStartWith($"v2:k2:{adminB.Id}::");
@@ -306,8 +306,13 @@ public class ApprovalUseCasesTests
         private readonly List<RefreshToken> _tokens = [];
         public void Add(RefreshToken token) => _tokens.Add(token);
         public bool AllRevokedFor(Guid userId) => _tokens.Where(t => t.UserId == userId).All(t => t.RevokedAt.HasValue);
-        public Task<RefreshToken?> FindActiveByHashAsync(string tokenHash, CancellationToken ct = default) =>
-            Task.FromResult(_tokens.FirstOrDefault(t => t.TokenHash == tokenHash && t.RevokedAt == null));
+        public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken ct = default) =>
+            Task.FromResult(_tokens.FirstOrDefault(t => t.TokenHash == tokenHash));
+        public Task RevokeFamilyAsync(Guid familyId, IClock clock, CancellationToken ct = default)
+        {
+            foreach (var t in _tokens.Where(t => t.FamilyId == familyId && t.RevokedAt == null)) t.Revoke(clock);
+            return Task.CompletedTask;
+        }
         public Task RevokeAllForUserAsync(Guid userId, IClock clock, CancellationToken ct = default)
         {
             foreach (var t in _tokens.Where(t => t.UserId == userId && t.RevokedAt == null)) t.Revoke(clock);
@@ -395,7 +400,7 @@ public class ApprovalUseCasesTests
         public bool TryVerify(string secret, string code, DateTimeOffset now, out long matchedStep)
         {
             matchedStep = NextStep;
-            return code == ValidCode;
+            return code == ValidTotp;
         }
     }
 

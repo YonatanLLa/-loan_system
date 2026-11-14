@@ -1,8 +1,10 @@
 using LoanSystem.Common.Core.Application;
 using LoanSystem.Common.Core.Ports.Outbound;
+using LoanSystem.Modules.Customers.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
 
 namespace LoanSystem.Modules.Security.Core.Application;
 
@@ -30,6 +32,7 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
     private readonly IClock _clock;
     private readonly IAuditContext _audit;
     private readonly TimeSpan _refreshLifetime;
+    private readonly ICustomerPortalLookup? _portalLookup;
 
     public RefreshTokenUseCase(
         IRefreshTokenRepository refreshTokens,
@@ -39,7 +42,8 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
         IAuditContext audit,
-        int refreshTokenDays)
+        int refreshTokenDays,
+        ICustomerPortalLookup? portalLookup = null)
     {
         _refreshTokens = refreshTokens;
         _users = users;
@@ -49,6 +53,7 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
         _clock = clock;
         _audit = audit;
         _refreshLifetime = TimeSpan.FromDays(refreshTokenDays);
+        _portalLookup = portalLookup;
     }
 
     public async Task<Result<AuthTokensResponse>> ExecuteAsync(RefreshRequest request, CancellationToken ct = default)
@@ -84,7 +89,8 @@ internal sealed class RefreshTokenUseCase : IRefreshTokenUseCase
 
         // Rotation: the presented token is revoked (linked to its replacement) and a new pair is issued in
         // the same family. INSERT + conditional UPDATE (revoked_at IS NULL) commit in one SaveChanges.
-        var tokens = TokenIssuer.Rotate(current, user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime);
+        var tokens = await TokenIssuer.RotateAsync(
+            current, user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime, _portalLookup, ct);
 
         try
         {

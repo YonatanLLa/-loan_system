@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { LoaderCircle, UserPlus, UserCheck, AlertTriangle } from '@lucide/vue'
+import { LoaderCircle, UserPlus, UserCheck, AlertTriangle, ShieldCheck } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { Customer, CreateCustomerRequest } from '@prestamos/api-client'
@@ -36,6 +36,10 @@ const isSubmitting = ref(false)
 const duplicateDocError = ref<string | null>(null)
 const fieldErrors = ref<Record<string, string>>({})
 
+const acceptDataProcessing = ref(true)
+const acceptCreditBureau = ref(true)
+const acceptMarketing = ref(false)
+
 const form = ref<CreateCustomerRequest>({
   personType: 'NATURAL',
   docType: 'DNI',
@@ -45,11 +49,15 @@ const form = ref<CreateCustomerRequest>({
   phone: '',
   address: '',
   district: '',
+  province: 'Lima',
+  department: 'Lima',
+  ubigeo: '150101',
   birthDate: '1995-01-01',
   monthlyNetIncome: '2500.00',
   occupation: '',
   employerName: '',
   workSeniorityMonths: 12,
+  isPep: false,
 })
 
 watch(
@@ -64,14 +72,21 @@ watch(
         docNumber: c.docNumber,
         fullName: c.fullName,
         email: c.email,
-        phone: c.phone,
+        phone: c.phone ?? c.phonePrimary ?? '',
         address: c.address ?? '',
         district: c.district ?? '',
-        birthDate: c.birthDate,
-        monthlyNetIncome: c.monthlyNetIncome,
+        province: c.province ?? 'Lima',
+        department: c.department ?? 'Lima',
+        ubigeo: c.ubigeo ?? '150101',
+        birthDate: c.birthDate ?? '1995-01-01',
+        monthlyNetIncome: String(c.monthlyNetIncome ?? c.monthlyIncome ?? '2500.00').replace(
+          /[^\d.]/g,
+          '',
+        ),
         occupation: c.occupation ?? '',
         employerName: c.employerName ?? '',
-        workSeniorityMonths: c.workSeniorityMonths ?? 0,
+        workSeniorityMonths: c.workSeniorityMonths ?? 12,
+        isPep: c.isPep ?? false,
       }
     } else {
       form.value = {
@@ -83,12 +98,19 @@ watch(
         phone: '',
         address: '',
         district: '',
+        province: 'Lima',
+        department: 'Lima',
+        ubigeo: '150101',
         birthDate: '1995-01-01',
         monthlyNetIncome: '2500.00',
         occupation: '',
         employerName: '',
         workSeniorityMonths: 12,
+        isPep: false,
       }
+      acceptDataProcessing.value = true
+      acceptCreditBureau.value = true
+      acceptMarketing.value = false
     }
   },
   { immediate: true },
@@ -122,7 +144,7 @@ function validateClient(): boolean {
     }
   }
 
-  if (!form.value.fullName.trim()) {
+  if (!form.value.fullName?.trim()) {
     fieldErrors.value.fullName = 'El nombre completo o razón social es obligatorio.'
     valid = false
   }
@@ -132,12 +154,12 @@ function validateClient(): boolean {
     valid = false
   }
 
-  if (!/^9\d{8}$/.test(form.value.phone)) {
+  if (!/^9\d{8}$/.test(form.value.phone ?? '')) {
     fieldErrors.value.phone = 'El celular debe tener 9 dígitos y empezar con 9 (formato Perú).'
     valid = false
   }
 
-  if (!form.value.birthDate) {
+  if (form.value.personType === 'NATURAL' && !form.value.birthDate) {
     fieldErrors.value.birthDate = 'La fecha de nacimiento es requerida.'
     valid = false
   }
@@ -145,6 +167,12 @@ function validateClient(): boolean {
   const income = Number(form.value.monthlyNetIncome)
   if (Number.isNaN(income) || income <= 0) {
     fieldErrors.value.monthlyNetIncome = 'El ingreso neto mensual debe ser mayor a 0.'
+    valid = false
+  }
+
+  if (!isEditing.value && !acceptDataProcessing.value) {
+    fieldErrors.value.consents =
+      'El consentimiento LPDP (Ley N° 29733) es obligatorio para registrar al cliente.'
     valid = false
   }
 
@@ -158,15 +186,34 @@ async function onSubmit() {
   duplicateDocError.value = null
 
   try {
+    const consents = [
+      { purpose: 'DATA_PROCESSING' as const, version: 'v1.0-2026' },
+      ...(acceptCreditBureau.value
+        ? [{ purpose: 'CREDIT_BUREAU_QUERY' as const, version: 'v1.0-2026' }]
+        : []),
+      ...(acceptMarketing.value
+        ? [{ purpose: 'MARKETING' as const, version: 'v1.0-2026' }]
+        : []),
+    ]
+
+    const payload: CreateCustomerRequest = {
+      ...form.value,
+      consents,
+    }
+
     if (isEditing.value && props.customerToEdit) {
-      const data = await saveCustomer(form.value, props.customerToEdit.id)
+      const data = await saveCustomer(
+        payload,
+        props.customerToEdit.id,
+        props.customerToEdit.version ?? 1,
+      )
       toast.success('Cliente actualizado', {
         description: `Los datos de ${data.fullName} se guardaron exitosamente.`,
       })
       emit('saved', data)
       emit('update:open', false)
     } else {
-      const data = await saveCustomer(form.value)
+      const data = await saveCustomer(payload)
       toast.success('Cliente registrado', {
         description: `${data.fullName} ha sido dado de alta exitosamente.`,
       })
@@ -178,7 +225,8 @@ async function onSubmit() {
 
     // FE-BO-07: Mensaje claro ante documento duplicado (409)
     if (apiError.status === 409) {
-      duplicateDocError.value = apiError.detail || 'Ya existe un cliente registrado con este documento.'
+      duplicateDocError.value =
+        apiError.detail || 'Ya existe un cliente registrado con este documento.'
       toast.error('Documento duplicado', {
         description: duplicateDocError.value,
       })
@@ -211,8 +259,8 @@ async function onSubmit() {
         <SheetDescription>
           {{
             isEditing
-              ? 'Modifica los datos personales y de contacto del cliente.'
-              : 'Registra un nuevo solicitante en la base de datos de la Fintech (FE-BO-06).'
+              ? 'Modifica los datos de contacto, dirección y perfil económico del cliente. El documento de identidad es inmutable (Decisión D3).'
+              : 'Registra un nuevo solicitante con validación de documento y consentimientos LPDP (FE-BO-06).'
           }}
         </SheetDescription>
       </SheetHeader>
@@ -239,7 +287,7 @@ async function onSubmit() {
                 id="personType"
                 v-model="form.personType"
                 :disabled="isEditing"
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
               >
                 <option value="NATURAL">Persona Natural</option>
                 <option value="JURIDICA">Persona Jurídica</option>
@@ -252,7 +300,7 @@ async function onSubmit() {
                 id="docType"
                 v-model="form.docType"
                 :disabled="isEditing"
-                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+                class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
               >
                 <option value="DNI">DNI (8 dígitos)</option>
                 <option value="CE">Carné de Extranjería (9 dígitos)</option>
@@ -262,26 +310,48 @@ async function onSubmit() {
             </div>
           </div>
 
-          <div class="space-y-1.5">
-            <label for="docNumber" class="text-xs font-medium">Número de Documento</label>
-            <Input
-              id="docNumber"
-              v-model="form.docNumber"
-              :disabled="isEditing"
-              placeholder="Ej. 41234567"
-              :class="{ 'border-destructive': fieldErrors.docNumber }"
-            />
-            <p v-if="fieldErrors.docNumber" class="text-xs text-destructive">
-              {{ fieldErrors.docNumber }}
-            </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="space-y-1.5">
+              <label for="docNumber" class="text-xs font-medium">Número de Documento</label>
+              <Input
+                id="docNumber"
+                v-model="form.docNumber"
+                :disabled="isEditing"
+                placeholder="Ej. 45891230"
+                class="font-mono"
+                :class="{ 'border-destructive': fieldErrors.docNumber }"
+              />
+              <p v-if="fieldErrors.docNumber" class="text-xs text-destructive">
+                {{ fieldErrors.docNumber }}
+              </p>
+            </div>
+
+            <div class="space-y-1.5">
+              <label for="birthDate" class="text-xs font-medium">
+                {{ form.personType === 'JURIDICA' ? 'Fecha de Constitución' : 'Fecha de Nacimiento' }}
+              </label>
+              <Input
+                id="birthDate"
+                v-model="form.birthDate"
+                type="date"
+                :disabled="isEditing"
+                :class="{ 'border-destructive': fieldErrors.birthDate }"
+              />
+              <p v-if="fieldErrors.birthDate" class="text-xs text-destructive">
+                {{ fieldErrors.birthDate }}
+              </p>
+            </div>
           </div>
 
           <div class="space-y-1.5">
-            <label for="fullName" class="text-xs font-medium">Nombre Completo / Razón Social</label>
+            <label for="fullName" class="text-xs font-medium">
+              {{ form.personType === 'JURIDICA' ? 'Razón Social' : 'Nombres y Apellidos Completos' }}
+            </label>
             <Input
               id="fullName"
               v-model="form.fullName"
-              placeholder="Nombres y Apellidos completos"
+              :disabled="isEditing"
+              placeholder="Ej. María Elena Quispe Huamán"
               :class="{ 'border-destructive': fieldErrors.fullName }"
             />
             <p v-if="fieldErrors.fullName" class="text-xs text-destructive">
@@ -290,7 +360,7 @@ async function onSubmit() {
           </div>
         </div>
 
-        <div class="space-y-4 pt-2 border-t">
+        <div class="space-y-4 border-t pt-4">
           <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             2. Contacto y Ubicación
           </h4>
@@ -311,11 +381,13 @@ async function onSubmit() {
             </div>
 
             <div class="space-y-1.5">
-              <label for="phone" class="text-xs font-medium">Celular (9 dígitos)</label>
+              <label for="phone" class="text-xs font-medium">Celular (Perú)</label>
               <Input
                 id="phone"
                 v-model="form.phone"
                 placeholder="987654321"
+                maxlength="9"
+                class="font-mono"
                 :class="{ 'border-destructive': fieldErrors.phone }"
               />
               <p v-if="fieldErrors.phone" class="text-xs text-destructive">
@@ -324,83 +396,133 @@ async function onSubmit() {
             </div>
           </div>
 
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div class="space-y-1.5">
-              <label for="address" class="text-xs font-medium">Dirección</label>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2 space-y-1.5">
+              <label for="address" class="text-xs font-medium">Dirección Domiciliaria</label>
               <Input
                 id="address"
                 v-model="form.address"
-                placeholder="Av. Los Pinos 123"
+                placeholder="Av. Los Próceres 450, Urb. Santa Catalina"
               />
             </div>
 
             <div class="space-y-1.5">
-              <label for="district" class="text-xs font-medium">Distrito / Ciudad</label>
-              <Input
-                id="district"
-                v-model="form.district"
-                placeholder="Miraflores, Lima"
-              />
+              <label for="district" class="text-xs font-medium">Distrito</label>
+              <Input id="district" v-model="form.district" placeholder="La Victoria" />
             </div>
           </div>
         </div>
 
-        <div class="space-y-4 pt-2 border-t">
+        <div class="space-y-4 border-t pt-4">
           <h4 class="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            3. Datos Socioeconómicos
+            3. Perfil Económico / Laboral
           </h4>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <label for="birthDate" class="text-xs font-medium">Fecha de Nacimiento</label>
-              <Input
-                id="birthDate"
-                v-model="form.birthDate"
-                type="date"
-                :class="{ 'border-destructive': fieldErrors.birthDate }"
-              />
-              <p v-if="fieldErrors.birthDate" class="text-xs text-destructive">
-                {{ fieldErrors.birthDate }}
-              </p>
-            </div>
-
-            <div class="space-y-1.5">
-              <label for="monthlyNetIncome" class="text-xs font-medium">Ingreso Neto Mensual (S/)</label>
+              <label for="monthlyNetIncome" class="text-xs font-medium">
+                Ingreso Neto Mensual (S/)
+              </label>
               <Input
                 id="monthlyNetIncome"
                 v-model="form.monthlyNetIncome"
-                type="text"
-                placeholder="3200.00"
+                type="number"
+                step="0.01"
+                min="0"
+                class="font-mono"
                 :class="{ 'border-destructive': fieldErrors.monthlyNetIncome }"
               />
               <p v-if="fieldErrors.monthlyNetIncome" class="text-xs text-destructive">
                 {{ fieldErrors.monthlyNetIncome }}
               </p>
             </div>
+
+            <div class="space-y-1.5">
+              <label for="workSeniorityMonths" class="text-xs font-medium">
+                Antigüedad Laboral (meses)
+              </label>
+              <Input
+                id="workSeniorityMonths"
+                v-model.number="form.workSeniorityMonths"
+                type="number"
+                min="0"
+              />
+            </div>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div class="space-y-1.5">
-              <label for="occupation" class="text-xs font-medium">Ocupación / Profesión</label>
-              <Input
-                id="occupation"
-                v-model="form.occupation"
-                placeholder="Contadora, Ingeniero, etc."
-              />
+              <label for="occupation" class="text-xs font-medium">Ocupación / Cargo</label>
+              <Input id="occupation" v-model="form.occupation" placeholder="Ej. Contador Público" />
             </div>
 
             <div class="space-y-1.5">
-              <label for="employerName" class="text-xs font-medium">Centro Laboral</label>
+              <label for="employerName" class="text-xs font-medium">Centro Laboral / Empresa</label>
               <Input
                 id="employerName"
                 v-model="form.employerName"
-                placeholder="Nombre de empresa o Independiente"
+                placeholder="Ej. Corporación Peruana SAC"
               />
             </div>
           </div>
+
+          <label class="flex items-center gap-2 text-xs cursor-pointer pt-1">
+            <input
+              v-model="form.isPep"
+              type="checkbox"
+              class="rounded border-input"
+            />
+            <span>
+              <strong>Persona Expuesta Políticamente (PEP):</strong> Declaración jurada SBS / UIF-Perú.
+            </span>
+          </label>
         </div>
 
-        <div class="flex items-center justify-end gap-3 pt-4 border-t">
+        <!-- Consentimientos LPDP en Alta -->
+        <div v-if="!isEditing" class="rounded-lg border p-3.5 space-y-2 bg-primary/5">
+          <div class="flex items-center gap-2 text-xs font-semibold text-primary">
+            <ShieldCheck class="size-4" />
+            <span>Consentimientos Ley N° 29733 (LPDP)</span>
+          </div>
+          <label class="flex items-start gap-2 text-xs cursor-pointer">
+            <input
+              v-model="acceptDataProcessing"
+              type="checkbox"
+              class="mt-0.5 rounded border-input"
+            />
+            <span>
+              <strong>Tratamiento de Datos Personales (Obligatorio):</strong> Autorizo el tratamiento
+              para evaluación crediticia, prevención LA/FT y ejecución contractual.
+            </span>
+          </label>
+          <label class="flex items-start gap-2 text-xs cursor-pointer">
+            <input
+              v-model="acceptCreditBureau"
+              type="checkbox"
+              class="mt-0.5 rounded border-input"
+            />
+            <span>
+              <strong>Consulta en Centrales de Riesgo (SBS / Equifax / Sentinel):</strong> Autorizo
+              la consulta de mi historial crediticio.
+            </span>
+          </label>
+          <label class="flex items-start gap-2 text-xs cursor-pointer">
+            <input
+              v-model="acceptMarketing"
+              type="checkbox"
+              class="mt-0.5 rounded border-input"
+            />
+            <span>
+              <strong>Comunicaciones Comerciales (Opcional):</strong> Deseo recibir ofertas y
+              campañas promocionales.
+            </span>
+          </label>
+          <p v-if="fieldErrors.consents" class="text-xs text-destructive">
+            {{ fieldErrors.consents }}
+          </p>
+        </div>
+
+        <div class="flex items-center justify-end gap-2 border-t pt-4">
           <Button
             type="button"
             variant="ghost"

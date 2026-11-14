@@ -27,8 +27,15 @@ Montar los secretos bajo `Secrets:Path` (por ejemplo `/run/secrets`) con `Secret
     }
   }
   ```
+- Secretos del módulo **`Customers`** (obligatorios en `Production` salvo que S3 no esté activo):
+  - `Customers__FieldProtection__Key` *(o `Customers__FieldProtection__Keys` para rotación con keyring JSON igual que MFA)*: clave AES-256 de 32 bytes Base64 para cifrar números de cuenta/CCI (`customer_bank_accounts.account_number_encrypted`).
+  - `Customers__FieldProtection__HmacKey`: secreto HMAC-SHA256 de al menos 32 bytes Base64 para `account_number_hash` (unicidad sin exponer plaintext).
+  - `Customers__Otp__Pepper`: secreto de al menos 32 bytes para HMAC-SHA256 de códigos OTP (`otp_verifications.otp_hash`).
+  - `Customers__Storage__SigningSecret`: secreto HMAC para URLs firmadas cuando se usa proveedor local (en producción usar `Customers:Storage:Provider = "S3"`).
+  - `Customers__Storage__AccessKey` y `Customers__Storage__SecretKey` *(cuando `Customers:Storage:Provider = "S3"`)*: credenciales del bucket privado KYC (MinIO/R2/AWS S3) con cifrado SSE (`AES256`).
+  - `Customers__IdentityVerifier__Provider`: **no** puede ser `"Fake"` en `Production` (validado en `ValidateStartupSecrets` y `CustomersOptionsValidator`).
 
-> `LoanSystem.Workers` solo requiere `ConnectionStrings__Database` (y opcionalmente `ConnectionStrings__Redis`).
+> `LoanSystem.Workers` requiere `ConnectionStrings__Database`, los secretos `Customers__FieldProtection__*` y `Customers__Otp__Pepper` si procesa jobs/eventos de clientes, y opcionalmente `ConnectionStrings__Redis`.
 
 ## 2. Rotación programada de claves JWT RS256 (sin downtime)
 

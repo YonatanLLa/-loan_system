@@ -4,6 +4,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\LoanSystem.Modules.Security.Core\LoanSystem.Modules.Security.Core.csproj" />
+    <ProjectReference Include="..\..\Customers\LoanSystem.Modules.Customers.Core\LoanSystem.Modules.Customers.Core.csproj" />
     <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
   </ItemGroup>
   <ItemGroup>

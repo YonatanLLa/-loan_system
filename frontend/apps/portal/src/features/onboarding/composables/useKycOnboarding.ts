@@ -24,18 +24,21 @@ export function useKycOnboarding() {
   const dniBack = ref<string | null>(null)
 
   function simulateUploadDniFront() {
-    dniFront.value = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" fill="%23e2e8f0" rx="10"/><text x="150" y="90" font-family="sans-serif" font-size="14" font-weight="bold" fill="%23475569" text-anchor="middle">DNI ANVERSO CAPTURADO</text></svg>'
+    dniFront.value =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
   }
 
   function simulateUploadDniBack() {
-    dniBack.value = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="180" viewBox="0 0 300 180"><rect width="300" height="180" fill="%23e2e8f0" rx="10"/><text x="150" y="90" font-family="sans-serif" font-size="14" font-weight="bold" fill="%23475569" text-anchor="middle">DNI REVERSO CAPTURADO</text></svg>'
+    dniBack.value =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
   }
 
   // ── Paso 2: Selfie con Prueba de Vida (FE-CP-03) ──────────────────────────
   const selfie = ref<string | null>(null)
 
   function simulateCaptureSelfie() {
-    selfie.value = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240"><circle cx="120" cy="120" r="100" fill="%23dbeafe"/><text x="120" y="125" font-family="sans-serif" font-size="13" font-weight="bold" fill="%231d4ed8" text-anchor="middle">SELFIE / BIOMETRÍA OK</text></svg>'
+    selfie.value =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
   }
 
   // ── Paso 3: Consentimientos Legales (FE-CP-04) ────────────────────────────
@@ -95,34 +98,45 @@ export function useKycOnboarding() {
     if (!canProceed.value) return false
     isBusy.value = true
     errorMessage.value = null
+    const customerId = session.user?.customerId
 
     try {
-      // 1. Envía expediente KYC (FE-CP-03)
-      await onboardingService.submitKyc({
-        dniFrontUrl: dniFront.value || 'dni-front.jpg',
-        dniBackUrl: dniBack.value || 'dni-back.jpg',
-        selfieUrl: selfie.value || 'selfie.jpg',
-      })
+      // 1. Envía expediente KYC (FE-CP-03 / BE-CUS-03..04)
+      await onboardingService.submitKyc(
+        {
+          dniFrontUrl: dniFront.value || 'dni-front.png',
+          dniBackUrl: dniBack.value || 'dni-back.png',
+          selfieUrl: selfie.value || 'selfie.png',
+        },
+        customerId,
+      )
 
-      // 2. Envía consentimientos legales (FE-CP-04)
-      await onboardingService.submitConsents({
-        dataProtection: consentDataProtection.value,
-        creditBureau: consentCreditBureau.value,
-        marketing: consentMarketing.value,
-      })
+      // 2. Envía consentimientos legales (FE-CP-04 / BE-CUS-06)
+      await onboardingService.submitConsents(
+        {
+          dataProtection: consentDataProtection.value,
+          creditBureau: consentCreditBureau.value,
+          marketing: consentMarketing.value,
+        },
+        customerId,
+      )
 
-      // 3. Registra cuenta de desembolso (FE-CP-05)
-      await onboardingService.registerBankAccount({
-        bankName: payoutType.value === 'BANK' ? bankName.value : 'Billetera Digital',
-        accountType: payoutType.value === 'BANK' ? 'CUENTA_AHORRO' : 'BILLETERA_DIGITAL',
-        cci: payoutType.value === 'BANK' ? cci.value : undefined,
-        phoneWallet: payoutType.value === 'WALLET' ? phoneWallet.value : undefined,
-      })
+      // 3. Registra cuenta de desembolso (FE-CP-05 / BE-CUS-09)
+      await onboardingService.registerBankAccount(
+        {
+          bankName: payoutType.value === 'BANK' ? bankName.value : 'Billetera Digital',
+          accountType: payoutType.value === 'BANK' ? 'CUENTA_AHORRO' : 'BILLETERA_DIGITAL',
+          cci: payoutType.value === 'BANK' ? cci.value : undefined,
+          phoneWallet: payoutType.value === 'WALLET' ? phoneWallet.value : undefined,
+        },
+        customerId,
+      )
 
       session.updateKycStatus('VERIFIED')
 
       toast.success('¡Verificación completada con éxito!', {
-        description: 'Tu identidad y cuenta de desembolso han sido validadas. Ya puedes solicitar préstamos.',
+        description:
+          'Tu identidad y cuenta de desembolso han sido validadas. Ya puedes solicitar préstamos.',
       })
 
       await router?.push('/inicio')

@@ -1,9 +1,11 @@
 using LoanSystem.Common.Core.Application;
 using LoanSystem.Common.Core.Ports.Outbound;
+using LoanSystem.Modules.Customers.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Domain;
 using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
 
 namespace LoanSystem.Modules.Security.Core.Application;
 
@@ -36,6 +38,7 @@ internal sealed class LoginUseCase : ILoginUseCase
     private readonly int _maxFailedAttempts;
     private readonly TimeSpan _lockWindow;
     private readonly MfaOptions _mfaOptions;
+    private readonly ICustomerPortalLookup? _portalLookup;
 
     public LoginUseCase(
         IUserRepository users,
@@ -50,7 +53,8 @@ internal sealed class LoginUseCase : ILoginUseCase
         int maxFailedAttempts = DefaultMaxFailedAttempts,
         int lockWindowMinutes = DefaultLockWindowMinutes,
         IMfaChallengeRepository? mfaChallenges = null,
-        MfaOptions? mfaOptions = null)
+        MfaOptions? mfaOptions = null,
+        ICustomerPortalLookup? portalLookup = null)
     {
         _users = users;
         _refreshTokens = refreshTokens;
@@ -65,6 +69,7 @@ internal sealed class LoginUseCase : ILoginUseCase
         _maxFailedAttempts = maxFailedAttempts;
         _lockWindow = TimeSpan.FromMinutes(lockWindowMinutes);
         _mfaOptions = mfaOptions ?? new MfaOptions();
+        _portalLookup = portalLookup;
     }
 
     public async Task<Result<LoginResponse>> ExecuteAsync(LoginRequest request, CancellationToken ct = default)
@@ -124,7 +129,8 @@ internal sealed class LoginUseCase : ILoginUseCase
         // La petición es anónima: se atribuye el cambio al usuario que inicia sesión (BE-SEC-07)
         _audit.SetAction("LOGIN");
         _audit.SetActor(user.Id);
-        var tokens = TokenIssuer.Issue(user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime);
+        var tokens = await TokenIssuer.IssueAsync(
+            user, _jwt, _refreshTokens, _clientInfo, _clock, _refreshLifetime, _portalLookup, ct);
 
         await _unitOfWork.SaveChangesAsync(ct);
         return LoginResponse.Authenticated(tokens);

@@ -43,6 +43,26 @@ function writeStorageItem(key: string, value: string | null): void {
   }
 }
 
+function extractCustomerIdFromJwt(token: string | null): string | undefined {
+  if (!token) return undefined
+  try {
+    const parts = token.split('.')
+    if (parts.length < 2 || !parts[1]) return undefined
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join(''),
+    )
+    const payload = JSON.parse(json) as Record<string, unknown>
+    const cid = payload.customer_id ?? payload.customerId
+    return typeof cid === 'string' && cid.length > 0 ? cid : undefined
+  } catch {
+    return undefined
+  }
+}
+
 export const useSessionStore = defineStore('session', () => {
   const accessToken = ref<string | null>(null)
   const refreshToken = ref<string | null>(readStorageItem(REFRESH_TOKEN_STORAGE_KEY))
@@ -131,7 +151,7 @@ export const useSessionStore = defineStore('session', () => {
         docNumber: '',
         email: data.email,
         role: data.role,
-        customerId: data.customerId,
+        customerId: data.customerId ?? extractCustomerIdFromJwt(accessToken.value),
         // GET /api/me del módulo Security actual no devuelve kycStatus; evitamos atrapar al cliente en /verificacion.
         kycStatus: data.kycStatus ?? 'VERIFIED',
       }
@@ -144,6 +164,12 @@ export const useSessionStore = defineStore('session', () => {
   function updateKycStatus(status: string) {
     if (user.value) {
       user.value.kycStatus = status
+    }
+  }
+
+  function setCustomerId(customerId: string) {
+    if (user.value) {
+      user.value.customerId = customerId
     }
   }
 
@@ -233,6 +259,7 @@ export const useSessionStore = defineStore('session', () => {
     clearTerminationReason,
     loadProfile,
     updateKycStatus,
+    setCustomerId,
     refreshAccessToken,
     ensure,
     logout,

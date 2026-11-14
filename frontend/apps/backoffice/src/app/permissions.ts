@@ -7,6 +7,11 @@
 export const PERMISSIONS = {
   dashboard: 'dashboard.view',
   customers: 'customers.read',
+  customersWrite: 'customers.write',
+  customersKycReview: 'customers.kyc.review',
+  customersDocumentsRead: 'customers.documents.read',
+  customersAccountsManage: 'customers.accounts.manage',
+  customersPiiUnmasked: 'customers.pii.unmasked',
   applications: 'applications.read',
   loans: 'loans.read',
   payments: 'payments.read',

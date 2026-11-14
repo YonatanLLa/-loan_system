@@ -3,6 +3,9 @@ using LoanSystem.Common.Adapters.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using LoanSystem.Modules.Administration.Core.Application;
+using LoanSystem.Modules.Administration.Core.Contracts;
 using LoanSystem.Modules.Administration.Adapters.Outbound.Persistence;
 using LoanSystem.Modules.Administration.Core.Ports.Outbound;
 
@@ -19,6 +22,11 @@ public static class AdministrationModule
             options.UseNpgsql(connectionString).UseAuditLog(sp));
         services.AddScoped<IAdministrationUnitOfWork>(sp => sp.GetRequiredService<AdministrationDbContext>());
         services.AddScoped<IAdministrationOutbox>(sp => sp.GetRequiredService<AdministrationDbContext>());
+        services.TryAddSingleton<IDbConnectionFactory>(_ => new NpgsqlConnectionFactory(connectionString));
+
+        // Holiday calendar (public contract consumed by Products, BE-PRO-06)
+        services.AddScoped<IHolidayRepository, HolidayRepository>();
+        services.AddScoped<IHolidayCalendarQuery, HolidayCalendarQuery>();
 
         return services;
     }

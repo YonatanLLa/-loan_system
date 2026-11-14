@@ -32,6 +32,59 @@ public class InterestRateTests
         Math.Abs(compounded - tea / 100m).ShouldBeLessThan(0.000000000000000001m);
     }
 
+    [Theory] // PLAN_PRODUCTOS §12: (1.30)^(d/360) − 1, in percent with 8 decimals
+    [InlineData(1, 0.07290553)]
+    [InlineData(7, 0.51145623)]
+    [InlineData(15, 1.09918153)]
+    [InlineData(30, 2.21044506)]
+    public void ToPeriodRate_Efectiva_Tea30_ShouldMatchReferenceTable(int days, decimal expectedPercent)
+    {
+        var rate = InterestRate.ToPeriodRate(0.30m, RateType.Efectiva, days);
+
+        Math.Round(rate * 100m, 8).ShouldBe(expectedPercent);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(15)]
+    [InlineData(30)]
+    [InlineData(24)]
+    [InlineData(31)]
+    public void ToPeriodRate_Efectiva_RoundTrip_ShouldReturnTheTea(int days)
+    {
+        var rate = InterestRate.ToPeriodRate(0.30m, RateType.Efectiva, days);
+
+        // (1 + i_d)^(360/d) − 1 = TEA; for d not dividing 360 check the daily factor instead.
+        var daily = InterestRate.Pow(1m + rate, 360 / Gcd(days, 360));
+        var expected = InterestRate.Pow(1.30m, days / Gcd(days, 360));
+        Math.Abs(daily - expected).ShouldBeLessThan(0.000000000000000001m);
+    }
+
+    [Fact]
+    public void ToPeriodRate_With30Days_IsTheMonthlyRate()
+    {
+        InterestRate.ToPeriodRate(0.12m, RateType.Efectiva, 30).ShouldBe(InterestRate.ToMonthlyRate(12m, RateType.Efectiva));
+        InterestRate.ToPeriodRate(0.12m, RateType.Nominal, 30).ShouldBe(0.01m);
+    }
+
+    [Fact]
+    public void ToPeriodRate_Nominal_IsProportionalTo360Days()
+    {
+        InterestRate.ToPeriodRate(0.36m, RateType.Nominal, 1).ShouldBe(0.001m);
+        InterestRate.ToPeriodRate(0.36m, RateType.Nominal, 15).ShouldBe(0.015m);
+    }
+
+    [Fact]
+    public void DailyGrowthFactor_PowerOf360_ShouldReturnOnePlusTea()
+    {
+        var q = InterestRate.DailyGrowthFactor(0.30m);
+
+        Math.Abs(InterestRate.Pow(q, 360) - 1.30m).ShouldBeLessThan(0.000000000000000001m);
+    }
+
+    private static int Gcd(int a, int b) => b == 0 ? a : Gcd(b, a % b);
+
     [Fact]
     public void ToMonthlyRate_Nominal_ShouldDivideBy12()
     {

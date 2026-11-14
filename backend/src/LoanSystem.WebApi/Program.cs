@@ -72,14 +72,7 @@ builder.Services.AddSecurityAuthentication(builder.Configuration, builder.Enviro
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy(SecurityPolicies.Admin, p => p.RequireRole(SecurityPolicies.Admin));
-    options.AddPolicy(SecurityPolicies.Analyst, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Analyst));
-    options.AddPolicy(SecurityPolicies.Operator, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Operator));
-    options.AddPolicy(SecurityPolicies.Collector, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Collector));
-    options.AddPolicy(SecurityPolicies.Auditor, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Auditor));
-    options.AddPolicy(SecurityPolicies.Client, p => p.RequireRole(SecurityPolicies.Client));
-
-    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+    options.AddLoanSystemAuthorizationPolicies();
 });
 
 // Registro de los 12 módulos

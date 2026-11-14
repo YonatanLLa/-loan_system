@@ -69,7 +69,7 @@ public class FrenchAmortizationScheduleTests
     public void Parser_ShouldAcceptFrench_CaseInsensitive(string value)
     {
         AmortizationMethodParser.TryParse(value, out var method).ShouldBeTrue();
-        method.ShouldBe(AmortizationMethod.French);
+        method.ShouldBe(AmortizationMethod.FRANCES);
     }
 
     [Theory]

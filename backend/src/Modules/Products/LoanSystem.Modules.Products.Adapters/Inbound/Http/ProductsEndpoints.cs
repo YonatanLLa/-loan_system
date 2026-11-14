@@ -25,7 +25,9 @@ public static class ProductsEndpoints
         })
         .AllowAnonymous()
         .WithName("SimulateSchedule")
-        .WithSummary("Simulate a loan payment schedule (French method)");
+        .WithSummary("Simulate a loan payment schedule: FRANCES, FLAT, ALEMAN or AMERICANO, any frequency (BE-PRO-02)")
+        .Produces<SimulateScheduleResponse>()
+        .ProducesProblem(StatusCodes.Status400BadRequest);
 
         return app;
     }

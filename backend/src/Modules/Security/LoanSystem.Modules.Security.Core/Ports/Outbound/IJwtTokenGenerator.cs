@@ -6,4 +6,6 @@ namespace LoanSystem.Modules.Security.Core.Ports.Outbound;
 internal interface IJwtTokenGenerator
 {
     (string AccessToken, DateTimeOffset ExpiresAt) Generate(User user);
+
+    (string AccessToken, DateTimeOffset ExpiresAt) Generate(User user, Guid? customerId) => Generate(user);
 }

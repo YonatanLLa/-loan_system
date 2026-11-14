@@ -116,6 +116,20 @@ public class JwtTokenGeneratorAndJwksTests
         };
 
         handler.ValidateToken(accessToken, validationParams, out _);
+
+        // R7: ROLE_CLIENT receives customer_id claim when linked
+        var clientUser = User.Reconstitute(
+            Guid.NewGuid(),
+            "client@loansystem.pe",
+            "hash",
+            "Client User",
+            SecurityRole.ROLE_CLIENT,
+            UserStatus.ACTIVE);
+        var linkedCustomerId = Guid.NewGuid();
+        var (clientJwtRaw, _) = generator.Generate(clientUser, linkedCustomerId);
+        var clientJwt = handler.ReadJwtToken(clientJwtRaw);
+        clientJwt.Claims.First(c => c.Type == "customer_id").Value.ShouldBe(linkedCustomerId.ToString());
+        handler.ValidateToken(clientJwtRaw, validationParams, out _);
     }
 
     [Fact]

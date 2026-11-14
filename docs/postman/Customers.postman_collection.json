@@ -1,0 +1,762 @@
+{
+  "info": {
+    "_postman_id": "8e3b9f58-4a12-4c9c-a2d1-91f7a3c1d901",
+    "name": "LoanSystem — Customers, KYC, Consents & Bank Accounts",
+    "description": "Colección de contrato para BE-CUS-01..11 (Customers, KYC, Consents, Bank Accounts, OTP y File Download). Incluye variables de colección, headers Idempotency-Key / If-Match y ejemplos de respuesta de error del catálogo §8.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{accessToken}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "customerId", "value": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa" },
+    { "key": "documentId", "value": "cccccccc-cccc-cccc-cccc-cccccccccccc" },
+    { "key": "fileToken", "value": "" },
+    { "key": "accountId", "value": "dddddddd-dddd-dddd-dddd-dddddddddddd" },
+    { "key": "otpRequestId", "value": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee" },
+    { "key": "etag", "value": "\"0\"" }
+  ],
+  "item": [
+    {
+      "name": "00 - Auth Helper",
+      "item": [
+        {
+          "name": "Login (obtain RS256 accessToken)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const data = pm.response.json();",
+                  "  if (data.accessToken) pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"operator@loansystem.pe\",\n  \"password\": \"ChangeMeBeforeUse!\"\n}"
+            },
+            "url": "{{baseUrl}}/api/auth/login"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "01 - Customers & Ficha 360 (BE-CUS-01, 02, 08)",
+      "item": [
+        {
+          "name": "Register Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const body = pm.response.json();",
+                  "  pm.collectionVariables.set('customerId', body.id);",
+                  "  const etag = pm.response.headers.get('ETag');",
+                  "  if (etag) pm.collectionVariables.set('etag', etag);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"personType\": \"NATURAL\",\n  \"docType\": \"DNI\",\n  \"docNumber\": \"45879612\",\n  \"fullName\": \"Ana María Quispe\",\n  \"birthDate\": \"1993-08-21\",\n  \"email\": \"ana.quispe@example.pe\",\n  \"phonePrimary\": \"987654321\",\n  \"phoneSecondary\": null,\n  \"address\": \"Av. Javier Prado Este 1234\",\n  \"district\": \"San Borja\",\n  \"monthlyNetIncome\": 4200.00,\n  \"occupation\": \"Ingeniera de Sistemas\",\n  \"employerName\": \"Tech Peru SAC\",\n  \"workSeniorityMonths\": 36,\n  \"consents\": [\n    { \"purpose\": \"DATA_PROCESSING\", \"version\": \"v1\" },\n    { \"purpose\": \"CREDIT_BUREAU_QUERY\", \"version\": \"v1\" }\n  ]\n}"
+            },
+            "url": "{{baseUrl}}/api/customers"
+          },
+          "response": [
+            {
+              "name": "409 Conflict — Customers.DocumentAlreadyExists",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Conflict\",\n  \"status\": 409,\n  \"detail\": \"Ya existe un cliente registrado con ese tipo y número de documento.\",\n  \"code\": \"Customers.DocumentAlreadyExists\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.InvalidDocumentNumber",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El número de documento no cumple el formato exigido.\",\n  \"code\": \"Customers.InvalidDocumentNumber\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.DocumentTypeInactive",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El tipo de documento indicado no se encuentra activo.\",\n  \"code\": \"Customers.DocumentTypeInactive\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.Underage",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El cliente debe ser mayor de 18 años.\",\n  \"code\": \"Customers.Underage\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.InvalidPersonDocumentCombination",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"Combinación inválida entre tipo de persona y tipo de documento.\",\n  \"code\": \"Customers.InvalidPersonDocumentCombination\"\n}"
+            },
+            {
+              "name": "422 Unprocessable Entity — Customers.ConsentRequired",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Se requiere aceptación explícita de DATA_PROCESSING.\",\n  \"code\": \"Customers.ConsentRequired\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Search Customers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers?q=Quispe&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "customers"],
+              "query": [
+                { "key": "q", "value": "Quispe" },
+                { "key": "kycStatus", "value": "PENDING", "disabled": true },
+                { "key": "personType", "value": "NATURAL", "disabled": true },
+                { "key": "createdFrom", "value": "2026-01-01", "disabled": true },
+                { "key": "createdTo", "value": "2026-12-31", "disabled": true },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer By Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const etag = pm.response.headers.get('ETag');",
+                  "if (etag) pm.collectionVariables.set('etag', etag);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}"
+          },
+          "response": [
+            {
+              "name": "404 Not Found — Customers.NotFound",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Not Found\",\n  \"status\": 404,\n  \"detail\": \"Cliente no encontrado.\",\n  \"code\": \"Customers.NotFound\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Update Customer (PATCH with If-Match ETag)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const etag = pm.response.headers.get('ETag');",
+                  "if (etag) pm.collectionVariables.set('etag', etag);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "If-Match", "value": "{{etag}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contact\": {\n    \"email\": null,\n    \"phonePrimary\": \"999888777\",\n    \"phoneSecondary\": null\n  },\n  \"address\": {\n    \"address\": \"Calle Los Pinos 450\",\n    \"district\": \"Miraflores\"\n  },\n  \"profile\": {\n    \"monthlyNetIncome\": 4800.00,\n    \"occupation\": null,\n    \"employerName\": null,\n    \"workSeniorityMonths\": 42\n  }\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}"
+          },
+          "response": [
+            {
+              "name": "409 Conflict — Customers.ConcurrencyConflict",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Conflict\",\n  \"status\": 409,\n  \"detail\": \"El registro fue modificado concurrentemente.\",\n  \"code\": \"Customers.ConcurrencyConflict\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Get Customer Field History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}/history?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "customers", "{{customerId}}", "history"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Customer Ficha 360 Overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/overview"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02 - KYC Documents (BE-CUS-03)",
+      "item": [
+        {
+          "name": "Upload Customer Document (Multipart)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const doc = pm.response.json();",
+                  "  pm.collectionVariables.set('documentId', doc.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": [] },
+                { "key": "category", "value": "DNI_FRONTAL", "type": "text" }
+              ]
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/documents"
+          },
+          "response": [
+            {
+              "name": "400 Bad Request — Customers.FileTooLarge",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El archivo excede el tamaño máximo permitido.\",\n  \"code\": \"Customers.FileTooLarge\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.UnsupportedFileType",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"Tipo de archivo no permitido o firma binaria inválida.\",\n  \"code\": \"Customers.UnsupportedFileType\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Customer Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/{{customerId}}/documents?includeHistory=false",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "customers", "{{customerId}}", "documents"],
+              "query": [{ "key": "includeHistory", "value": "false" }]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Temporary Signed Document URL (Audits VIEW_DOCUMENT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.url && body.url.includes('/api/customers/files/')) {",
+                  "    pm.collectionVariables.set('fileToken', body.url.split('/api/customers/files/')[1]);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/documents/{{documentId}}/url"
+          },
+          "response": [
+            {
+              "name": "404 Not Found — Customers.DocumentNotFound",
+              "status": "Not Found",
+              "code": 404,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Not Found\",\n  \"status\": 404,\n  \"detail\": \"Documento no encontrado.\",\n  \"code\": \"Customers.DocumentNotFound\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Download Signed Local File (Anonymous Token)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/files/{{fileToken}}"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03 - KYC Workflow & Auto Verification (BE-CUS-04, 05)",
+      "item": [
+        {
+          "name": "Get Customer KYC Status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc"
+          },
+          "response": []
+        },
+        {
+          "name": "Submit KYC",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc/submit"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.MissingRequiredDocuments",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Faltan documentos obligatorios del expediente KYC.\",\n  \"code\": \"Customers.MissingRequiredDocuments\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Approve KYC",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"notes\": \"Identidad, biometría e ingresos verificados conforme a política interna.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc/approve"
+          },
+          "response": [
+            {
+              "name": "403 Forbidden — Customers.KycRequiresAdmin",
+              "status": "Forbidden",
+              "code": 403,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Forbidden\",\n  \"status\": 403,\n  \"detail\": \"Clientes PEP o de riesgo HIGH requieren aprobación de ROLE_ADMIN.\",\n  \"code\": \"Customers.KycRequiresAdmin\"\n}"
+            },
+            {
+              "name": "422 Unprocessable Entity — Customers.KycCheckFailed",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Existen verificaciones automáticas en estado FAIL.\",\n  \"code\": \"Customers.KycCheckFailed\"\n}"
+            },
+            {
+              "name": "409 Conflict — Customers.InvalidKycTransition",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Conflict\",\n  \"status\": 409,\n  \"detail\": \"Transición KYC inválida desde el estado actual.\",\n  \"code\": \"Customers.InvalidKycTransition\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Reject KYC",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Fotografía del reverso ilegible; volver a cargar documento nítido.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc/reject"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.KycNotesRequired",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Debe ingresar observaciones descriptivas de al menos 10 caracteres.\",\n  \"code\": \"Customers.KycNotesRequired\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Resubmit KYC",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc/resubmit"
+          },
+          "response": []
+        },
+        {
+          "name": "Retry Failed Automatic KYC Checks",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/kyc/retry-checks"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04 - LPDP Consents (BE-CUS-07)",
+      "item": [
+        {
+          "name": "Get Current Published Consent Texts (Anonymous)",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/consents/current"
+          },
+          "response": []
+        },
+        {
+          "name": "List Customer Consents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/consents"
+          },
+          "response": []
+        },
+        {
+          "name": "Grant Customer Consent",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purpose\": \"MARKETING\",\n  \"version\": \"v1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/consents"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.ConsentVersionOutdated",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"La versión del texto legal indicada ya no está vigente.\",\n  \"code\": \"Customers.ConsentVersionOutdated\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Revoke Customer Consent (MARKETING)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/consents/MARKETING"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.ConsentNotRevocable",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Solo el consentimiento de MARKETING puede revocarse directamente por esta vía.\",\n  \"code\": \"Customers.ConsentNotRevocable\"\n}"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Bank Accounts & OTP (BE-CUS-09, 10, 11)",
+      "item": [
+        {
+          "name": "Register Bank Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  pm.collectionVariables.set('accountId', pm.response.json().id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bankName\": \"BCP\",\n  \"accountType\": \"CUENTA_AHORRO\",\n  \"cci\": \"00219300012345678901\",\n  \"phoneWallet\": null,\n  \"gatewayToken\": null,\n  \"holderName\": \"Ana María Quispe\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts"
+          },
+          "response": [
+            {
+              "name": "400 Bad Request — Customers.InvalidCci",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El CCI debe tener 20 dígitos numéricos y código de banco válido.\",\n  \"code\": \"Customers.InvalidCci\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.InvalidWalletPhone",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"El teléfono de billetera digital debe tener formato peruano (9 dígitos iniciando en 9).\",\n  \"code\": \"Customers.InvalidWalletPhone\"\n}"
+            },
+            {
+              "name": "400 Bad Request — Customers.RawCardNotAllowed",
+              "status": "Bad Request",
+              "code": 400,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Validation Error\",\n  \"status\": 400,\n  \"detail\": \"No se permite almacenar números de tarjeta (PAN) en claro; usar gatewayToken.\",\n  \"code\": \"Customers.RawCardNotAllowed\"\n}"
+            },
+            {
+              "name": "409 Conflict — Customers.BankAccountAlreadyExists",
+              "status": "Conflict",
+              "code": 409,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Conflict\",\n  \"status\": 409,\n  \"detail\": \"La cuenta ya se encuentra registrada para este cliente.\",\n  \"code\": \"Customers.BankAccountAlreadyExists\"\n}"
+            },
+            {
+              "name": "422 Unprocessable Entity — Customers.BankAccountLimitReached",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Se alcanzó el máximo de cuentas activas permitidas por cliente.\",\n  \"code\": \"Customers.BankAccountLimitReached\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "List Bank Accounts (Never Exposes Raw CCI)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts"
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Bank Account Ownership",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"holderName\": \"Ana María Quispe\",\n  \"method\": \"MANUAL\",\n  \"notes\": \"Constancia CCI validada.\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts/{{accountId}}/verify"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.AccountHolderMismatch",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"El titular de la cuenta bancaria no coincide con el nombre del cliente.\",\n  \"code\": \"Customers.AccountHolderMismatch\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Deactivate Bank Account",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts/{{accountId}}"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Primary Bank Account (Initiates OTP when replacing existing primary)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 202) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.otpChallenge && body.otpChallenge.otpRequestId) {",
+                  "    pm.collectionVariables.set('otpRequestId', body.otpChallenge.otpRequestId);",
+                  "  }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts/{{accountId}}/primary"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.AccountNotVerified",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Solo cuentas activas y verificadas pueden designarse como primarias.\",\n  \"code\": \"Customers.AccountNotVerified\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Confirm Primary Bank Account Change (OTP + 24h Cooling)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otpRequestId\": \"{{otpRequestId}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/bank-accounts/{{accountId}}/primary/confirm"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.OtpInvalid",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Código OTP inválido.\",\n  \"code\": \"Customers.OtpInvalid\"\n}"
+            },
+            {
+              "name": "423 Locked — Customers.OtpLocked",
+              "status": "Locked",
+              "code": 423,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Locked\",\n  \"status\": 423,\n  \"detail\": \"OTP bloqueado por exceso de intentos fallidos.\",\n  \"code\": \"Customers.OtpLocked\"\n}"
+            }
+          ]
+        },
+        {
+          "name": "Start Contact Verification (OTP)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const body = pm.response.json();",
+                  "  if (body.otpRequestId) pm.collectionVariables.set('otpRequestId', body.otpRequestId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"channel\": \"EMAIL\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/contact/verify/start"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.OtpResendTooSoon",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"Debe esperar antes de reenviar un nuevo código OTP.\",\n  \"code\": \"Customers.OtpResendTooSoon\",\n  \"retryAfterSeconds\": 45\n}"
+            }
+          ]
+        },
+        {
+          "name": "Confirm Contact Verification (OTP)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"otpRequestId\": \"{{otpRequestId}}\",\n  \"code\": \"123456\"\n}"
+            },
+            "url": "{{baseUrl}}/api/customers/{{customerId}}/contact/verify/confirm"
+          },
+          "response": [
+            {
+              "name": "422 Unprocessable Entity — Customers.OtpExpired",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"El código OTP ha expirado.\",\n  \"code\": \"Customers.OtpExpired\"\n}"
+            },
+            {
+              "name": "422 Unprocessable Entity — Customers.OtpAlreadyUsed",
+              "status": "Unprocessable Entity",
+              "code": 422,
+              "header": [{ "key": "Content-Type", "value": "application/problem+json" }],
+              "body": "{\n  \"title\": \"Unprocessable Entity\",\n  \"status\": 422,\n  \"detail\": \"El código OTP ya fue utilizado o invalidado.\",\n  \"code\": \"Customers.OtpAlreadyUsed\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

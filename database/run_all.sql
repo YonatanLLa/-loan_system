@@ -46,6 +46,11 @@ BEGIN;
 \ir migrations/16_refresh_tokens_family.sql
 \ir migrations/17_users_mfa.sql
 \ir migrations/18_approval_requests.sql
+\ir migrations/19_customers_kyc_extensions.sql
+\ir migrations/20_customer_documents_v2.sql
+\ir migrations/21_customer_consents.sql
+\ir migrations/22_otp_purpose_and_attempts.sql
+\ir migrations/23_customer_bank_accounts_v2.sql
 
 -- ── PASO 4: Índices ──────────────────────────────────────────────────────────
 \echo '[4/5] Índices de rendimiento...'
@@ -54,6 +59,7 @@ BEGIN;
 -- ── PASO 5: Datos semilla ────────────────────────────────────────────────────
 \echo '[5/5] Datos iniciales (seeds)...'
 \ir seeds/12_seed_data.sql
+\ir seeds/24_seed_consent_texts.sql
 
 COMMIT;
 

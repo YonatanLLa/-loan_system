@@ -6,8 +6,11 @@ import { createPinia } from 'pinia'
 
 import App from './App.vue'
 import { setupApi } from './app/api'
+import { initTheme } from './app/composables/useTheme'
 import router from './app/router'
 import { useSessionStore } from './app/stores/session'
+
+initTheme()
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -20,8 +23,12 @@ setupApi({
     getAccessToken: () => session.accessToken,
     refresh: () => session.refreshAccessToken(),
     onSessionExpired: () => {
+      const motivo =
+        session.sessionTerminationReason === 'reused'
+          ? 'sesion-comprometida'
+          : 'sesion-expirada'
       session.clear()
-      void router.replace({ name: 'login', query: { motivo: 'sesion-expirada' } })
+      void router.replace({ name: 'login', query: { motivo } })
     },
   },
 })

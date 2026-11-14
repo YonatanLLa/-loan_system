@@ -94,7 +94,7 @@ export const collectionsReportHandlers = [
     const items = db.audit
       .filter((e) => !entity || e.entityName === entity)
       .filter((e) => !action || e.action === action)
-      .filter((e) => matches(e.userName, user))
+      .filter((e) => matches(e.userName ?? '', user))
       .filter((e) => !from || e.createdAt.slice(0, 10) >= from)
       .filter((e) => !to || e.createdAt.slice(0, 10) <= to)
     return HttpResponse.json(paginate(items, url))

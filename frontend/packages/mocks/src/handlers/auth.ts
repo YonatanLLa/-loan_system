@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw'
-import type { LoginRequest, Me, TokenResponse } from '@prestamos/api-client'
+import type { AuthTokensResponse, LoginRequest, LoginResponse, Me } from '@prestamos/api-client'
 
 import { db, nextId, nowIso, recordAudit, type UserRec } from '../db'
 import { problem, readJson, secured, wait } from '../http-utils'
@@ -9,6 +9,7 @@ const MAX_FAILED = 5
 const failureKey = (userId: string): string => `login-failures:${userId}`
 const failures = (userId: string): number => db.counters.get(failureKey(userId)) ?? 0
 const STORAGE_KEY = 'prestamos-mock-session'
+const refreshTokenOwners = new Map<string, string>()
 
 function storage(): Storage | null {
   try {
@@ -38,37 +39,47 @@ function remember(userId: string | null): void {
   else storage()?.removeItem(STORAGE_KEY)
 }
 
-function issueToken(user: UserRec): TokenResponse {
+function issueTokens(user: UserRec): AuthTokensResponse {
   const accessToken = `tok-${crypto.randomUUID()}`
+  const refreshToken = `rtok-${crypto.randomUUID()}`
   db.tokens.set(accessToken, user.id)
-  return { accessToken }
+  refreshTokenOwners.set(refreshToken, user.id)
+  return {
+    accessToken,
+    refreshToken,
+    expiresInSeconds: 1800,
+    role: user.role,
+  }
 }
 
 export function toMe(user: UserRec): Me {
   const customer = user.customerId ? db.customers.find((c) => c.id === user.customerId) : undefined
   return {
     id: user.id,
+    userId: user.id,
     fullName: user.fullName,
     email: user.email,
     role: user.role,
     permissions: user.permissions,
+    mfaEnabled: false,
     customerId: user.customerId,
     kycStatus: customer?.kycStatus,
   }
 }
 
-async function login(request: Request, client: boolean): Promise<Response> {
+async function login(request: Request, clientOnly: boolean): Promise<Response> {
   await wait()
   const body = await readJson<LoginRequest & { identifier?: string }>(request)
   const identifier = (body?.email ?? body?.identifier ?? '').trim().toLowerCase()
   const user = db.users.find((candidate) => {
-    if ((candidate.role === 'ROLE_CLIENT') !== client) return false
+    if (clientOnly && candidate.role !== 'ROLE_CLIENT') return false
     if (candidate.email.toLowerCase() === identifier) return true
     const customer = candidate.customerId
       ? db.customers.find((c) => c.id === candidate.customerId)
       : undefined
     return (
-      client && (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
+      (clientOnly || candidate.role === 'ROLE_CLIENT') &&
+      (customer?.phone === identifier || customer?.docNumber.toLowerCase() === identifier)
     )
   })
 
@@ -86,7 +97,20 @@ async function login(request: Request, client: boolean): Promise<Response> {
   db.counters.delete(failureKey(user.id))
   remember(user.id)
   recordAudit({ entityName: 'users', entityId: user.id, action: 'LOGIN', userName: user.fullName })
-  return HttpResponse.json(issueToken(user))
+  const tokens = issueTokens(user)
+  if (clientOnly) {
+    return HttpResponse.json(tokens)
+  }
+  const response: LoginResponse = {
+    status: 'AUTHENTICATED',
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresInSeconds: tokens.expiresInSeconds,
+    role: tokens.role,
+    mfaToken: null,
+    mfaExpiresInSeconds: null,
+  }
+  return HttpResponse.json(response)
 }
 
 interface RegisterBody {
@@ -136,20 +160,24 @@ export const authHandlers = [
     return HttpResponse.json({ verified: true, message: 'Identidad confirmada exitosamente.' })
   }),
 
-  // El refresh real usa una cookie HttpOnly; aquí se simula con la sesión recordada.
   http.post('*/api/auth/refresh', async ({ request }) => {
     await wait()
     const body = await readJson<{ refreshToken?: string }>(request)
+    const tokenOwnerId = body?.refreshToken ? refreshTokenOwners.get(body.refreshToken) : undefined
+    if (body?.refreshToken) refreshTokenOwners.delete(body.refreshToken)
     const user =
+      (tokenOwnerId ? db.users.find((u) => u.id === tokenOwnerId) : undefined) ??
       db.users.find((u) => u.id === refreshSession.userId) ??
       (body?.refreshToken ? db.users.find((u) => u.id === 'usr-100') : undefined)
     return user
-      ? HttpResponse.json(issueToken(user))
+      ? HttpResponse.json(issueTokens(user))
       : problem(401, 'Sesión no válida', 'Inicia sesión.')
   }),
 
-  http.post('*/api/auth/logout', async () => {
+  http.post('*/api/auth/logout', async ({ request }) => {
     await wait()
+    const body = await readJson<{ refreshToken?: string | null }>(request)
+    if (body?.refreshToken) refreshTokenOwners.delete(body.refreshToken)
     remember(null)
     return new HttpResponse(null, { status: 204 })
   }),
@@ -176,11 +204,11 @@ export const authHandlers = [
       }) ?? db.users.find((u) => u.id === 'usr-100')!
 
     const customer = db.customers.find((c) => c.id === user.customerId) ?? db.customers[0]!
-    const { accessToken } = issueToken(user)
+    const { accessToken, refreshToken } = issueTokens(user)
     remember(user.id)
     return HttpResponse.json({
       accessToken,
-      refreshToken: accessToken,
+      refreshToken,
       user: {
         id: user.id,
         customerId: customer.id,
@@ -244,7 +272,7 @@ export const authHandlers = [
       customerId,
     }
     db.users.push(newUser)
-    const token = issueToken(newUser)
+    const token = issueTokens(newUser)
     remember(newUser.id)
     recordAudit({
       entityName: 'customers',

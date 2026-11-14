@@ -98,7 +98,7 @@ export const collectorProductivityColumns: TableColumn<CollectorRow>[] = [
     key: 'promises',
     label: 'Promesas Acordadas',
     value: (c) => c.promisesCount,
-    cellClass: 'text-emerald-600 font-semibold',
+    cellClass: 'text-emerald-600 dark:text-emerald-400 font-semibold',
   },
 ]
 
@@ -134,7 +134,7 @@ export const monthlyEvolutionColumns: TableColumn<MonthlyEvolutionRow>[] = [
     key: 'collected',
     label: 'Recaudado',
     kind: 'money',
-    cellClass: 'text-emerald-600 font-semibold',
+    cellClass: 'text-emerald-600 dark:text-emerald-400 font-semibold',
   },
   {
     key: 'net',

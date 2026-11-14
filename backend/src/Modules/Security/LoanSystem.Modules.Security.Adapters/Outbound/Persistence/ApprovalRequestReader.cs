@@ -258,7 +258,7 @@ internal sealed class ApprovalRequestReader : IApprovalRequestReader
         public string PayloadJson { get; set; } = "{}";
     }
 
-    private sealed class SummaryRow
+    private class SummaryRow
     {
         public Guid Id { get; set; }
         public string OperationType { get; set; } = string.Empty;

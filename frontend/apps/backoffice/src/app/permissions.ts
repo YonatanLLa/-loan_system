@@ -18,6 +18,13 @@ export const PERMISSIONS = {
   audit: 'audit.read',
   products: 'products.manage',
   admin: 'admin.manage',
+  approvalsRead: 'approvals.read',
+  approvalsPaymentsReverse: 'approvals.payments.reverse',
+  approvalsLoansWriteOff: 'approvals.loans.write_off',
+  approvalsLoansAdjust: 'approvals.loans.adjust',
+  approvalsProductsRates: 'approvals.products.rates',
+  approvalsLoansRestructure: 'approvals.loans.restructure',
+  approvalsUsersRole: 'approvals.users.role',
 } as const
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

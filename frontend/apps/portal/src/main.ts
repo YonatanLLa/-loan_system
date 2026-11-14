@@ -21,7 +21,16 @@ setupApi({
     getAccessToken: () => session.accessToken,
     refresh: () => session.refreshAccessToken(),
     onSessionExpired: () => {
+      const reason = session.sessionTerminationReason
       session.clear()
+      if (!router.currentRoute.value.meta.public) {
+        void router.replace({
+          path: '/login',
+          query: {
+            motivo: reason === 'reused' ? 'sesion-comprometida' : 'sesion-expirada',
+          },
+        })
+      }
     },
   },
 })

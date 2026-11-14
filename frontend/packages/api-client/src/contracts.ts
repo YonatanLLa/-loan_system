@@ -49,23 +49,102 @@ export type PaymentMethodType =
   | 'PASARELA_PAGO'
 export type DisbursementStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'REVERSED'
 
-// ── Sesión ───────────────────────────────────────────────────────────────────
+// ── Sesión y Seguridad (API_SECURITY.md) ─────────────────────────────────────
+export type SecurityRole =
+  | 'ROLE_ADMIN'
+  | 'ROLE_ANALYST'
+  | 'ROLE_OPERATOR'
+  | 'ROLE_COLLECTOR'
+  | 'ROLE_AUDITOR'
+  | 'ROLE_CLIENT'
+  | (string & {})
+
+export type LoginStatus = 'AUTHENTICATED' | 'MFA_REQUIRED' | 'MFA_ENROLLMENT_REQUIRED'
+
 export interface LoginRequest {
   email: string
   password: string
 }
+
+export interface AuthTokensResponse {
+  accessToken: string
+  refreshToken: string
+  expiresInSeconds: number
+  role: string
+}
+
+export interface LoginResponse {
+  status: LoginStatus
+  accessToken: string | null
+  refreshToken: string | null
+  expiresInSeconds: number | null
+  role: string | null
+  mfaToken: string | null
+  mfaExpiresInSeconds: number | null
+}
+
+export interface MfaVerifyRequest {
+  mfaToken: string
+  code?: string | null
+  recoveryCode?: string | null
+}
+
+export interface MfaEnrollRequest {
+  mfaToken: string
+}
+
+export interface MfaEnrollResponse {
+  secret: string
+  otpauthUri: string
+}
+
+export interface MfaEnrollConfirmRequest {
+  mfaToken: string
+  code: string
+}
+
+export interface MfaEnrollConfirmResponse {
+  tokens: AuthTokensResponse
+  recoveryCodes: string[]
+}
+
+export interface RefreshRequest {
+  refreshToken: string
+}
+
+export interface LogoutRequest {
+  refreshToken?: string | null
+}
+
+/** Contrato mínimo de token mantenido por compatibilidad con mocks/mobile. */
 export interface TokenResponse {
   accessToken: string
+  refreshToken?: string
+  expiresInSeconds?: number
+  role?: string
 }
+
 export interface Me {
   id: string
+  userId?: string
   fullName: string
   email: string
   role: string
   permissions: string[]
+  mfaEnabled?: boolean
   /** Solo clientes del portal. */
   customerId?: string
   kycStatus?: KycStatus
+}
+
+export interface ChangeUserRoleRequest {
+  newRole: string
+  reason: string
+}
+
+export interface SecurityPingResponse {
+  module: string
+  status: string
 }
 
 // ── Clientes ─────────────────────────────────────────────────────────────────
@@ -606,9 +685,99 @@ export interface AuditLogEntry {
   action: string
   stateBefore: Record<string, unknown> | null
   stateAfter: Record<string, unknown> | null
-  userName: string
-  userIp: string
+  userId?: string | null
+  userName: string | null
+  userEmail?: string | null
+  userIp: string | null
+  userAgent?: string | null
   createdAt: Instant
+  approvalRequestId?: string | null
+}
+
+export interface AuditLogQuery {
+  entity?: string
+  entityName?: string
+  entityId?: string
+  action?: string
+  userId?: string
+  user?: string
+  from?: string
+  to?: string
+  page?: number
+  pageSize?: number
+  approvalRequestId?: string
+}
+
+// ── Aprobaciones de cuatro ojos ──────────────────────────────────────────────
+export type ApprovalOperationType =
+  | 'PAYMENT_REVERSAL'
+  | 'LOAN_WRITE_OFF'
+  | 'MANUAL_ADJUSTMENT'
+  | 'PRODUCT_RATE_CHANGE'
+  | 'LOAN_RESTRUCTURE'
+  | 'USER_ROLE_CHANGE'
+  | (string & {})
+
+export type ApprovalStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED'
+
+export type ApprovalScope = 'toDecide' | 'mine' | 'all'
+
+export interface ApprovalUserRef {
+  id: string
+  fullName: string
+  email: string
+}
+
+export interface ApprovalRequestSummary {
+  id: string
+  operationType: ApprovalOperationType
+  targetEntity: string
+  targetId: string
+  status: ApprovalStatus
+  reason: string
+  evidenceRef: string | null
+  requestedBy: ApprovalUserRef
+  requestedAt: Instant
+  expiresAt: Instant
+  decidedBy: ApprovalUserRef | null
+  decidedAt: Instant | null
+}
+
+export interface ApprovalRequestDto extends ApprovalRequestSummary {
+  payload: Record<string, unknown>
+  targetSnapshot: Record<string, unknown>
+  currentTargetState: Record<string, unknown> | null
+  decisionComment: string | null
+}
+
+export interface ApprovalQuery {
+  status?: ApprovalStatus | string
+  operationType?: ApprovalOperationType | string
+  targetId?: string
+  requestedBy?: string
+  scope?: ApprovalScope
+  page?: number
+  pageSize?: number
+}
+
+export interface ApproveApprovalRequest {
+  comment?: string | null
+  mfaCode?: string | null
+}
+
+export interface RejectApprovalRequest {
+  comment: string
+}
+
+export interface ApprovalOutcome {
+  resultEntity: string
+  resultId: string
+}
+
+export interface ApprovalDecisionResponse {
+  id: string
+  status: ApprovalStatus | string
+  result?: ApprovalOutcome | null
 }
 
 export interface Company {

@@ -32,7 +32,25 @@ export function installGuards(router: Router) {
     if (to.meta.public) return true
 
     const isAuthenticated = await session.ensure()
-    return resolveAccess(to, { isAuthenticated, can: session.can })
+    const decision = resolveAccess(to, { isAuthenticated, can: session.can })
+    if (
+      !isAuthenticated &&
+      session.sessionTerminationReason === 'reused' &&
+      decision !== true &&
+      typeof decision === 'object' &&
+      'name' in decision &&
+      decision.name === 'login'
+    ) {
+      session.clearTerminationReason()
+      return {
+        ...decision,
+        query: {
+          ...(typeof decision.query === 'object' ? decision.query : {}),
+          motivo: 'sesion-comprometida',
+        },
+      }
+    }
+    return decision
   })
 
   router.afterEach((to) => {

@@ -247,7 +247,7 @@ onMounted(() => {
                     :href="`https://wa.me/51${row.phone.replace(/\D/g, '')}`"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
                     title="Abrir WhatsApp"
                   >
                     <MessageCircle class="size-3" />
@@ -397,7 +397,7 @@ onMounted(() => {
                     :href="`https://wa.me/51${item.phone.replace(/\D/g, '')}`"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="inline-flex items-center gap-1 font-medium text-emerald-600 hover:underline"
+                    class="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
                     title="Abrir WhatsApp"
                   >
                     <MessageCircle class="size-3" />

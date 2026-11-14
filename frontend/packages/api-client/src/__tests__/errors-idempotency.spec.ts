@@ -27,6 +27,32 @@ describe('toApiError', () => {
     expect(error.traceId).toBe('abc')
   })
 
+  it('preserva code y errorType de ProblemDetails de Security y detecta respuestas con solo code', () => {
+    const error = toApiError(
+      axiosError(401, {
+        title: 'Security.RefreshTokenReused',
+        detail: 'The refresh token is invalid, expired or revoked.',
+        code: 'Security.RefreshTokenReused',
+        errorType: 'Unauthorized',
+      }),
+    )
+    expect(error.status).toBe(401)
+    expect(error.code).toBe('Security.RefreshTokenReused')
+    expect(error.errorType).toBe('Unauthorized')
+    expect(error.detail).toBe('The refresh token is invalid, expired or revoked.')
+
+    const codeOnly = toApiError(
+      axiosError(403, {
+        code: 'Approvals.InvalidMfaCode',
+        errorType: 'Forbidden',
+      }),
+    )
+    expect(codeOnly.status).toBe(403)
+    expect(codeOnly.code).toBe('Approvals.InvalidMfaCode')
+    expect(codeOnly.errorType).toBe('Forbidden')
+    expect(codeOnly.title).toBe('Sin permiso')
+  })
+
   it('da un título por defecto cuando la respuesta no es ProblemDetails', () => {
     const error = toApiError(axiosError(409, 'texto plano'))
     expect(error.title).toBe('Conflicto')

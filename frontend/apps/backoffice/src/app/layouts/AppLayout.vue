@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronsUpDown, HandCoins, LogOut } from '@lucide/vue'
+import { ChevronsUpDown, HandCoins, LogOut, User } from '@lucide/vue'
 
 import { Avatar, AvatarFallback } from '@prestamos/ui/components/ui/avatar'
 import { Badge } from '@prestamos/ui/components/ui/badge'
@@ -30,6 +30,7 @@ import {
   SidebarTrigger,
 } from '@prestamos/ui/components/ui/sidebar'
 
+import ThemeToggle from '../components/ThemeToggle.vue'
 import { buildMenu } from '../navigation'
 import { useSessionStore } from '../stores/session'
 
@@ -39,15 +40,9 @@ const session = useSessionStore()
 
 const menu = computed(() => buildMenu(router.getRoutes(), session.can))
 
-const initials = computed(() =>
-  (session.user?.fullName ?? '')
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part.charAt(0))
-    .join('')
-    .slice(0, 2)
-    .toUpperCase(),
-)
+function goToProfile() {
+  void router.push({ name: 'profile' })
+}
 
 async function logout() {
   await session.logout()
@@ -105,7 +100,7 @@ async function logout() {
               <DropdownMenuTrigger as-child>
                 <SidebarMenuButton size="lg" aria-label="Menú de usuario">
                   <Avatar class="size-8 rounded-lg">
-                    <AvatarFallback class="rounded-lg">{{ initials }}</AvatarFallback>
+                    <AvatarFallback class="rounded-lg">{{ session.initials }}</AvatarFallback>
                   </Avatar>
                   <div class="grid flex-1 text-left text-sm leading-tight">
                     <span class="truncate font-medium">{{ session.user?.fullName }}</span>
@@ -117,10 +112,21 @@ async function logout() {
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent side="right" align="end" class="min-w-56">
-                <DropdownMenuLabel class="text-xs text-muted-foreground">
-                  {{ session.user?.role }}
+                <DropdownMenuLabel class="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <span>{{ session.user?.role }}</span>
+                  <Badge
+                    v-if="session.user?.mfaEnabled !== undefined"
+                    :variant="session.user.mfaEnabled ? 'secondary' : 'outline'"
+                    class="text-[10px] font-normal"
+                  >
+                    {{ session.user.mfaEnabled ? 'MFA TOTP activo' : 'MFA inactivo' }}
+                  </Badge>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem @select="goToProfile">
+                  <User aria-hidden="true" />
+                  Mi perfil
+                </DropdownMenuItem>
                 <DropdownMenuItem @select="logout">
                   <LogOut aria-hidden="true" />
                   Cerrar sesión
@@ -138,7 +144,10 @@ async function logout() {
         <SidebarTrigger class="-ml-1" />
         <Separator orientation="vertical" class="mr-2 h-4" />
         <span class="text-sm font-medium">{{ route.meta.title }}</span>
-        <Badge v-if="session.isDemo" variant="outline" class="ml-auto">Modo demo</Badge>
+        <div class="ml-auto flex items-center gap-2">
+          <Badge v-if="session.isDemo" variant="outline">Modo demo</Badge>
+          <ThemeToggle />
+        </div>
       </header>
       <main class="flex-1 p-4 md:p-6">
         <RouterView />

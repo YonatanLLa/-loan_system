@@ -122,9 +122,9 @@ onMounted(() => {
           <CardHeader class="pb-2">
             <div class="flex items-center justify-between">
               <span class="text-xs font-medium text-muted-foreground">Cobranza del Día</span>
-              <HandCoins class="size-4 text-emerald-600" />
+              <HandCoins class="size-4 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <CardTitle class="text-2xl font-bold text-emerald-600">
+            <CardTitle class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
               <MoneyText :amount="kpis.collections.collectedToday" />
             </CardTitle>
           </CardHeader>

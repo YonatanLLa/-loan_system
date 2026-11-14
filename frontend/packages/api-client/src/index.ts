@@ -10,5 +10,11 @@ export { createDemoUsersApi, createUsersApi, type User, type UsersApi } from './
 export type * from './contracts'
 export type { components, paths } from './generated/schema'
 // Las apps usan estos tipos sin depender de axios directamente.
-export type { AxiosAdapter, AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
+export type {
+  AxiosAdapter,
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from 'axios'
 export { AxiosError } from 'axios'

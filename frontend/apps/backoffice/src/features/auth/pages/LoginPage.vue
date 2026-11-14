@@ -19,16 +19,18 @@ import {
 import { Field, FieldError, FieldGroup, FieldLabel } from '@prestamos/ui/components/ui/field'
 import { Input } from '@prestamos/ui/components/ui/input'
 
+import ThemeToggle from '@/app/components/ThemeToggle.vue'
 import { safeRedirect } from '@/app/router/guards'
 import { useSessionStore } from '@/app/stores/session'
 import { loginSchema } from '../schemas/login'
 
-// FE-BO-01. El segundo factor (FE-BO-02) se agrega cuando el backend defina su contrato.
+// FE-BO-01 / FE-BO-02: Autenticación con flujo MFA condicional (TOTP / enrollamiento).
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 
 const sessionExpired = computed(() => route.query.motivo === 'sesion-expirada')
+const sessionCompromised = computed(() => route.query.motivo === 'sesion-comprometida')
 
 /* ── Account locked state (HTTP 423) ── */
 const accountLocked = ref<{ title: string; detail: string } | null>(null)
@@ -51,7 +53,14 @@ function goNext() {
 
 const onSubmit = handleSubmit(async (values) => {
   try {
-    await session.login(values.email, values.password)
+    const status = await session.login(values.email, values.password)
+    if (status === 'MFA_REQUIRED' || status === 'MFA_ENROLLMENT_REQUIRED') {
+      await router.replace({
+        name: 'totp',
+        query: route.query.redirect ? { redirect: String(route.query.redirect) } : undefined,
+      })
+      return
+    }
     await goNext()
   } catch (error) {
     const apiError = toApiError(error)
@@ -78,7 +87,10 @@ function enterDemo() {
 </script>
 
 <template>
-  <main class="grid min-h-svh place-items-center bg-muted/40 p-4">
+  <main class="relative grid min-h-svh place-items-center bg-muted/40 p-4 pt-14 sm:pt-4">
+    <div class="absolute top-4 right-4">
+      <ThemeToggle variant="outline" />
+    </div>
     <div class="w-full max-w-sm space-y-6">
       <div class="flex items-center justify-center gap-2 text-lg font-semibold">
         <span
@@ -89,7 +101,15 @@ function enterDemo() {
         Sistema de Préstamos
       </div>
 
-      <Alert v-if="sessionExpired && !accountLocked">
+      <Alert v-if="sessionCompromised && !accountLocked" variant="destructive">
+        <AlertTitle>Sesión revocada por seguridad</AlertTitle>
+        <AlertDescription>
+          Detectamos reutilización de tu token de sesión. Por seguridad se cerraron tus sesiones
+          activas; inicia sesión nuevamente.
+        </AlertDescription>
+      </Alert>
+
+      <Alert v-if="sessionExpired && !sessionCompromised && !accountLocked">
         <AlertTitle>Tu sesión expiró</AlertTitle>
         <AlertDescription>Ingresa nuevamente para continuar.</AlertDescription>
       </Alert>

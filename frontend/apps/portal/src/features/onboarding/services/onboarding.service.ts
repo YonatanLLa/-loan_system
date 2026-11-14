@@ -1,4 +1,5 @@
 import type {
+  AuthTokensResponse,
   ClientRegisterRequest,
   ClientRegisterResponse,
   ConsentsSubmitRequest,
@@ -6,11 +7,12 @@ import type {
   Customer,
   CustomerBankAccount,
   KycSubmitRequest,
+  LoginResponse,
+  MfaVerifyRequest,
   OtpSendRequest,
   OtpSendResponse,
   OtpVerifyRequest,
   OtpVerifyResponse,
-  TokenResponse,
 } from '@prestamos/api-client'
 
 import { useApi } from '@/app/api'
@@ -20,11 +22,23 @@ import { useApi } from '@/app/api'
  * Encapsula la comunicación HTTP con el backend / mocks.
  */
 export const onboardingService = {
-  /** Inicia sesión del cliente prestatario (FE-CP-02). */
-  async loginClient(identifier: string, password: string): Promise<TokenResponse> {
-    const { data } = await useApi().post<TokenResponse>('/client/login', {
-      email: identifier.trim(),
-      password,
+  /** Inicia sesión del cliente prestatario mediante POST /api/auth/login (FE-CP-02). */
+  async loginClient(identifier: string, password: string): Promise<LoginResponse> {
+    const { data } = await useApi().post<LoginResponse>(
+      '/auth/login',
+      {
+        email: identifier.trim(),
+        password,
+      },
+      { skipAuthRefresh: true },
+    )
+    return data
+  },
+
+  /** Completa verificación MFA TOTP si el backend la solicita durante el login. */
+  async verifyClientMfa(payload: MfaVerifyRequest): Promise<AuthTokensResponse> {
+    const { data } = await useApi().post<AuthTokensResponse>('/auth/mfa/verify', payload, {
+      skipAuthRefresh: true,
     })
     return data
   },
@@ -59,8 +73,12 @@ export const onboardingService = {
   },
 
   /** Cierra la sesión activa revocando credenciales (FE-CP-02). */
-  async logout(): Promise<void> {
-    await useApi().post('/auth/logout')
+  async logout(refreshToken?: string | null): Promise<void> {
+    await useApi().post(
+      '/auth/logout',
+      { refreshToken: refreshToken ?? null },
+      { skipAuthRefresh: true },
+    )
   },
 
   /** Consulta el perfil del cliente autenticado en el portal (FE-CP-03). */

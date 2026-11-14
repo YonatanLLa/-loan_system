@@ -1,29 +1,63 @@
 import { ref, watch } from 'vue'
 import { toast } from 'vue-sonner'
-import type { AuditLogEntry, Page } from '@prestamos/api-client'
-import { toApiError } from '@prestamos/api-client'
+import { z } from 'zod'
+
+import { type AuditLogEntry, type AuditLogQuery, type Page, toApiError } from '@prestamos/api-client'
+
 import { auditService } from '../services/audit.service'
 
-export function useAuditLog() {
+export const AUDIT_ENTITY_SUGGESTIONS = [
+  'users',
+  'approval_requests',
+  'refresh_tokens',
+  'loans',
+  'payments',
+  'loan_products',
+  'customers',
+] as const
+
+export const AUDIT_ACTION_OPTIONS = ['INSERT', 'UPDATE', 'DELETE'] as const
+
+const uuidSchema = z.string().uuid()
+
+export interface AuditFilterState {
+  entity: string
+  entityId: string
+  action: string
+  user: string
+  from: string
+  to: string
+  approvalRequestId: string
+  page: number
+}
+
+function createEmptyFilters(): AuditFilterState {
+  return {
+    entity: '',
+    entityId: '',
+    action: '',
+    user: '',
+    from: '',
+    to: '',
+    approvalRequestId: '',
+    page: 1,
+  }
+}
+
+export function useAuditLog(initialFilters: Partial<AuditFilterState> = {}) {
   const loading = ref(false)
   const auditPage = ref<Page<AuditLogEntry>>({
     items: [],
     total: 0,
     page: 1,
-    pageSize: 15,
+    pageSize: 20,
   })
 
-  const availableEntities = ref<string[]>([])
-  const availableActions = ref<string[]>([])
-
-  const filters = ref({
-    entity: '',
-    action: '',
-    user: '',
-    from: '',
-    to: '',
-    page: 1,
+  const filters = ref<AuditFilterState>({
+    ...createEmptyFilters(),
+    ...initialFilters,
   })
+  const approvalRequestIdError = ref<string | null>(null)
 
   const totalPages = ref(1)
   watch(
@@ -34,26 +68,38 @@ export function useAuditLog() {
     { immediate: true },
   )
 
-  async function loadCatalogs() {
-    try {
-      const [entities, actions] = await Promise.all([
-        auditService.getEntities(),
-        auditService.getActions(),
-      ])
-      availableEntities.value = entities
-      availableActions.value = actions
-    } catch {
-      // Silencioso en caso de que el catálogo falle
+  function buildQuery(): AuditLogQuery | null {
+    const trimmedApprovalId = filters.value.approvalRequestId.trim()
+    if (trimmedApprovalId && !uuidSchema.safeParse(trimmedApprovalId).success) {
+      approvalRequestIdError.value = 'El ID de aprobación debe ser un UUID válido.'
+      return null
+    }
+    approvalRequestIdError.value = null
+
+    const trimmedUser = filters.value.user.trim()
+    const userIsUuid = trimmedUser !== '' && uuidSchema.safeParse(trimmedUser).success
+
+    return {
+      entity: filters.value.entity.trim() || undefined,
+      entityId: filters.value.entityId.trim() || undefined,
+      action: filters.value.action.trim() || undefined,
+      userId: userIsUuid ? trimmedUser : undefined,
+      user: trimmedUser && !userIsUuid ? trimmedUser : undefined,
+      from: filters.value.from || undefined,
+      to: filters.value.to || undefined,
+      approvalRequestId: trimmedApprovalId || undefined,
+      page: filters.value.page,
+      pageSize: auditPage.value.pageSize,
     }
   }
 
   async function loadAuditLogs() {
+    const query = buildQuery()
+    if (!query) return
+
     loading.value = true
     try {
-      auditPage.value = await auditService.getLogs({
-        ...filters.value,
-        pageSize: auditPage.value.pageSize,
-      })
+      auditPage.value = await auditService.getLogs(query)
     } catch (error) {
       const apiError = toApiError(error)
       toast.error('Error al cargar bitácora', { description: apiError.detail })
@@ -68,14 +114,8 @@ export function useAuditLog() {
   }
 
   function resetFilters() {
-    filters.value = {
-      entity: '',
-      action: '',
-      user: '',
-      from: '',
-      to: '',
-      page: 1,
-    }
+    filters.value = createEmptyFilters()
+    approvalRequestIdError.value = null
     void loadAuditLogs()
   }
 
@@ -88,11 +128,9 @@ export function useAuditLog() {
   return {
     loading,
     auditPage,
-    availableEntities,
-    availableActions,
     filters,
+    approvalRequestIdError,
     totalPages,
-    loadCatalogs,
     loadAuditLogs,
     onSearch,
     resetFilters,

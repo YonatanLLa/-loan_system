@@ -1,285 +1,276 @@
-import { ref } from 'vue'
-import { toApiError } from '@prestamos/api-client'
-import type {
-  AdminUserDto,
-  Company,
-  GlobalParameters,
-  Holiday,
-  PaymentMethodConfig,
-} from '@prestamos/api-client'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { toast } from 'vue-sonner'
+import { z } from 'zod'
 
 import {
-  adminService,
-  type CreateAdminUserPayload,
-  type CreateHolidayPayload,
-} from '../services/admin.service'
+  type ApprovalRequestDto,
+  type SecurityPingResponse,
+  type SecurityRole,
+  toApiError,
+} from '@prestamos/api-client'
 
-export type AdminTab = 'company' | 'payment-methods' | 'holidays' | 'users' | 'parameters'
+import { adminService } from '../services/admin.service'
+
+export interface RoleMatrixEntry {
+  role: SecurityRole
+  label: string
+  description: string
+  permissions: readonly string[]
+}
 
 /**
- * Composable para la gestión integral de la configuración institucional,
- * canales digitales, feriados, usuarios y parámetros del backoffice (FE-BO-41 y FE-BO-42).
+ * Matriz de referencia de roles y permisos (solo lectura), espejo exacto de
+ * `RolePermissions.cs` en el backend.
  */
-export function useAdminSettings() {
-  const activeTab = ref<AdminTab>('company')
+export const SECURITY_ROLES_MATRIX: readonly RoleMatrixEntry[] = [
+  {
+    role: 'ROLE_ADMIN',
+    label: 'Administrador',
+    description: 'Acceso completo operativo, administración de usuarios y aprobaciones de cuatro ojos.',
+    permissions: [
+      'dashboard.view',
+      'customers.read',
+      'applications.read',
+      'loans.read',
+      'payments.read',
+      'payments.reverse',
+      'treasury.read',
+      'integrations.read',
+      'collections.read',
+      'reports.read',
+      'audit.read',
+      'products.manage',
+      'admin.manage',
+      'approvals.read',
+      'approvals.payments.reverse',
+      'approvals.loans.write_off',
+      'approvals.loans.adjust',
+      'approvals.products.rates',
+      'approvals.loans.restructure',
+      'approvals.users.role',
+    ],
+  },
+  {
+    role: 'ROLE_ANALYST',
+    label: 'Analista de crédito',
+    description: 'Consulta de clientes, solicitudes, préstamos y reportes.',
+    permissions: ['dashboard.view', 'customers.read', 'applications.read', 'loans.read', 'reports.read'],
+  },
+  {
+    role: 'ROLE_OPERATOR',
+    label: 'Operador financiero',
+    description: 'Operación diaria de solicitudes, pagos, tesorería e integraciones.',
+    permissions: [
+      'dashboard.view',
+      'customers.read',
+      'applications.read',
+      'loans.read',
+      'payments.read',
+      'treasury.read',
+      'integrations.read',
+      'reports.read',
+    ],
+  },
+  {
+    role: 'ROLE_COLLECTOR',
+    label: 'Gestor de cobranzas',
+    description: 'Seguimiento de cartera vencida y gestión de cobranza.',
+    permissions: ['dashboard.view', 'customers.read', 'loans.read', 'collections.read'],
+  },
+  {
+    role: 'ROLE_AUDITOR',
+    label: 'Auditor interno',
+    description: 'Consulta de solo lectura sobre auditoría, reportes, cartera y aprobaciones.',
+    permissions: [
+      'dashboard.view',
+      'audit.read',
+      'reports.read',
+      'customers.read',
+      'loans.read',
+      'payments.read',
+      'treasury.read',
+      'approvals.read',
+    ],
+  },
+  {
+    role: 'ROLE_CLIENT',
+    label: 'Cliente (Portal)',
+    description: 'Acceso exclusivo al Portal de Clientes; bloqueado para Backoffice.',
+    permissions: ['client.portal'],
+  },
+] as const
 
-  // ── Empresa ────────────────────────────────────────────────────────────────
-  const company = ref<Company | null>(null)
-  const companyLoading = ref(false)
-  const companySaving = ref(false)
-  const companyError = ref<string | null>(null)
+export type UserSecurityAction = 'suspend' | 'activate' | 'resetMfa'
 
-  async function loadCompany(): Promise<void> {
-    companyLoading.value = true
-    companyError.value = null
+const uuidSchema = z
+  .string()
+  .trim()
+  .min(1, 'Ingresa el UUID del usuario')
+  .uuid('Debe ser un UUID válido (ej. 550e8400-e29b-41d4-a716-446655440000)')
+
+const ACTION_META: Record<
+  UserSecurityAction,
+  { title: string; confirmLabel: string; successToast: string }
+> = {
+  suspend: {
+    title: 'Suspender usuario',
+    confirmLabel: 'Confirmar suspensión',
+    successToast: 'Usuario suspendido correctamente',
+  },
+  activate: {
+    title: 'Activar usuario',
+    confirmLabel: 'Confirmar activación',
+    successToast: 'Usuario activado correctamente',
+  },
+  resetMfa: {
+    title: 'Reiniciar MFA del usuario',
+    confirmLabel: 'Confirmar reinicio MFA',
+    successToast: 'MFA reiniciado; el usuario deberá enrolarse en su próximo ingreso',
+  },
+}
+
+export function useAdminSettings(options: { autoLoad?: boolean } = {}) {
+  const { autoLoad = true } = options
+
+  const pingResult = ref<SecurityPingResponse | null>(null)
+  const pingLoading = ref(false)
+  const pingError = ref<string | null>(null)
+
+  const targetUserId = ref('')
+  const targetUserIdError = ref<string | null>(null)
+
+  const pendingAction = ref<UserSecurityAction | null>(null)
+  const actionBusy = ref(false)
+  const lastActionFeedback = ref<string | null>(null)
+
+  const roleForm = reactive<{ newRole: SecurityRole; reason: string }>({
+    newRole: 'ROLE_ANALYST',
+    reason: '',
+  })
+  const roleReasonError = ref<string | null>(null)
+  const roleSubmitting = ref(false)
+  const createdApproval = ref<ApprovalRequestDto | null>(null)
+
+  const isValidUserId = computed(() => uuidSchema.safeParse(targetUserId.value).success)
+  const pendingActionMeta = computed(() =>
+    pendingAction.value ? ACTION_META[pendingAction.value] : null,
+  )
+
+  function validateUserId(): string | null {
+    const parsed = uuidSchema.safeParse(targetUserId.value)
+    if (!parsed.success) {
+      targetUserIdError.value = parsed.error.issues[0]?.message ?? 'UUID inválido'
+      return null
+    }
+    targetUserIdError.value = null
+    return parsed.data
+  }
+
+  async function checkSecurityPing() {
+    pingLoading.value = true
+    pingError.value = null
     try {
-      company.value = await adminService.fetchCompany()
-    } catch (err) {
-      const apiErr = toApiError(err)
-      companyError.value = apiErr.detail
-      toast.error('Error al cargar datos de la empresa', { description: apiErr.detail })
+      pingResult.value = await adminService.pingSecurity()
+    } catch (error) {
+      const apiError = toApiError(error)
+      pingError.value = apiError.detail || apiError.title
+      toast.error(apiError.title, { description: apiError.detail })
     } finally {
-      companyLoading.value = false
+      pingLoading.value = false
     }
   }
 
-  async function saveCompany(payload: Partial<Company>): Promise<boolean> {
-    companySaving.value = true
-    companyError.value = null
-    try {
-      company.value = await adminService.updateCompany(payload)
-      toast.success('Empresa actualizada', {
-        description: 'Los datos institucionales y de soporte fueron guardados.',
-      })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      companyError.value = apiErr.detail
-      toast.error('Error al actualizar empresa', { description: apiErr.detail })
-      return false
-    } finally {
-      companySaving.value = false
-    }
+  function requestActionConfirmation(action: UserSecurityAction) {
+    if (!validateUserId()) return
+    pendingAction.value = action
   }
 
-  // ── Feriados ───────────────────────────────────────────────────────────────
-  const holidays = ref<Holiday[]>([])
-  const holidaysLoading = ref(false)
-  const holidaysSaving = ref(false)
-  const holidaysError = ref<string | null>(null)
-
-  async function loadHolidays(): Promise<void> {
-    holidaysLoading.value = true
-    holidaysError.value = null
-    try {
-      holidays.value = await adminService.fetchHolidays()
-    } catch (err) {
-      const apiErr = toApiError(err)
-      holidaysError.value = apiErr.detail
-      toast.error('Error al cargar feriados', { description: apiErr.detail })
-    } finally {
-      holidaysLoading.value = false
-    }
+  function cancelActionConfirmation() {
+    pendingAction.value = null
   }
 
-  async function addHoliday(payload: CreateHolidayPayload): Promise<boolean> {
-    if (!payload.date || !payload.name.trim()) return false
-    holidaysSaving.value = true
-    holidaysError.value = null
-    try {
-      const created = await adminService.createHoliday(payload)
-      holidays.value = [...holidays.value, created].sort((a, b) => a.date.localeCompare(b.date))
-      toast.success('Feriado agregado', {
-        description: `${created.name} (${created.date}) añadido al calendario de vencimientos.`,
-      })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      holidaysError.value = apiErr.detail
-      toast.error('No se pudo agregar el feriado', { description: apiErr.detail })
-      return false
-    } finally {
-      holidaysSaving.value = false
-    }
-  }
+  async function executePendingAction() {
+    const action = pendingAction.value
+    const userId = validateUserId()
+    if (!action || !userId) return
 
-  async function removeHoliday(id: string): Promise<boolean> {
-    holidaysSaving.value = true
-    holidaysError.value = null
+    actionBusy.value = true
     try {
-      await adminService.deleteHoliday(id)
-      holidays.value = holidays.value.filter((h) => h.id !== id)
-      toast.success('Feriado eliminado', {
-        description: 'Se retiró el feriado del calendario del sistema.',
-      })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      holidaysError.value = apiErr.detail
-      toast.error('Error al eliminar feriado', { description: apiErr.detail })
-      return false
-    } finally {
-      holidaysSaving.value = false
-    }
-  }
-
-  // ── Métodos de Pago y Canales ──────────────────────────────────────────────
-  const paymentMethods = ref<PaymentMethodConfig[]>([])
-  const paymentMethodsLoading = ref(false)
-  const paymentMethodsError = ref<string | null>(null)
-
-  async function loadPaymentMethods(): Promise<void> {
-    paymentMethodsLoading.value = true
-    paymentMethodsError.value = null
-    try {
-      paymentMethods.value = await adminService.fetchPaymentMethods()
-    } catch (err) {
-      const apiErr = toApiError(err)
-      paymentMethodsError.value = apiErr.detail
-      toast.error('Error al cargar métodos de pago', { description: apiErr.detail })
-    } finally {
-      paymentMethodsLoading.value = false
-    }
-  }
-
-  async function togglePaymentMethod(id: string, isActive: boolean): Promise<boolean> {
-    try {
-      const updated = await adminService.updatePaymentMethod(id, { isActive })
-      const idx = paymentMethods.value.findIndex((m) => m.id === id)
-      if (idx >= 0) {
-        paymentMethods.value[idx] = updated
+      if (action === 'suspend') {
+        await adminService.suspendUser(userId)
+      } else if (action === 'activate') {
+        await adminService.activateUser(userId)
+      } else {
+        await adminService.resetUserMfa(userId)
       }
-      toast.success('Canal actualizado', {
-        description: `${updated.name} ahora está ${isActive ? 'ACTIVO' : 'INACTIVO'}.`,
+      const message = `${ACTION_META[action].successToast} (${userId}).`
+      lastActionFeedback.value = message
+      toast.success(ACTION_META[action].successToast)
+      pendingAction.value = null
+    } catch (error) {
+      const apiError = toApiError(error)
+      toast.error(apiError.title, { description: apiError.detail })
+    } finally {
+      actionBusy.value = false
+    }
+  }
+
+  async function submitRoleChange() {
+    const userId = validateUserId()
+    const trimmedReason = roleForm.reason.trim()
+    if (trimmedReason.length < 10) {
+      roleReasonError.value = 'La justificación debe tener al menos 10 caracteres.'
+    } else {
+      roleReasonError.value = null
+    }
+
+    if (!userId || roleReasonError.value) return
+
+    roleSubmitting.value = true
+    try {
+      const approval = await adminService.requestUserRoleChange(userId, {
+        newRole: roleForm.newRole,
+        reason: trimmedReason,
       })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      toast.error('Error al actualizar método de pago', { description: apiErr.detail })
-      return false
-    }
-  }
-
-  // ── Usuarios de Backoffice ─────────────────────────────────────────────────
-  const users = ref<AdminUserDto[]>([])
-  const usersLoading = ref(false)
-  const usersSaving = ref(false)
-  const usersError = ref<string | null>(null)
-
-  async function loadUsers(): Promise<void> {
-    usersLoading.value = true
-    usersError.value = null
-    try {
-      users.value = await adminService.fetchUsers()
-    } catch (err) {
-      const apiErr = toApiError(err)
-      usersError.value = apiErr.detail
-      toast.error('Error al cargar usuarios', { description: apiErr.detail })
-    } finally {
-      usersLoading.value = false
-    }
-  }
-
-  async function addUser(payload: CreateAdminUserPayload): Promise<boolean> {
-    if (!payload.email.trim() || !payload.fullName.trim() || !payload.role) return false
-    usersSaving.value = true
-    usersError.value = null
-    try {
-      const created = await adminService.createUser(payload)
-      users.value = [created, ...users.value]
-      toast.success('Usuario registrado', {
-        description: `Se creó la cuenta para ${created.fullName} (${created.email}).`,
+      createdApproval.value = approval
+      roleForm.reason = ''
+      toast.success('Solicitud de cambio de rol creada', {
+        description: `Solicitud ${approval.id} pendiente de segunda aprobación.`,
       })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      usersError.value =
-        apiErr.status === 409
-          ? 'Ya existe un usuario con este correo electrónico.'
-          : apiErr.detail
-      toast.error('Error al registrar usuario', { description: usersError.value })
-      return false
+    } catch (error) {
+      const apiError = toApiError(error)
+      toast.error(apiError.title, { description: apiError.detail })
     } finally {
-      usersSaving.value = false
+      roleSubmitting.value = false
     }
   }
 
-  // ── Parámetros Globales ────────────────────────────────────────────────────
-  const parameters = ref<GlobalParameters | null>(null)
-  const parametersLoading = ref(false)
-  const parametersSaving = ref(false)
-  const parametersError = ref<string | null>(null)
-
-  async function loadParameters(): Promise<void> {
-    parametersLoading.value = true
-    parametersError.value = null
-    try {
-      parameters.value = await adminService.fetchParameters()
-    } catch (err) {
-      const apiErr = toApiError(err)
-      parametersError.value = apiErr.detail
-      toast.error('Error al cargar parámetros globales', { description: apiErr.detail })
-    } finally {
-      parametersLoading.value = false
-    }
-  }
-
-  async function saveParameters(payload: Partial<GlobalParameters>): Promise<boolean> {
-    parametersSaving.value = true
-    parametersError.value = null
-    try {
-      parameters.value = await adminService.updateParameters(payload)
-      toast.success('Parámetros actualizados', {
-        description: 'Las políticas y reglas operacionales globales fueron guardadas.',
-      })
-      return true
-    } catch (err) {
-      const apiErr = toApiError(err)
-      parametersError.value = apiErr.detail
-      toast.error('Error al guardar parámetros', { description: apiErr.detail })
-      return false
-    } finally {
-      parametersSaving.value = false
-    }
+  if (autoLoad) {
+    onMounted(() => {
+      void checkSecurityPing()
+    })
   }
 
   return {
-    activeTab,
-    // Empresa
-    company,
-    companyLoading,
-    companySaving,
-    companyError,
-    loadCompany,
-    saveCompany,
-    // Feriados
-    holidays,
-    holidaysLoading,
-    holidaysSaving,
-    holidaysError,
-    loadHolidays,
-    addHoliday,
-    removeHoliday,
-    // Métodos de Pago
-    paymentMethods,
-    paymentMethodsLoading,
-    paymentMethodsError,
-    loadPaymentMethods,
-    togglePaymentMethod,
-    // Usuarios
-    users,
-    usersLoading,
-    usersSaving,
-    usersError,
-    loadUsers,
-    addUser,
-    // Parámetros
-    parameters,
-    parametersLoading,
-    parametersSaving,
-    parametersError,
-    loadParameters,
-    saveParameters,
+    SECURITY_ROLES_MATRIX,
+    pingResult,
+    pingLoading,
+    pingError,
+    targetUserId,
+    targetUserIdError,
+    isValidUserId,
+    pendingAction,
+    pendingActionMeta,
+    actionBusy,
+    lastActionFeedback,
+    roleForm,
+    roleReasonError,
+    roleSubmitting,
+    createdApproval,
+    checkSecurityPing,
+    requestActionConfirmation,
+    cancelActionConfirmation,
+    executePendingAction,
+    submitRoleChange,
   }
 }

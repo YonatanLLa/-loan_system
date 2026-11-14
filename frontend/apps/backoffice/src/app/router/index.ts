@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import { adminRoutes } from '@/features/admin'
+import { approvalsRoutes } from '@/features/approvals'
 import { auditRoutes } from '@/features/audit'
 import { authRoutes } from '@/features/auth'
 import { collectionsRoutes } from '@/features/collections'
@@ -10,6 +11,7 @@ import { loansRoutes } from '@/features/loans'
 import { originationRoutes } from '@/features/origination'
 import { paymentsRoutes } from '@/features/payments'
 import { productsRoutes } from '@/features/products'
+import { profileRoutes } from '@/features/profile'
 import { reportsRoutes } from '@/features/reports'
 import { treasuryRoutes } from '@/features/treasury'
 
@@ -34,6 +36,8 @@ const router = createRouter({
         ...integrationsRoutes,
         ...collectionsRoutes,
         ...auditRoutes,
+        ...approvalsRoutes,
+        ...profileRoutes,
         ...productsRoutes,
         ...adminRoutes,
         {

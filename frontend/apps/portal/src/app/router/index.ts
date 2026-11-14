@@ -48,8 +48,13 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const session = useSessionStore()
+
+  // En recarga con refresh token en sessionStorage, restaura el perfil una sola vez.
+  if (!session.isAuthenticated) {
+    await session.ensure()
+  }
 
   // Si ya tiene sesión e intenta ir a landing, login o registro, redirige al home
   if (
@@ -59,8 +64,12 @@ router.beforeEach((to) => {
     return { path: '/inicio' }
   }
 
-  // Si la ruta requiere autenticación y no tiene sesión, va a la landing
+  // Si la ruta requiere autenticación y no tiene sesión, redirige según motivo o a la landing
   if (!to.meta.public && !session.isAuthenticated) {
+    if (session.sessionTerminationReason === 'reused') {
+      session.clearTerminationReason()
+      return { path: '/login', query: { motivo: 'sesion-comprometida' } }
+    }
     return { path: '/' }
   }
 

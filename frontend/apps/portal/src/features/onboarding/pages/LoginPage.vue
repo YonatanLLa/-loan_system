@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
+import { computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
 import {
   AlertCircle,
   ArrowRight,
@@ -20,11 +21,33 @@ import {
 import { Input } from '@prestamos/ui/components/ui/input'
 import { Label } from '@prestamos/ui/components/ui/label'
 
+import { useSessionStore } from '@/app/stores/session'
+
 import { useClientAuth } from '../composables'
 
-// FE-CP-02: Login del cliente prestatario con email o celular y contraseña.
+// FE-CP-02: Login del cliente prestatario con correo y contraseña.
 
-const { loginIdentifier, loginPassword, loginLoading, loginError, login } = useClientAuth()
+const route = useRoute()
+const session = useSessionStore()
+const sessionMotivo = computed(() =>
+  route.query.motivo === 'sesion-comprometida'
+    ? 'Detectamos reutilización de tu sesión y cerramos tu acceso por seguridad. Ingresa nuevamente.'
+    : route.query.motivo === 'sesion-expirada'
+      ? 'Tu sesión expiró. Ingresa nuevamente para continuar.'
+      : null,
+)
+
+const {
+  loginIdentifier,
+  loginPassword,
+  loginLoading,
+  loginError,
+  mfaChallengeToken,
+  mfaCode,
+  login,
+  verifyMfaLogin,
+  cancelMfaChallenge,
+} = useClientAuth()
 
 interface DemoAccount {
   name: string
@@ -80,12 +103,48 @@ function fillDemoClient(account: DemoAccount) {
       </CardHeader>
 
       <CardContent class="space-y-4">
+        <Alert v-if="sessionMotivo && !loginError" variant="destructive" class="py-2.5">
+          <AlertCircle class="size-4" />
+          <AlertDescription class="text-xs">{{ sessionMotivo }}</AlertDescription>
+        </Alert>
+
         <Alert v-if="loginError" variant="destructive" class="py-2.5">
           <AlertCircle class="size-4" />
           <AlertDescription class="text-xs">{{ loginError }}</AlertDescription>
         </Alert>
 
-        <form class="space-y-3.5" @submit.prevent="login">
+        <form v-if="mfaChallengeToken" class="space-y-3.5" @submit.prevent="verifyMfaLogin">
+          <div class="space-y-1.5">
+            <Label for="clientMfaCode" class="text-xs font-medium">
+              Código de verificación (6 dígitos)
+            </Label>
+            <Input
+              id="clientMfaCode"
+              v-model="mfaCode"
+              type="text"
+              inputmode="numeric"
+              maxlength="6"
+              autocomplete="one-time-code"
+              placeholder="000000"
+              required
+              class="h-10 text-xs font-mono tracking-widest"
+            />
+          </div>
+          <Button type="submit" class="w-full h-10 font-semibold text-xs" :disabled="loginLoading">
+            <LoaderCircle v-if="loginLoading" class="mr-2 size-4 animate-spin" />
+            <span>Confirmar código</span>
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            class="w-full h-9 text-xs"
+            @click="cancelMfaChallenge"
+          >
+            Volver al inicio de sesión
+          </Button>
+        </form>
+
+        <form v-else class="space-y-3.5" @submit.prevent="login">
           <div class="space-y-1.5">
             <Label for="loginEmail" class="text-xs font-medium">Correo o Celular</Label>
             <Input
@@ -119,8 +178,8 @@ function fillDemoClient(account: DemoAccount) {
           </Button>
         </form>
 
-        <!-- Accesos directos Demo para pruebas -->
-        <div class="pt-3 border-t border-border space-y-2.5">
+        <!-- Accesos directos Demo para pruebas (solo cuando VITE_DEMO_LOGIN=true) -->
+        <div v-if="session.demoEnabled" class="pt-3 border-t border-border space-y-2.5">
           <div class="flex items-center justify-between">
             <span class="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <Sparkles class="size-3 text-primary" />

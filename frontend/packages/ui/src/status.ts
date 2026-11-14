@@ -63,6 +63,13 @@ export const statusCatalog = {
     PENDIENTE: { label: 'Por vencer', tone: 'warning' },
     VENCIDA: { label: 'Vencida', tone: 'danger' },
   },
+  approval: {
+    PENDING: { label: 'Pendiente', tone: 'warning' },
+    APPROVED: { label: 'Aprobada', tone: 'success' },
+    REJECTED: { label: 'Rechazada', tone: 'danger' },
+    CANCELLED: { label: 'Cancelada', tone: 'neutral' },
+    EXPIRED: { label: 'Expirada', tone: 'neutral' },
+  },
 } as const satisfies Record<string, Record<string, StatusInfo>>
 
 export type StatusKind = keyof typeof statusCatalog

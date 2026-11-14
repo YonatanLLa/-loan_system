@@ -1,125 +1,207 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
-import AddHolidayDialog from '../features/admin/components/AddHolidayDialog.vue'
-import AddUserDialog from '../features/admin/components/AddUserDialog.vue'
-import { useAdminSettings } from '../features/admin/composables'
-import { adminService } from '../features/admin/services'
+import {
+  AxiosError,
+  type AxiosAdapter,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from '@prestamos/api-client'
 
-const stubs = {
-  Card: { template: '<div><slot /></div>' },
-  CardContent: { template: '<div><slot /></div>' },
-  CardHeader: { template: '<div><slot /></div>' },
-  CardTitle: { template: '<div><slot /></div>' },
-  CardDescription: { template: '<div><slot /></div>' },
+import { setupApi } from '@/app/api'
+import { useAdminSettings } from '@/features/admin/composables'
+import AdminPage from '@/features/admin/pages/AdminPage.vue'
+import { adminService } from '@/features/admin/services'
+
+function jsonResponse(
+  config: InternalAxiosRequestConfig,
+  data: unknown,
+  status = 200,
+): Promise<AxiosResponse> {
+  return Promise.resolve({ data, status, statusText: 'OK', headers: {}, config })
 }
 
-describe('AddHolidayDialog (FE-BO-41)', () => {
-  it('deshabilita el botón de guardar si falta fecha o nombre', async () => {
-    const wrapper = mount(AddHolidayDialog, {
-      props: { open: true, isBusy: false },
-      global: { stubs },
-    })
+function errorResponse(
+  config: InternalAxiosRequestConfig,
+  status: number,
+  data: unknown,
+): Promise<never> {
+  const response = { data, status, statusText: 'Error', headers: {}, config } as AxiosResponse
+  return Promise.reject(new AxiosError(`HTTP ${status}`, String(status), config, null, response))
+}
 
-    const submit = wrapper.find('button[type="submit"]')
-    expect(submit.attributes('disabled')).toBeDefined()
-
-    await wrapper.find('#holidayDate').setValue('2026-12-25')
-    expect(submit.attributes('disabled')).toBeDefined()
-
-    await wrapper.find('#holidayName').setValue('Navidad')
-    expect(submit.attributes('disabled')).toBeUndefined()
-  })
-
-  it('emite el evento submit con los datos del feriado y recurrencia', async () => {
-    const wrapper = mount(AddHolidayDialog, {
-      props: { open: true, isBusy: false },
-      global: { stubs },
-    })
-
-    await wrapper.find('#holidayDate').setValue('2026-07-28')
-    await wrapper.find('#holidayName').setValue('Fiestas Patrias')
-    await wrapper.find('#isRecurring').setValue(true)
-
-    await wrapper.find('form').trigger('submit')
-
-    const emitted = wrapper.emitted('submit')
-    expect(emitted).toBeTruthy()
-    expect(emitted?.[0]?.[0]).toEqual({
-      date: '2026-07-28',
-      name: 'Fiestas Patrias',
-      isRecurring: true,
-    })
-  })
-})
-
-describe('AddUserDialog (FE-BO-41)', () => {
-  it('exige nombre completo y correo corporativo para habilitar el registro', async () => {
-    const wrapper = mount(AddUserDialog, {
-      props: { open: true, isBusy: false },
-      global: { stubs },
-    })
-
-    const submit = wrapper.find('button[type="submit"]')
-    expect(submit.attributes('disabled')).toBeDefined()
-
-    await wrapper.find('#userFullName').setValue('Carlos Mendoza')
-    expect(submit.attributes('disabled')).toBeDefined()
-
-    await wrapper.find('#userEmail').setValue('carlos.mendoza@fintech.pe')
-    expect(submit.attributes('disabled')).toBeUndefined()
-  })
-
-  it('emite el payload con el rol seleccionado y permisos correspondientes', async () => {
-    const wrapper = mount(AddUserDialog, {
-      props: { open: true, isBusy: false },
-      global: { stubs },
-    })
-
-    await wrapper.find('#userFullName').setValue('Ana Morales')
-    await wrapper.find('#userEmail').setValue('ana.morales@fintech.pe')
-    await wrapper.find('#userRole').setValue('ROLE_COLLECTOR')
-
-    await wrapper.find('form').trigger('submit')
-
-    const emitted = wrapper.emitted('submit')
-    expect(emitted).toBeTruthy()
-    const payload = emitted?.[0]?.[0] as { fullName: string; email: string; role: string; permissions: string[] }
-    expect(payload.fullName).toBe('Ana Morales')
-    expect(payload.email).toBe('ana.morales@fintech.pe')
-    expect(payload.role).toBe('ROLE_COLLECTOR')
-    expect(payload.permissions).toContain('collections.actions')
-  })
-})
-
-describe('Admin Service y Composable (FE-BO-41 y FE-BO-42)', () => {
-  it('adminService expone todas las operaciones de administración y parámetros', () => {
-    expect(typeof adminService.fetchCompany).toBe('function')
-    expect(typeof adminService.updateCompany).toBe('function')
-    expect(typeof adminService.fetchHolidays).toBe('function')
-    expect(typeof adminService.createHoliday).toBe('function')
-    expect(typeof adminService.deleteHoliday).toBe('function')
-    expect(typeof adminService.fetchPaymentMethods).toBe('function')
-    expect(typeof adminService.updatePaymentMethod).toBe('function')
-    expect(typeof adminService.fetchUsers).toBe('function')
-    expect(typeof adminService.createUser).toBe('function')
-    expect(typeof adminService.fetchParameters).toBe('function')
-    expect(typeof adminService.updateParameters).toBe('function')
-  })
-
-  it('useAdminSettings inicializa pestañas y estados correctamente', () => {
+describe('Admin Security (API_SECURITY.md)', () => {
+  beforeEach(() => {
     setActivePinia(createPinia())
-    const settings = useAdminSettings()
+  })
 
-    expect(settings.activeTab.value).toBe('company')
-    settings.activeTab.value = 'parameters'
-    expect(settings.activeTab.value).toBe('parameters')
+  it('adminService llama únicamente a los endpoints documentados en API_SECURITY.md con Idempotency-Key en mutaciones', async () => {
+    const calls: InternalAxiosRequestConfig[] = []
+    const userId = '550e8400-e29b-41d4-a716-446655440000'
+    const adapter: AxiosAdapter = (config) => {
+      calls.push(config)
+      if (config.url === '/security/ping') {
+        return jsonResponse(config, {
+          module: 'Security',
+          status: 'Ready',
+        })
+      }
+      if (config.url === `/users/${userId}/role`) {
+        return jsonResponse(
+          config,
+          {
+            id: 'app-123',
+            operationType: 'USER_ROLE_CHANGE',
+            targetEntity: 'User',
+            targetId: userId,
+            status: 'PENDING',
+            reason: 'Cambio de rol por rotación interna',
+            evidenceRef: null,
+            requestedBy: { id: 'admin-1', fullName: 'Admin', email: 'admin@sistema.local' },
+            requestedAt: '2026-11-14T00:00:00Z',
+            expiresAt: '2026-11-15T00:00:00Z',
+            decidedBy: null,
+            decidedAt: null,
+            payload: { newRole: 'ROLE_AUDITOR' },
+            targetSnapshot: { role: 'ROLE_ANALYST' },
+            currentTargetState: { role: 'ROLE_ANALYST' },
+            decisionComment: null,
+          },
+          202,
+        )
+      }
+      return jsonResponse(config, null, 204)
+    }
 
-    expect(settings.company.value).toBeNull()
-    expect(settings.holidays.value).toEqual([])
-    expect(settings.paymentMethods.value).toEqual([])
-    expect(settings.users.value).toEqual([])
-    expect(settings.parameters.value).toBeNull()
+    setupApi({
+      baseURL: '/api',
+      session: { getAccessToken: () => 'tok', refresh: async () => false, onSessionExpired: vi.fn<() => void>() },
+      adapter,
+    })
+
+    const ping = await adminService.pingSecurity()
+    expect(ping.module).toBe('Security')
+
+    await adminService.suspendUser(userId)
+    await adminService.activateUser(userId)
+    await adminService.resetUserMfa(userId)
+    const approval = await adminService.requestUserRoleChange(userId, {
+      newRole: 'ROLE_AUDITOR',
+      reason: 'Cambio de rol por rotación interna',
+    })
+
+    expect(approval.status).toBe('PENDING')
+    expect(calls.map((c) => `${c.method?.toUpperCase()} ${c.url}`)).toEqual([
+      'GET /security/ping',
+      `POST /users/${userId}/suspend`,
+      `POST /users/${userId}/activate`,
+      `POST /users/${userId}/mfa/reset`,
+      `PUT /users/${userId}/role`,
+    ])
+
+    for (const mutation of calls.slice(1)) {
+      expect(mutation.headers.get('Idempotency-Key')).toBeTruthy()
+    }
+  })
+
+  it('useAdminSettings valida UUID, confirmación de acciones, longitud mínima de justificación y matriz de 6 roles', async () => {
+    const userId = '550e8400-e29b-41d4-a716-446655440000'
+    const adapter: AxiosAdapter = (config) => {
+      if (config.url === '/security/ping') {
+        return jsonResponse(config, {
+          module: 'Security',
+          status: 'Ready',
+        })
+      }
+      if (config.url === `/users/${userId}/role`) {
+        return jsonResponse(
+          config,
+          {
+            id: 'app-role-1',
+            operationType: 'USER_ROLE_CHANGE',
+            targetEntity: 'User',
+            targetId: userId,
+            status: 'PENDING',
+            reason: 'Promoción a auditoría interna',
+            evidenceRef: null,
+            requestedBy: { id: 'admin-1', fullName: 'Admin', email: 'admin@sistema.local' },
+            requestedAt: '2026-11-14T00:00:00Z',
+            expiresAt: '2026-11-15T00:00:00Z',
+            decidedBy: null,
+            decidedAt: null,
+            payload: { newRole: 'ROLE_AUDITOR' },
+            targetSnapshot: { role: 'ROLE_ANALYST' },
+            currentTargetState: null,
+            decisionComment: null,
+          },
+          202,
+        )
+      }
+      return errorResponse(config, 404, { title: 'No encontrado' })
+    }
+
+    setupApi({
+      baseURL: '/api',
+      session: { getAccessToken: () => 'tok', refresh: async () => false, onSessionExpired: vi.fn<() => void>() },
+      adapter,
+    })
+
+    const settings = useAdminSettings({ autoLoad: false })
+    expect(settings.SECURITY_ROLES_MATRIX).toHaveLength(6)
+    const adminMatrix = settings.SECURITY_ROLES_MATRIX.find((r) => r.role === 'ROLE_ADMIN')
+    expect(adminMatrix?.permissions).toHaveLength(20)
+
+    settings.requestActionConfirmation('suspend')
+    expect(settings.targetUserIdError.value).toBeTruthy()
+
+    settings.targetUserId.value = 'no-es-uuid'
+    await settings.submitRoleChange()
+    expect(settings.targetUserIdError.value).toContain('UUID')
+    expect(settings.roleReasonError.value).toContain('10 caracteres')
+
+    settings.targetUserId.value = userId
+    settings.roleForm.newRole = 'ROLE_AUDITOR'
+    settings.roleForm.reason = 'Promoción a auditoría interna'
+    await settings.submitRoleChange()
+
+    expect(settings.createdApproval.value?.id).toBe('app-role-1')
+    expect(settings.roleForm.reason).toBe('')
+  })
+
+  it('AdminPage renderiza el estado de Security y la matriz de roles sin llamar a /admin/*', async () => {
+    const urls: string[] = []
+    setupApi({
+      baseURL: '/api',
+      session: { getAccessToken: () => 'tok', refresh: async () => false, onSessionExpired: vi.fn<() => void>() },
+      adapter: (config) => {
+        urls.push(config.url ?? '')
+        return jsonResponse(config, {
+          module: 'Security',
+          status: 'Ready',
+        })
+      },
+    })
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/administracion', name: 'admin', component: AdminPage },
+        { path: '/auditoria', name: 'audit', component: { template: '<div />' } },
+        { path: '/aprobaciones', name: 'approvals', component: { template: '<div />' } },
+      ],
+    })
+    await router.push('/administracion')
+    await router.isReady()
+
+    const wrapper = mount(AdminPage, {
+      global: { plugins: [router] },
+    })
+
+    expect(wrapper.text()).toContain('Administración de Seguridad')
+    expect(wrapper.text()).toContain('ROLE_ADMIN')
+    expect(wrapper.text()).toContain('approvals.users.role')
+    expect(urls.every((u) => !u.startsWith('/admin'))).toBe(true)
   })
 })

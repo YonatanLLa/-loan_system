@@ -35,6 +35,13 @@ const ALL_BACKOFFICE = [
   'audit.read',
   'products.manage',
   'admin.manage',
+  'approvals.read',
+  'approvals.payments.reverse',
+  'approvals.loans.write_off',
+  'approvals.loans.adjust',
+  'approvals.products.rates',
+  'approvals.loans.restructure',
+  'approvals.users.role',
 ]
 
 /** CCI de 20 dígitos. Si `fail`, termina en 0000: el banco simulado lo rechaza al desembolsar. */
@@ -87,6 +94,7 @@ function seedUsers(): void {
         'loans.read',
         'payments.read',
         'treasury.read',
+        'approvals.read',
       ],
     ],
   ] as const

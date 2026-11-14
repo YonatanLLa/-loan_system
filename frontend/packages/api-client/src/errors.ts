@@ -8,6 +8,8 @@ export interface ProblemDetails {
   detail?: string
   instance?: string
   traceId?: string
+  code?: string
+  errorType?: string
   /** Errores de validación por campo: { "Amount": ["El monto es obligatorio"] } */
   errors?: Record<string, string[]>
 }
@@ -16,6 +18,8 @@ export interface ApiErrorInit {
   status: number
   title: string
   detail: string
+  code?: string
+  errorType?: string
   fieldErrors?: Record<string, string[]>
   traceId?: string
 }
@@ -25,6 +29,8 @@ export class ApiError extends Error {
   readonly status: number
   readonly title: string
   readonly detail: string
+  readonly code?: string
+  readonly errorType?: string
   readonly fieldErrors: Record<string, string[]>
   readonly traceId?: string
 
@@ -34,6 +40,8 @@ export class ApiError extends Error {
     this.status = init.status
     this.title = init.title
     this.detail = init.detail
+    this.code = init.code
+    this.errorType = init.errorType
     this.fieldErrors = init.fieldErrors ?? {}
     this.traceId = init.traceId
   }
@@ -77,6 +85,8 @@ export function toApiError(error: unknown): ApiError {
       status,
       title,
       detail: body?.detail ?? title,
+      code: body?.code,
+      errorType: body?.errorType,
       fieldErrors: body?.errors,
       traceId: body?.traceId,
     })
@@ -109,5 +119,9 @@ export function toFormErrors(error: ApiError): Record<string, string> {
 }
 
 function isProblemDetails(value: unknown): value is ProblemDetails {
-  return typeof value === 'object' && value !== null && ('title' in value || 'detail' in value)
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('title' in value || 'detail' in value || 'code' in value)
+  )
 }

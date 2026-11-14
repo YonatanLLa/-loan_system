@@ -231,6 +231,156 @@ public class SecurityAuthUseCasesTests
 
         result.IsFailure.ShouldBeTrue();
         result.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        result.Error.Code.ShouldBe("Security.InvalidRefreshToken");
+        _refreshTokens.RevokeFamilyCalls.ShouldBe(0);       // expiry is not a reuse signal
+        expired.RevokedAt.ShouldBeNull();
+        _unitOfWork.SaveChangesCalls.ShouldBe(0);
+    }
+
+    // ----- Refresh token families, reuse detection and atomic rotation (DECISION_02) -----
+
+    [Fact]
+    public async Task Login_StartsANewTokenFamily()
+    {
+        AddActiveUser();
+
+        await CreateLogin().ExecuteAsync(new LoginRequest(Email, Password));
+
+        var issued = _refreshTokens.Added.ShouldHaveSingleItem();
+        issued.FamilyId.ShouldBe(issued.Id);
+        issued.ReplacedByTokenId.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task Refresh_Rotation_KeepsFamilyAndLinksOldTokenToItsReplacement()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        var existing = RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(existing);
+
+        var result = await CreateRefresh().ExecuteAsync(new RefreshRequest(raw));
+
+        result.IsSuccess.ShouldBeTrue();
+        var rotated = _refreshTokens.Added.ShouldHaveSingleItem();
+        rotated.FamilyId.ShouldBe(existing.FamilyId);
+        rotated.Id.ShouldNotBe(existing.Id);
+        rotated.IsActive(_clock).ShouldBeTrue();
+        rotated.TokenHash.ShouldBe(RefreshTokenHasher.Hash(result.Value.RefreshToken));
+        existing.RevokedAt.ShouldBe(_clock.UtcNow);
+        existing.ReplacedByTokenId.ShouldBe(rotated.Id);
+        _refreshTokens.RevokeFamilyCalls.ShouldBe(0);
+        _unitOfWork.SaveChangesCalls.ShouldBe(1);           // INSERT + UPDATE in a single save
+    }
+
+    [Fact]
+    public async Task Refresh_ReusingARotatedToken_RevokesTheWholeFamilyAndReturnsReused()
+    {
+        var user = AddActiveUser();
+        var (rawStolen, hash) = RefreshTokenHasher.Create();
+        var original = RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(original);
+
+        // Another session (other device) of the same user: a different family.
+        var (_, otherHash) = RefreshTokenHasher.Create();
+        var otherSession = RefreshToken.Issue(user.Id, otherHash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(otherSession);
+
+        var useCase = CreateRefresh();
+        var first = await useCase.ExecuteAsync(new RefreshRequest(rawStolen));   // legitimate rotation
+        first.IsSuccess.ShouldBeTrue();
+        var second = await useCase.ExecuteAsync(new RefreshRequest(first.Value.RefreshToken));
+        second.IsSuccess.ShouldBeTrue();
+        _audit.SetActor(Guid.Empty);                                              // reset to observe the reuse path
+
+        var reuse = await useCase.ExecuteAsync(new RefreshRequest(rawStolen));   // the old token shows up again
+
+        reuse.IsFailure.ShouldBeTrue();
+        reuse.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        reuse.Error.Code.ShouldBe("Security.RefreshTokenReused");
+        _refreshTokens.RevokeFamilyCalls.ShouldBe(1);
+        _refreshTokens.Added.ShouldAllBe(t => t.FamilyId == original.FamilyId);
+        _refreshTokens.Added.ShouldAllBe(t => t.RevokedAt != null);              // the current head of the chain is revoked too
+        otherSession.IsActive(_clock).ShouldBeTrue();                             // other families are untouched
+        _audit.ActorId.ShouldBe(user.Id);
+        _unitOfWork.SaveChangesCalls.ShouldBe(3);
+
+        // After the family is revoked, the latest token is no longer usable either.
+        var afterRevocation = await useCase.ExecuteAsync(new RefreshRequest(second.Value.RefreshToken));
+        afterRevocation.IsFailure.ShouldBeTrue();
+        afterRevocation.Error.Code.ShouldBe("Security.InvalidRefreshToken");
+    }
+
+    [Fact]
+    public async Task Refresh_WithLoggedOutToken_ReturnsInvalidWithoutFamilyRevocation()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        _refreshTokens.Seed(RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null));
+        await CreateLogout().ExecuteAsync(new LogoutRequest(raw));
+
+        var result = await CreateRefresh().ExecuteAsync(new RefreshRequest(raw));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("Security.InvalidRefreshToken");   // revoked but never rotated: not a reuse
+        _refreshTokens.RevokeFamilyCalls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Refresh_WhenRotationLosesAConcurrencyRace_ReturnsInvalidWithoutRevokingTheFamily()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        var existing = RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        _refreshTokens.Seed(existing);
+        _unitOfWork.FailNextSaveWithConcurrencyConflict = true;   // another request rotated it first
+
+        var result = await CreateRefresh().ExecuteAsync(new RefreshRequest(raw));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Unauthorized);
+        result.Error.Code.ShouldBe("Security.InvalidRefreshToken");
+        _refreshTokens.RevokeFamilyCalls.ShouldBe(0);
+        _unitOfWork.SaveChangesCalls.ShouldBe(1);
+    }
+
+    [Fact]
+    public async Task Logout_WhenTokenWasRevokedConcurrently_StillSucceeds()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        _refreshTokens.Seed(RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null));
+        _unitOfWork.FailNextSaveWithConcurrencyConflict = true;
+
+        var result = await CreateLogout().ExecuteAsync(new LogoutRequest(raw));
+
+        result.IsSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task Logout_WithAlreadyRevokedToken_IsANoOp()
+    {
+        var user = AddActiveUser();
+        var (raw, hash) = RefreshTokenHasher.Create();
+        var token = RefreshToken.Issue(user.Id, hash, _clock, TimeSpan.FromDays(14), userIp: null, userAgent: null);
+        token.Revoke(_clock);
+        _refreshTokens.Seed(token);
+
+        var result = await CreateLogout().ExecuteAsync(new LogoutRequest(raw));
+
+        result.IsSuccess.ShouldBeTrue();
+        _unitOfWork.SaveChangesCalls.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task Suspend_RevokesTokensAndSavesInsideOneTransaction()
+    {
+        var target = AddActiveUser();
+
+        var result = await CreateSuspend().ExecuteAsync(new SuspendUserRequest(target.Id));
+
+        result.IsSuccess.ShouldBeTrue();
+        _unitOfWork.CommittedTransactions.ShouldBe(1);
     }
 
     [Fact]
@@ -558,8 +708,18 @@ public class SecurityAuthUseCasesTests
         public List<RefreshToken> Added { get; } = [];
         public void Seed(RefreshToken token) => _seeded.Add(token);
         public void Add(RefreshToken token) => Added.Add(token);
-        public Task<RefreshToken?> FindActiveByHashAsync(string tokenHash, CancellationToken ct = default) =>
-            Task.FromResult(_seeded.FirstOrDefault(t => t.TokenHash == tokenHash && t.RevokedAt is null));
+        public int RevokeFamilyCalls { get; private set; }
+        public Task<RefreshToken?> FindByHashAsync(string tokenHash, CancellationToken ct = default) =>
+            Task.FromResult(_seeded.Concat(Added).FirstOrDefault(t => t.TokenHash == tokenHash));
+        public Task RevokeFamilyAsync(Guid familyId, IClock clock, CancellationToken ct = default)
+        {
+            RevokeFamilyCalls++;
+            foreach (var token in _seeded.Concat(Added).Where(t => t.FamilyId == familyId && t.RevokedAt is null))
+            {
+                token.Revoke(clock);
+            }
+            return Task.CompletedTask;
+        }
         public Task RevokeAllForUserAsync(Guid userId, IClock clock, CancellationToken ct = default)
         {
             foreach (var token in _seeded.Concat(Added).Where(t => t.UserId == userId && t.RevokedAt is null))
@@ -609,12 +769,34 @@ public class SecurityAuthUseCasesTests
     private sealed class FakeUnitOfWork : ISecurityUnitOfWork
     {
         public int SaveChangesCalls { get; private set; }
+        public int CommittedTransactions { get; private set; }
+
+        /// <summary>Simulates losing an optimistic-concurrency race on the next save.</summary>
+        public bool FailNextSaveWithConcurrencyConflict { get; set; }
+
         public Task<int> SaveChangesAsync(CancellationToken ct = default)
         {
             SaveChangesCalls++;
+            if (FailNextSaveWithConcurrencyConflict)
+            {
+                FailNextSaveWithConcurrencyConflict = false;
+                throw new ConcurrencyConflictException();
+            }
             return Task.FromResult(0);
         }
+
         public Task<ITransactionScope> BeginTransactionAsync(CancellationToken ct = default) =>
-            throw new NotSupportedException();
+            Task.FromResult<ITransactionScope>(new FakeTransaction(this));
+
+        private sealed class FakeTransaction(FakeUnitOfWork owner) : ITransactionScope
+        {
+            public Task CommitAsync(CancellationToken ct = default)
+            {
+                owner.CommittedTransactions++;
+                return Task.CompletedTask;
+            }
+            public Task RollbackAsync(CancellationToken ct = default) => Task.CompletedTask;
+            public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+        }
     }
 }

@@ -90,6 +90,8 @@ erDiagram
         timestamptz revoked_at
         inet user_ip
         text user_agent
+        UUID family_id
+        UUID replaced_by_token_id FK
     }
     audit_logs {
         bigserial id PK

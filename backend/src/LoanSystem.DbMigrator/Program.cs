@@ -106,7 +106,8 @@ public static class Program
             // so inserting in the middle would rename already-applied scripts.
             "migrations/13_outbox_messages.sql",
             "migrations/14_audit_logs_user_agent.sql",
-            "migrations/15_audit_logs_append_only.sql"
+            "migrations/15_audit_logs_append_only.sql",
+            "migrations/16_refresh_tokens_family.sql"
         };
 
         var list = new List<(string Name, string Path)>();

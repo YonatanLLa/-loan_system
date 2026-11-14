@@ -104,9 +104,11 @@ dotnet run --project src/LoanSystem.WebApi
     "amount": 10000,
     "annualRatePercentage": 12,
     "termMonths": 12,
-    "method": "FRENCH"
+    "method": "FRENCH",
+    "rateType": "EFECTIVA"
   }
   ```
+  `annualRatePercentage` se interpreta como **TEA** por defecto. Envía `"rateType": "NOMINAL"` si la tasa es una TNA. Ver [docs/DECISION_01_TASA_EFECTIVA_TEA.md](docs/DECISION_01_TASA_EFECTIVA_TEA.md).
 
 ### 4. Iniciar Procesos en Segundo Plano (Workers)
 ```powershell

@@ -4,7 +4,8 @@ public sealed record SimulateScheduleRequest(
     decimal Amount,
     decimal AnnualRatePercentage,
     int TermMonths,
-    string Method = "FRENCH");
+    string Method = "FRENCH",
+    string RateType = "EFECTIVA");
 
 public sealed record InstallmentSimulation(
     int Number,

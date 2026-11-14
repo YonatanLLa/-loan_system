@@ -91,8 +91,9 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
             return;
         }
 
-        // Authenticated user first; the use case's actor covers anonymous requests such as login
-        var userId = _currentUser?.UserId ?? _auditContext?.ActorId;
+        // An actor set explicitly by the use case (login, refresh, reset) wins over the request's JWT,
+        // which may belong to another user if the client still sends a stale Authorization header
+        var userId = _auditContext?.ActorId ?? _currentUser?.UserId;
         var businessAction = _auditContext?.Action;
         var userIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress;
         if (userIp is { IsIPv4MappedToIPv6: true })
@@ -201,7 +202,7 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
         foreach (var property in entry.Properties)
         {
             var name = property.Metadata.Name;
-            if (IsSensitive(name))
+            if (property.Metadata.IsAuditSensitive() || IsSensitiveName(name))
             {
                 values[name] = "[REDACTED]";
                 continue;
@@ -219,7 +220,13 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
         return JsonSerializer.Serialize(values, SerializerOptions);
     }
 
-    private static bool IsSensitive(string name) =>
+    // Naming rules are a safety net; properties with other names are marked with IsAuditSensitive() in the EF mapping.
+    // Deliberately narrow: plain "token"/"code" substrings would hide useful data (TokenExpiresAt, CurrencyCode).
+    private static bool IsSensitiveName(string name) =>
         SensitivePropertyNames.Contains(name)
-        || name.Contains("secret", StringComparison.OrdinalIgnoreCase);
+        || name.Contains("secret", StringComparison.OrdinalIgnoreCase)
+        || name.EndsWith("Hash", StringComparison.OrdinalIgnoreCase)
+        // NewPassword, TemporaryPassword... but not timestamps such as PasswordChangedAt
+        || (name.Contains("password", StringComparison.OrdinalIgnoreCase)
+            && !name.EndsWith("At", StringComparison.Ordinal));
 }

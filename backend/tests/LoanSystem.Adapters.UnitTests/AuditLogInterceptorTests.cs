@@ -49,6 +49,11 @@ public class AuditLogInterceptorTests
         public Guid Id { get; set; } = Guid.NewGuid();
         public DateTimeOffset TokenExpiresAt { get; set; }
         public string? ApiSecret { get; set; }
+        public string? ResetTokenHash { get; set; }
+        public string? TemporaryPassword { get; set; }
+        public DateTimeOffset? PasswordChangedAt { get; set; }
+        public string? InvitationCode { get; set; }
+        public string? CurrencyCode { get; set; }
     }
 
     private sealed class FixedClock(DateTimeOffset now) : IClock
@@ -100,6 +105,7 @@ public class AuditLogInterceptorTests
             {
                 b.ToTable("test_credentials");
                 b.HasKey(x => x.Id);
+                b.Property(x => x.InvitationCode).IsAuditSensitive();
             });
         }
     }
@@ -401,12 +407,27 @@ public class AuditLogInterceptorTests
     }
 
     [Fact]
-    public async Task AuthenticatedUser_TakesPrecedenceOverActor()
+    public async Task ExplicitActor_TakesPrecedenceOverStaleJwtUser()
+    {
+        // Login sent with another user's still-valid JWT in the Authorization header
+        var staleJwtUserId = Guid.NewGuid();
+        var actorId = Guid.NewGuid();
+        var auditContext = new AuditContext();
+        auditContext.SetActor(actorId);
+        var interceptor = new AuditLogInterceptor(new TestCurrentUser { UserId = staleJwtUserId }, auditContext: auditContext);
+        await using var context = CreateDbContext(interceptor);
+
+        context.Products.Add(new TestProduct { Name = "X", Price = 0m });
+        await context.SaveChangesAsync();
+
+        (await context.AuditLogs.SingleAsync()).UserId.ShouldBe(actorId);
+    }
+
+    [Fact]
+    public async Task AuthenticatedUser_IsUsed_WhenNoActorIsSet()
     {
         var authenticatedId = Guid.NewGuid();
-        var auditContext = new AuditContext();
-        auditContext.SetActor(Guid.NewGuid());
-        var interceptor = new AuditLogInterceptor(new TestCurrentUser { UserId = authenticatedId }, auditContext: auditContext);
+        var interceptor = new AuditLogInterceptor(new TestCurrentUser { UserId = authenticatedId }, auditContext: new AuditContext());
         await using var context = CreateDbContext(interceptor);
 
         context.Products.Add(new TestProduct { Name = "X", Price = 0m });
@@ -460,6 +481,35 @@ public class AuditLogInterceptorTests
         stateAfter.ShouldContain("\"TokenExpiresAt\":\"2030-01-01");
         stateAfter.ShouldContain("\"ApiSecret\":\"[REDACTED]\"");
         stateAfter.ShouldNotContain("super-secret-value");
+    }
+
+    [Fact]
+    public async Task SensitiveFilter_MasksHashSuffix_PasswordVariants_AndMarkedProperties()
+    {
+        var interceptor = new AuditLogInterceptor();
+        await using var context = CreateDbContext(interceptor);
+
+        context.Credentials.Add(new TestCredential
+        {
+            ResetTokenHash = "hash-value",
+            TemporaryPassword = "temp-pass",
+            PasswordChangedAt = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            InvitationCode = "INV-123",
+            CurrencyCode = "PEN"
+        });
+        await context.SaveChangesAsync();
+
+        var stateAfter = (await context.AuditLogs.SingleAsync()).StateAfter!;
+        stateAfter.ShouldContain("\"ResetTokenHash\":\"[REDACTED]\"");
+        stateAfter.ShouldContain("\"TemporaryPassword\":\"[REDACTED]\"");
+        stateAfter.ShouldContain("\"InvitationCode\":\"[REDACTED]\"");
+        stateAfter.ShouldNotContain("hash-value");
+        stateAfter.ShouldNotContain("temp-pass");
+        stateAfter.ShouldNotContain("INV-123");
+
+        // Useful data stays visible
+        stateAfter.ShouldContain("\"PasswordChangedAt\":\"2030-01-01");
+        stateAfter.ShouldContain("\"CurrencyCode\":\"PEN\"");
     }
 
     [Fact]

@@ -30,11 +30,19 @@ internal sealed class LogoutUseCase : ILogoutUseCase
         if (!string.IsNullOrWhiteSpace(request.RefreshToken))
         {
             var hash = RefreshTokenHasher.Hash(request.RefreshToken);
-            var token = await _refreshTokens.FindActiveByHashAsync(hash, ct);
-            if (token is not null)
+            var token = await _refreshTokens.FindByHashAsync(hash, ct);
+            if (token is not null && !token.IsRevoked)
             {
                 token.Revoke(_clock);
-                await _unitOfWork.SaveChangesAsync(ct);
+                try
+                {
+                    await _unitOfWork.SaveChangesAsync(ct);
+                }
+                catch (ConcurrencyConflictException)
+                {
+                    // Someone else revoked it first (concurrent refresh, logout or suspension): the goal
+                    // of logout — this token no longer usable — is already met.
+                }
             }
 
             return Result.Success();

@@ -2,6 +2,8 @@ namespace LoanSystem.Common.Core.Ports.Outbound;
 
 public interface IUnitOfWork
 {
+    /// <summary>Persists all pending changes atomically.</summary>
+    /// <exception cref="ConcurrencyConflictException">An optimistic concurrency check failed; nothing was saved.</exception>
     Task<int> SaveChangesAsync(CancellationToken ct = default);
     Task<ITransactionScope> BeginTransactionAsync(CancellationToken ct = default);
 }

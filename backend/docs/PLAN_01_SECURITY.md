@@ -220,6 +220,8 @@ public interface IAuditLogReader   // Dapper (solo lectura, BE-SEC-08)
   persistir. Devuelve `LoginResponse`.
 - **`RefreshTokenUseCase`** (BE-SEC-01): `FindActiveByHashAsync`; si no activo → `Unauthorized`.
   **Rotación**: `Revoke` del token usado + alta de uno nuevo + nuevo JWT, en una transacción.
+  > ✅ Actualizado (2026-11-10): familias de tokens, detección de reúso (`Security.RefreshTokenReused`)
+  > y rotación atómica con token de concurrencia. Ver `DECISION_02_REFRESH_TOKEN_REUSE_DETECTION.md`.
 - **`LogoutUseCase`** (BE-SEC-04): `Revoke` del refresh token indicado.
 - **`GetCurrentUserUseCase`** (BE-SEC-04): construye `MeResponse` desde `ICurrentUser` + permisos
   efectivos derivados del rol.

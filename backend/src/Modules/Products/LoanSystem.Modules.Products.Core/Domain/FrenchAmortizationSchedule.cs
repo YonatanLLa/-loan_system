@@ -33,13 +33,18 @@ internal static class FrenchAmortizationSchedule
             return principal / termMonths;
 
         // quota = P * r * (1+r)^n / ((1+r)^n - 1)
-        var growth = Pow(1m + monthlyRate, termMonths);
+        var growth = InterestRate.Pow(1m + monthlyRate, termMonths);
         return new Money(principal.Amount * monthlyRate * growth / (growth - 1m), principal.Currency);
     }
 
-    public static AmortizationSchedule Build(Money principal, decimal annualRatePercentage, int termMonths)
+    /// <param name="annualRatePercentage">Annual rate in percent (e.g. 30 = 30%).</param>
+    /// <param name="rateType">
+    /// How to read the annual rate. In Peru products are quoted as TEA (<see cref="RateType.Efectiva"/>),
+    /// which is converted with (1+TEA)^(1/12)-1, NOT TEA/12. See DECISION_01_TASA_EFECTIVA_TEA.md.
+    /// </param>
+    public static AmortizationSchedule Build(Money principal, decimal annualRatePercentage, int termMonths, RateType rateType)
     {
-        var monthlyRate = annualRatePercentage / 100m / 12m;
+        var monthlyRate = InterestRate.ToMonthlyRate(annualRatePercentage, rateType);
         var installment = CalculateInstallment(principal, monthlyRate, termMonths);
 
         var installments = new List<ScheduleInstallment>(termMonths);
@@ -73,22 +78,5 @@ internal static class FrenchAmortizationSchedule
         }
 
         return new AmortizationSchedule(principal, totalInterest, principal + totalInterest, installments);
-    }
-
-    /// <summary>Exponentiation by squaring in decimal (no floating point).</summary>
-    private static decimal Pow(decimal value, int exponent)
-    {
-        var result = 1m;
-        var b = value;
-        var e = exponent;
-        while (e > 0)
-        {
-            if ((e & 1) == 1)
-                result *= b;
-            b *= b;
-            e >>= 1;
-        }
-
-        return result;
     }
 }

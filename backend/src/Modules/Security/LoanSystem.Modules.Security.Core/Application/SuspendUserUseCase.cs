@@ -48,8 +48,16 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
 
         user.Suspend();
         _audit.SetAction("SUSPEND");
-        await _refreshTokens.RevokeAllForUserAsync(user.Id, _clock, ct);
-        await _unitOfWork.SaveChangesAsync(ct);
+
+        // RevokeAllForUserAsync is an immediate bulk UPDATE; the transaction keeps it atomic with the
+        // suspension. Its row locks also make a concurrent rotation of one of these tokens lose the race.
+        await using (var transaction = await _unitOfWork.BeginTransactionAsync(ct))
+        {
+            await _refreshTokens.RevokeAllForUserAsync(user.Id, _clock, ct);
+            await _unitOfWork.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+
         _statusTracker.InvalidateUser(user.Id);
 
         return Result.Success();

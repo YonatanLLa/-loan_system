@@ -38,6 +38,37 @@ internal enum DayCountMode
     ACTUAL_360 = 2
 }
 
+/// <summary>Opening fee mode. Member names match the PostgreSQL <c>commission_mode</c> enum labels exactly (BE-PRO-03).</summary>
+internal enum CommissionMode
+{
+    /// <summary>Deducted from the disbursement: the customer receives requested − fee.</summary>
+    DEDUCTIVA = 1,
+
+    /// <summary>Added to the principal: the schedule is built on requested + fee.</summary>
+    FINANCIADA = 2
+}
+
+internal static class CommissionModeParser
+{
+    public const string Supported = "DEDUCTIVA, FINANCIADA";
+
+    public static bool TryParse(string? value, out CommissionMode mode)
+    {
+        switch (value?.Trim().ToUpperInvariant())
+        {
+            case "DEDUCTIVA":
+                mode = CommissionMode.DEDUCTIVA;
+                return true;
+            case "FINANCIADA":
+                mode = CommissionMode.FINANCIADA;
+                return true;
+            default:
+                mode = default;
+                return false;
+        }
+    }
+}
+
 internal static class AmortizationMethodParser
 {
     public const string Supported = "FRANCES (alias FRENCH), FLAT, ALEMAN, AMERICANO";

@@ -444,16 +444,16 @@ En todas: `S₀ = P`; `i_k` = tasa del periodo `k` (con `d_k` días; en `NOMINAL
 
 ### BE-PRO-03 — Comisiones
 
-- [ ] **PRO-03.1** `OpeningFeeCalculator.Calculate(Money requested, decimal feeRateFraction, Money feeFixed)` → `round(requested · rate) + fixed`.
-- [ ] **PRO-03.2** Efecto según modo:
+- [x] **PRO-03.1** `OpeningFeeCalculator.Calculate(Money requested, decimal feeRateFraction, Money feeFixed)` → `round(requested · rate) + fixed`.
+- [x] **PRO-03.2** Efecto según modo:
 
 | Modo | Capital financiado (entra al motor) | Desembolso neto al cliente |
 |---|---|---|
 | `DEDUCTIVA` | `requested` | `requested − fee` (debe ser `> 0`, si no `422 Products.OpeningFeeExceedsAmount`) |
 | `FINANCIADA` | `requested + fee` | `requested` |
 
-- [ ] **PRO-03.3** Cargo periódico: `periodic_fee` fijo por cuota → columna `Fees` de cada línea; **no** forma parte de la fórmula de amortización ni genera interés.
-- [ ] **PRO-03.4** Validaciones en el producto: `opening_fee_rate` 0–20 %; `opening_fee_fixed ≥ 0`; `periodic_fee ≥ 0`; en `DEDUCTIVA`, la comisión calculada sobre `min_amount` debe ser menor que `min_amount`.
+- [x] **PRO-03.3** Cargo periódico: `periodic_fee` fijo por cuota → columna `Fees` de cada línea; **no** forma parte de la fórmula de amortización ni genera interés.
+- [x] **PRO-03.4** (regla lista en `OpeningFeeCalculator.ValidateProductTerms`; la invoca `ProductValidator` en PRO-01) Validaciones en el producto: `opening_fee_rate` 0–20 %; `opening_fee_fixed ≥ 0`; `periodic_fee ≥ 0`; en `DEDUCTIVA`, la comisión calculada sobre `min_amount` debe ser menor que `min_amount`.
 
 - **CA-03.a** P = 10 000, comisión 2 % `DEDUCTIVA` → `openingFee = 200,00`, `netDisbursement = 9 800,00`, cronograma sobre 10 000.
 - **CA-03.b** Mismo caso `FINANCIADA` → cronograma sobre **10 200,00**, desembolso neto 10 000,00.
@@ -463,12 +463,12 @@ En todas: `S₀ = P`; `i_k` = tasa del periodo `k` (con `d_k` días; en `NOMINAL
 
 ### TCEA — Tasa de Costo Efectivo Anual (motor para BE-ORI-04)
 
-- [ ] **PRO-T.1** `TceaCalculator.Calculate(Money netDisbursement, IReadOnlyList<(int DaysFromDisbursement, Money Total)> flows)` → `decimal tceaFraction`.
+- [x] **PRO-T.1** `TceaCalculator.Calculate(Money netDisbursement, IReadOnlyList<(int DaysFromDisbursement, Money Total)> flows)` → `decimal tceaFraction`.
   - Incógnita `q = (1 + TCEA)^(1/360)`. Resolver `f(q) = net − Σ Total_k · q^(−D_k) = 0` con **Newton** (`f'(q) = Σ Total_k · D_k · q^(−D_k−1)`), arrancando en `q₀ = (1 + TEA)^(1/360)`; si Newton no converge en 50 iteraciones, **bisección** en `q ∈ [1, 1.01]`. Tolerancia `|Δq| < 1e-18`. Solo potencias enteras (sin `Math.Pow`).
   - `TCEA = q^360 − 1`. Se informa en % con 2 decimales.
   - En `NOMINAL_PERIODS`, `D_k = k · d`.
-- [ ] **PRO-T.2** Flujos que entran: desembolso **neto** (t₀) y el **total** de cada cuota (capital + interés + cargos + seguro en F2). La mora y la penalidad no entran (son contingentes).
-- [ ] **PRO-T.3** Toda cotización del motor (`ScheduleQuote`, §10) incluye `teaPercentage` y `tceaPercentage`.
+- [x] **PRO-T.2** Flujos que entran: desembolso **neto** (t₀) y el **total** de cada cuota (capital + interés + cargos + seguro en F2). La mora y la penalidad no entran (son contingentes).
+- [ ] **PRO-T.3** (motor listo: `LoanQuoteCalculator` devuelve `TeaFraction` y `TceaFraction`; falta exponerlo en `ScheduleQuote` con PRO-Q) Toda cotización del motor (`ScheduleQuote`, §10) incluye `teaPercentage` y `tceaPercentage`.
 
 - **CA-T.a** Francés P = 10 000, TEA 30 %, 12 mensuales, comisión 2 % deductiva + cargo 5 por cuota → **TCEA = 36,54 %** (§12, V5).
 - **CA-T.b** Sin comisiones ni cargos → `|TCEA − TEA| < 0,01` puntos porcentuales (el redondeo de céntimos da 29,9997 %).

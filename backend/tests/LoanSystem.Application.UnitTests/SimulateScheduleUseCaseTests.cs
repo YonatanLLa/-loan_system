@@ -100,6 +100,66 @@ public class SimulateScheduleUseCaseTests
         result.Value.Installments[0].Total.ShouldBe(888.49m);
     }
 
+    [Theory] // PRO-02.8: new methods, PG labels and the FRENCH alias (§12 V1–V4)
+    [InlineData("FRANCES", 957.86, null)]
+    [InlineData("FRENCH", 957.86, null)]
+    [InlineData("aleman", 1054.37, null)]
+    [InlineData("AMERICANO", 221.04, null)]
+    [InlineData("FLAT", 1054.38, 56.80)]
+    public async Task ExecuteAsync_WithEachMethod_ShouldReturnReferenceInstallment(string method, decimal firstInstallment, double? effectiveTea)
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(10000m, 30m, 12, method));
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Installments[0].Total.ShouldBe(firstInstallment);
+        result.Value.InstallmentAmount.ShouldBe(firstInstallment);
+        result.Value.Installments.Sum(i => i.Principal).ShouldBe(10000m);
+        result.Value.EffectiveTeaPercentage.ShouldBe(effectiveTea is null ? null : (decimal)effectiveTea.Value);
+    }
+
+    [Fact] // V9: installments + frequency, termMonths omitted
+    public async Task ExecuteAsync_WithWeeklyFrequencyAndInstallments_ShouldUseSevenDayPeriods()
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(
+            10000m, 30m, Method: "FRANCES", Frequency: "SEMANAL", Installments: 52));
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Installments.Count.ShouldBe(52);
+        result.Value.Installments[0].Total.ShouldBe(219.50m);
+        result.Value.Frequency.ShouldBe("SEMANAL");
+        result.Value.Method.ShouldBe("FRANCES");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_InstallmentsWinsOverTermMonths()
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(10000m, 30m, 12, Installments: 6));
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Installments.Count.ShouldBe(6);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WithUnknownFrequency_ShouldReturnValidationError()
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(1000m, 10m, 12, Frequency: "ANUAL"));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("Products.InvalidFrequency");
+    }
+
+    [Theory] // PRO-02.8 hard limits
+    [InlineData(10_000_000.01, 12, "Products.InvalidAmount")]
+    [InlineData(1000, 721, "Products.InvalidTerm")]
+    public async Task ExecuteAsync_AboveHardLimits_ShouldReturnValidationError(decimal amount, int installments, string code)
+    {
+        var result = await _useCase.ExecuteAsync(new SimulateScheduleRequest(amount, 10m, installments));
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Type.ShouldBe(ErrorType.Validation);
+        result.Error.Code.ShouldBe(code);
+    }
+
     [Fact]
     public async Task ExecuteAsync_WithUnknownRateType_ShouldReturnValidationError()
     {

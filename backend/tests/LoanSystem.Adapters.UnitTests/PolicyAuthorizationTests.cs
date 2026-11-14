@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using LoanSystem.Common.Adapters.Http;
 using LoanSystem.Common.Core.Application;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -81,14 +82,7 @@ public class PolicyAuthorizationTests
 
         services.AddAuthorization(options =>
         {
-            options.AddPolicy(SecurityPolicies.Admin, p => p.RequireRole(SecurityPolicies.Admin));
-            options.AddPolicy(SecurityPolicies.Analyst, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Analyst));
-            options.AddPolicy(SecurityPolicies.Operator, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Operator));
-            options.AddPolicy(SecurityPolicies.Collector, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Collector));
-            options.AddPolicy(SecurityPolicies.Auditor, p => p.RequireRole(SecurityPolicies.Admin, SecurityPolicies.Auditor));
-            options.AddPolicy(SecurityPolicies.Client, p => p.RequireRole(SecurityPolicies.Client));
-
-            options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+            options.AddLoanSystemAuthorizationPolicies();
         });
 
         _serviceProvider = services.BuildServiceProvider();
@@ -146,6 +140,13 @@ public class PolicyAuthorizationTests
                 _executionCounters["anonymous"]++;
                 return Results.Ok(new { message = "anonymous ok" });
             }).AllowAnonymous();
+
+            endpoints.MapGet("/test/customers-read", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersRead);
+            endpoints.MapGet("/test/customers-write", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersWrite);
+            endpoints.MapGet("/test/customers-write-client", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersWriteOrClient);
+            endpoints.MapGet("/test/customers-audit", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersAuditRead);
+            endpoints.MapGet("/test/customers-docs-client", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersDocsReadOrClient);
+            endpoints.MapGet("/test/customers-accounts-client", () => Results.Ok()).RequireAuthorization(SecurityPolicies.CustomersAccountsManageOrClient);
         });
 
         _pipeline = app.Build();
@@ -303,5 +304,25 @@ public class PolicyAuthorizationTests
 
         context.Response.StatusCode.ShouldBe(StatusCodes.Status403Forbidden);
         _executionCounters[counterKey].ShouldBe(0);
+    }
+
+    [Theory]
+    [InlineData("/test/customers-read", SecurityPolicies.Collector, 200)]
+    [InlineData("/test/customers-read", SecurityPolicies.Auditor, 200)]
+    [InlineData("/test/customers-read", SecurityPolicies.Client, 403)]
+    [InlineData("/test/customers-write", SecurityPolicies.Operator, 200)]
+    [InlineData("/test/customers-write", SecurityPolicies.Collector, 403)]
+    [InlineData("/test/customers-write-client", SecurityPolicies.Client, 200)]
+    [InlineData("/test/customers-write-client", SecurityPolicies.Auditor, 403)]
+    [InlineData("/test/customers-audit", SecurityPolicies.Auditor, 200)]
+    [InlineData("/test/customers-audit", SecurityPolicies.Operator, 403)]
+    [InlineData("/test/customers-docs-client", SecurityPolicies.Operator, 200)]
+    [InlineData("/test/customers-docs-client", SecurityPolicies.Collector, 403)]
+    [InlineData("/test/customers-accounts-client", SecurityPolicies.Operator, 200)]
+    [InlineData("/test/customers-accounts-client", SecurityPolicies.Analyst, 403)]
+    public async Task CustomersCompositePolicies_EnforceExpectedRoleMatrix(string path, string role, int expectedStatus)
+    {
+        var context = await ExecuteRequestAsync(path, CreatePrincipal(role));
+        context.Response.StatusCode.ShouldBe(expectedStatus);
     }
 }

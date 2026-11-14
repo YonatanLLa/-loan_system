@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { CheckCircle2, XCircle, AlertTriangle, LoaderCircle } from '@lucide/vue'
+import { CheckCircle2, XCircle, LoaderCircle, AlertTriangle } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 
 import type { KycStatus } from '@prestamos/api-client'
@@ -16,13 +16,14 @@ import {
 
 import { useCustomers } from '../composables/useCustomers'
 
-// FE-BO-08: Dictamen de expediente KYC: aprobar o rechazar con notas obligatorias si se rechaza.
+// FE-BO-08 / BE-CUS-05: Aprobación o rechazo del expediente KYC con motivo obligatorio.
 
 const props = defineProps<{
   open: boolean
   customerId: string
   customerName: string
   currentStatus: KycStatus
+  hasReviewOrErrorChecks?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -31,12 +32,18 @@ const emit = defineEmits<{
 }>()
 
 const { submitKycDecision } = useCustomers()
+
 const decision = ref<'VERIFIED' | 'REJECTED'>('VERIFIED')
 const notes = ref('')
 const isSubmitting = ref(false)
 const errorMsg = ref<string | null>(null)
 
 const isReject = computed(() => decision.value === 'REJECTED')
+const minNotesLength = computed(() => {
+  if (!isReject.value && props.hasReviewOrErrorChecks) return 30
+  if (isReject.value) return 10
+  return 0
+})
 
 watch(
   () => props.open,
@@ -52,8 +59,15 @@ watch(
 async function onSubmit() {
   errorMsg.value = null
 
-  if (isReject.value && !notes.value.trim()) {
-    errorMsg.value = 'Para rechazar el expediente KYC debes indicar obligatoriamente el motivo.'
+  if (isReject.value && notes.value.trim().length < 10) {
+    errorMsg.value =
+      'Para rechazar el expediente KYC debes indicar obligatoriamente el motivo (mínimo 10 caracteres).'
+    return
+  }
+
+  if (!isReject.value && props.hasReviewOrErrorChecks && notes.value.trim().length < 30) {
+    errorMsg.value =
+      'Existen verificaciones automáticas en REVIEW o ERROR: debes ingresar al menos 30 caracteres de sustento.'
     return
   }
 
@@ -61,7 +75,9 @@ async function onSubmit() {
   try {
     await submitKycDecision(props.customerId, {
       status: decision.value,
-      notes: notes.value.trim() || undefined,
+      notes:
+        notes.value.trim() ||
+        'Expediente KYC verificado y aprobado manualmente en Backoffice.',
     })
 
     toast.success(
@@ -96,7 +112,7 @@ async function onSubmit() {
           <CardTitle class="text-lg">Dictamen de Expediente KYC</CardTitle>
         </div>
         <CardDescription>
-          Resolución para el cliente <strong>{{ customerName }}</strong> (FE-BO-08).
+          Resolución para el cliente <strong>{{ customerName }}</strong> (FE-BO-08 / BE-CUS-05).
         </CardDescription>
       </CardHeader>
 
@@ -131,6 +147,17 @@ async function onSubmit() {
             </button>
           </div>
 
+          <div
+            v-if="!isReject && hasReviewOrErrorChecks"
+            class="p-3 bg-amber-500/10 text-amber-700 dark:text-amber-300 text-xs rounded-md flex items-start gap-2"
+          >
+            <AlertTriangle class="size-4 shrink-0 mt-0.5" />
+            <span>
+              Existen checks automáticos en estado <strong>REVIEW</strong> o <strong>ERROR</strong>.
+              Se exige sustento obligatorio de al menos 30 caracteres.
+            </span>
+          </div>
+
           <div v-if="errorMsg" class="p-3 bg-destructive/10 text-destructive text-xs rounded-md flex items-start gap-2">
             <AlertTriangle class="size-4 shrink-0 mt-0.5" />
             <span>{{ errorMsg }}</span>
@@ -138,13 +165,19 @@ async function onSubmit() {
 
           <div class="space-y-1.5">
             <label for="kycNotes" class="text-xs font-medium">
-              {{ isReject ? 'Motivo del Rechazo (Obligatorio)' : 'Observaciones / Notas (Opcional)' }}
+              {{
+                isReject
+                  ? 'Motivo del Rechazo (Obligatorio, mín. 10 caracteres)'
+                  : minNotesLength > 0
+                    ? `Sustento de Aprobación (Obligatorio, mín. ${minNotesLength} caracteres)`
+                    : 'Observaciones / Notas de Verificación'
+              }}
             </label>
             <textarea
               id="kycNotes"
               v-model="notes"
               rows="3"
-              placeholder="Ej. Documento nítido verificado con Reniec / Selfie ilegible..."
+              placeholder="Ej. Documento nítido verificado con RENIEC / Selfie biométrica conforme..."
               class="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
               :class="{ 'border-destructive': isReject && !notes.trim() }"
             ></textarea>

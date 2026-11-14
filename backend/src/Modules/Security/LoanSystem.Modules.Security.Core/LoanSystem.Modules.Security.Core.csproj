@@ -1,5 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
     <ProjectReference Include="..\..\..\Common\LoanSystem.Common.Core\LoanSystem.Common.Core.csproj" />
+    <ProjectReference Include="..\..\Customers\LoanSystem.Modules.Customers.Core\LoanSystem.Modules.Customers.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="LoanSystem.Adapters.UnitTests" />
   </ItemGroup>
 </Project>

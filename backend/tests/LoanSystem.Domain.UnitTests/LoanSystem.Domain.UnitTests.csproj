@@ -11,5 +11,6 @@
     <ProjectReference Include="..\..\src\Modules\Products\LoanSystem.Modules.Products.Core\LoanSystem.Modules.Products.Core.csproj" />
     <ProjectReference Include="..\..\src\Modules\Administration\LoanSystem.Modules.Administration.Core\LoanSystem.Modules.Administration.Core.csproj" />
     <ProjectReference Include="..\..\src\Modules\Security\LoanSystem.Modules.Security.Core\LoanSystem.Modules.Security.Core.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Customers\LoanSystem.Modules.Customers.Core\LoanSystem.Modules.Customers.Core.csproj" />
   </ItemGroup>
 </Project>

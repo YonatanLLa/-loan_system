@@ -14,6 +14,7 @@ import {
 import type { Customer } from '@prestamos/api-client'
 import { EmptyState, PageHeader, TableGenerator, type TableColumn } from '@prestamos/ui'
 import { Button } from '@prestamos/ui/components/ui/button'
+import { Badge } from '@prestamos/ui/components/ui/badge'
 import {
   Card,
   CardContent,
@@ -31,11 +32,13 @@ const {
   customersPage,
   searchQuery,
   selectedKycStatus,
+  selectedPersonType,
   totalPages,
   loadCustomers,
   onSearch,
   resetFilters,
   goToPage,
+  getCustomer360,
 } = useCustomers()
 
 // Modal de Alta / Edición
@@ -51,14 +54,19 @@ const customerColumns: TableColumn<Customer>[] = [
   { key: 'document', label: 'Documento', cellClass: 'font-mono text-xs' },
   { key: 'customer', label: 'Cliente' },
   { key: 'contact', label: 'Contacto', cellClass: 'text-xs' },
-  { key: 'monthlyNetIncome', label: 'Ingreso Neto', kind: 'money', cellClass: 'text-xs font-medium' },
+  { key: 'monthlyNetIncome', label: 'Ingreso / Riesgo AML', kind: 'money', cellClass: 'text-xs font-medium' },
   { key: 'kycStatus', label: 'Estado KYC', kind: 'status', statusKind: 'kyc' },
   { key: 'createdAt', label: 'Registro', kind: 'datetime', cellClass: 'text-xs text-muted-foreground' },
   { key: 'actions', label: 'Acciones', align: 'right' },
 ]
 
-function openEdit(customer: Customer) {
-  customerToEdit.value = customer
+async function openEdit(customer: Customer) {
+  try {
+    const full = await getCustomer360(customer.id)
+    customerToEdit.value = full
+  } catch {
+    customerToEdit.value = customer
+  }
   isFormOpen.value = true
 }
 
@@ -98,6 +106,18 @@ onMounted(() => {
             />
           </div>
 
+          <div class="w-full sm:w-44">
+            <select
+              v-model="selectedPersonType"
+              class="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
+              @change="onSearch"
+            >
+              <option value="">Todos los tipos</option>
+              <option value="NATURAL">Persona Natural</option>
+              <option value="JURIDICA">Persona Jurídica</option>
+            </select>
+          </div>
+
           <div class="w-full sm:w-48">
             <select
               v-model="selectedKycStatus"
@@ -105,6 +125,9 @@ onMounted(() => {
               @change="onSearch"
             >
               <option value="">Todos los estados KYC</option>
+              <option value="DRAFT">Borrador</option>
+              <option value="PENDING_DOCUMENTS">Pendiente Docs</option>
+              <option value="IN_REVIEW">En Revisión</option>
               <option value="PENDING">Pendiente</option>
               <option value="VERIFIED">Verificado</option>
               <option value="REJECTED">Rechazado</option>
@@ -114,7 +137,7 @@ onMounted(() => {
 
           <div class="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-end">
             <Button
-              v-if="searchQuery || selectedKycStatus"
+              v-if="searchQuery || selectedKycStatus || selectedPersonType"
               type="button"
               variant="ghost"
               size="sm"
@@ -153,12 +176,12 @@ onMounted(() => {
           >
             <Button size="sm" @click="openCreate">
               <UserPlus class="size-4 mr-2" />
-              Alta de Cliente
+              Registrar Cliente
             </Button>
           </EmptyState>
         </div>
 
-        <!-- Lista -->
+        <!-- Tabla -->
         <div v-else>
           <TableGenerator
             :columns="customerColumns"
@@ -166,18 +189,24 @@ onMounted(() => {
             row-key="id"
           >
             <template #cell-document="{ row: customer }">
-              <span class="font-semibold text-foreground">{{ customer.docType }}:</span>
-              {{ customer.docNumber }}
+              <span class="font-semibold text-foreground">{{ customer.docType }}</span>
+              <span class="text-muted-foreground ml-1.5">{{ customer.docNumber }}</span>
             </template>
             <template #cell-customer="{ row: customer }">
-              <div class="font-medium text-foreground">{{ customer.fullName }}</div>
+              <div class="flex items-center gap-2">
+                <div class="font-medium text-foreground">{{ customer.fullName }}</div>
+                <Badge v-if="customer.isPep" variant="destructive" class="text-[10px]">PEP</Badge>
+              </div>
               <div class="text-xs text-muted-foreground">
-                {{ customer.occupation || customer.personType }}
+                {{ customer.occupation || (customer.personType === 'JURIDICA' ? 'Persona Jurídica' : 'Persona Natural') }}
+                <span v-if="customer.district"> · {{ customer.district }}</span>
               </div>
             </template>
             <template #cell-contact="{ row: customer }">
-              <div>{{ customer.phone }}</div>
-              <div class="text-muted-foreground truncate max-w-[180px]">{{ customer.email }}</div>
+              <div>{{ customer.phone || customer.phonePrimary || '—' }}</div>
+              <div class="text-muted-foreground truncate max-w-[180px]">
+                {{ customer.email || `AML: ${customer.amlRiskLevel || 'LOW'}` }}
+              </div>
             </template>
             <template #cell-actions="{ row: customer }">
               <div class="flex items-center justify-end gap-1">

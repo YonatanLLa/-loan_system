@@ -7,13 +7,21 @@
 
 ## 2. ¿Qué hace?
 
-### Responsabilidades actuales y archivos `.cs`
+### Contratos públicos y puertos actuales (`Contracts/` y `Ports/`)
+
+- **`Contracts/ILoanPortfolioQuery.cs`**
+  - Contrato público (`GetByCustomerAsync`) y DTO `LoanSummary` expuestos por `Loans` para lectura entre módulos desde la Ficha 360 de `Customers` (`BE-CUS-08`), preservando el aislamiento entre esquemas.
 
 - **`Ports/Outbound/ILoansUnitOfWork.cs`**
-  - Puerto de salida que hereda de `IUnitOfWork` para garantizar que la creación del préstamo, la generación de sus cuotas, el registro del desembolso y cualquier actualización de saldos de capital/interés/mora se guarden en una única transacción atómica.
+  - Puerto de salida que extiende `IUnitOfWork` para garantizar que la creación del préstamo, la generación de sus cuotas, el registro del desembolso y cualquier actualización de saldos de capital/interés/mora se guarden en una única transacción atómica.
 
 - **`Ports/Outbound/ILoansOutbox.cs`**
-  - Puerto de salida que hereda de `IOutboxRepository` para publicar eventos de integración clave del ciclo de vida del crédito (ej. `LoanCreatedIntegrationEvent`, `LoanDisbursedIntegrationEvent`, `LoanPaidOffIntegrationEvent`, `LoanRefinancedIntegrationEvent`) dentro de la misma transacción de base de datos.
+  - Puerto de salida que extiende `IOutboxRepository` para publicar eventos de integración clave del ciclo de vida del crédito (ej. `LoanCreatedIntegrationEvent`, `LoanDisbursedIntegrationEvent`, `LoanPaidOffIntegrationEvent`, `LoanRefinancedIntegrationEvent`) dentro de la misma transacción de base de datos.
+
+### Requisito obligatorio para el futuro caso de uso de desembolso (`BE-CUS-06`)
+- Todo caso de uso de desembolso en `Loans` **debe** invocar `ICustomerDisbursementEligibility.CheckAsync(customerId, bankAccountId, ct)` dentro de su transacción:
+  - Si `IsEligible` es `false`, rechazar con HTTP `422 Unprocessable Entity`, código `Loans.CustomerNotEligible`, `extensions.reasons` devolviendo los códigos recibidos (`KYC_NOT_VERIFIED`, `KYC_EXPIRED`, `ACCOUNT_NOT_FOUND`, `ACCOUNT_NOT_OWNED`, `ACCOUNT_NOT_VERIFIED`, `ACCOUNT_INACTIVE`, `ACCOUNT_IN_COOLING_PERIOD`), y detalle `"Cliente con KYC pendiente"` cuando corresponda a KYC (`CA-05.2`).
+- Al diseñar o migrar la tabla `loans`, incorporar la FK compuesta `(customer_id, customer_bank_account_id)` hacia `uq_customer_bank_accounts_customer_id` en `customer_bank_accounts` como defensa adicional en BD (`DB-42`).
 
 ### ¿Qué se agrega aquí conforme crece el módulo?
 - **Entidades y Raíces de Agregado (`Domain/`):**

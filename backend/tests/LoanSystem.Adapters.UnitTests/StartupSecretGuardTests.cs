@@ -206,4 +206,32 @@ public class StartupSecretGuardTests
 
         Should.Throw<DirectoryNotFoundException>(() => builder.AddSecretManager(env));
     }
+
+    [Fact]
+    public void ValidateStartupSecrets_Production_RejectsFakeIdentityVerifierAndPlaceholderCustomerSecrets()
+    {
+        var env = new TestHostEnvironment { EnvironmentName = Environments.Production };
+        using var rsa = RSA.Create(2048);
+
+        var validBase = new Dictionary<string, string?>
+        {
+            ["ConnectionStrings:Database"] = "Host=prod-db;Database=loans;Username=svc;Password=StrongProdPassword!99",
+            ["Jwt:SigningKeys"] = ValidSigningKeysJson(rsa),
+            ["Security:Mfa:EncryptionKeys"] = ValidMfaKeysJson()
+        };
+
+        var fakeVerifier = new Dictionary<string, string?>(validBase)
+        {
+            ["Customers:IdentityVerifier:Provider"] = "Fake"
+        };
+        Should.Throw<InvalidOperationException>(() =>
+            new ConfigurationBuilder().AddInMemoryCollection(fakeVerifier).Build().ValidateStartupSecrets(env));
+
+        var placeholderOtp = new Dictionary<string, string?>(validBase)
+        {
+            ["Customers:Otp:Pepper"] = "dev-otp-salt"
+        };
+        Should.Throw<InvalidOperationException>(() =>
+            new ConfigurationBuilder().AddInMemoryCollection(placeholderOtp).Build().ValidateStartupSecrets(env));
+    }
 }

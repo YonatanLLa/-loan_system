@@ -188,4 +188,24 @@ public class ArchitectureTests
 
         result.IsSuccessful.ShouldBeTrue($"{host} failing types: {Describe(result)}");
     }
+
+    [Fact]
+    public void AllSecurityPolicyConstants_ShouldBeRegistered_ByAuthorizationPolicyExtensions()
+    {
+        var options = new Microsoft.AspNetCore.Authorization.AuthorizationOptions();
+        LoanSystem.Common.Adapters.Http.AuthorizationPolicyExtensions.AddLoanSystemAuthorizationPolicies(options);
+
+        var constants = typeof(LoanSystem.Common.Core.Application.SecurityPolicies)
+            .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+            .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string))
+            .ToArray();
+
+        constants.Length.ShouldBeGreaterThan(0);
+        foreach (var field in constants)
+        {
+            var policyName = (string)field.GetRawConstantValue()!;
+            options.GetPolicy(policyName).ShouldNotBeNull(
+                $"SecurityPolicies.{field.Name} ('{policyName}') is missing in AuthorizationPolicyExtensions.");
+        }
+    }
 }

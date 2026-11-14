@@ -22,7 +22,8 @@ public static class SecretManagerExtensions
         "postgrespassword",
         "SecretKeyForJwtSigningShouldBeReplacedInProductionEnvironment12345",
         "REPLACE_IN_PROD",
-        "changeme"
+        "changeme",
+        "dev-otp-salt"
     ];
 
     public static IConfigurationBuilder AddSecretManager(
@@ -110,6 +111,16 @@ public static class SecretManagerExtensions
 
         EnsureNoForbiddenPlaceholder(dbConnection, "ConnectionStrings:Database");
         EnsureNoForbiddenPlaceholder(configuration["ConnectionStrings:Redis"], "ConnectionStrings:Redis");
+        EnsureNoForbiddenPlaceholder(configuration["Customers:Otp:Pepper"], "Customers:Otp:Pepper");
+        EnsureNoForbiddenPlaceholder(configuration["Customers:FieldProtection:Key"], "Customers:FieldProtection:Key");
+        EnsureNoForbiddenPlaceholder(configuration["Customers:FieldProtection:HmacKey"], "Customers:FieldProtection:HmacKey");
+
+        if (environment.IsProduction() &&
+            string.Equals(configuration["Customers:IdentityVerifier:Provider"]?.Trim(), "Fake", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Configuration value 'Customers:IdentityVerifier:Provider' cannot be 'Fake' in Production.");
+        }
 
         if (!requireHttpSecuritySecrets)
         {

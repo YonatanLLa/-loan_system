@@ -1,9 +1,11 @@
 using LoanSystem.Common.Core.Application;
 using LoanSystem.Common.Core.Ports.Outbound;
+using LoanSystem.Modules.Customers.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Domain;
 using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
 
 namespace LoanSystem.Modules.Security.Core.Application;
 
@@ -24,6 +26,7 @@ internal sealed class VerifyMfaUseCase : IVerifyMfaUseCase
     private readonly IClock _clock;
     private readonly IAuditContext _audit;
     private readonly SecurityOptions _options;
+    private readonly ICustomerPortalLookup? _portalLookup;
 
     public VerifyMfaUseCase(
         IMfaChallengeRepository challenges,
@@ -37,7 +40,8 @@ internal sealed class VerifyMfaUseCase : IVerifyMfaUseCase
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
         IAuditContext audit,
-        SecurityOptions options)
+        SecurityOptions options,
+        ICustomerPortalLookup? portalLookup = null)
     {
         _challenges = challenges;
         _recoveryCodes = recoveryCodes;
@@ -51,6 +55,7 @@ internal sealed class VerifyMfaUseCase : IVerifyMfaUseCase
         _clock = clock;
         _audit = audit;
         _options = options;
+        _portalLookup = portalLookup;
     }
 
     public async Task<Result<AuthTokensResponse>> ExecuteAsync(MfaVerifyRequest request, CancellationToken ct = default)
@@ -90,8 +95,8 @@ internal sealed class VerifyMfaUseCase : IVerifyMfaUseCase
         _audit.SetAction("LOGIN");
         _audit.SetActor(user.Id);
 
-        var tokens = TokenIssuer.Issue(
-            user, _jwt, _refreshTokens, _clientInfo, _clock, TimeSpan.FromDays(_options.RefreshTokenDays));
+        var tokens = await TokenIssuer.IssueAsync(
+            user, _jwt, _refreshTokens, _clientInfo, _clock, TimeSpan.FromDays(_options.RefreshTokenDays), _portalLookup, ct);
 
         await _unitOfWork.SaveChangesAsync(ct);
         return tokens;

@@ -9,6 +9,8 @@ import {
   Clock,
   KeyRound,
   LoaderCircle,
+  Mail,
+  Phone,
   Plus,
   RefreshCw,
   ShieldAlert,
@@ -35,6 +37,9 @@ const {
   refunds,
   primaryAccount,
   coolingOffAccount,
+  hasMarketingConsent,
+  contactOtpIssued,
+  isVerifyingContact,
   isLoading,
   isUpdatingAccount,
   isRequestingRefund,
@@ -43,6 +48,9 @@ const {
   loadData,
   changePrimaryAccount,
   submitRefundRequest,
+  startContactOtp,
+  confirmContactOtp,
+  toggleMarketing,
 } = useProfile()
 
 // Modales y formularios
@@ -57,6 +65,7 @@ const newCci = ref('')
 const newPhoneWallet = ref('')
 const otpCode = ref('')
 const accountFormError = ref<string | null>(null)
+const contactOtpCode = ref('')
 
 const refundAmount = ref('')
 const refundBankAccountId = ref('')
@@ -111,6 +120,12 @@ const handleConfirmAccountChange = async () => {
   }
 }
 
+const handleConfirmContactOtp = async () => {
+  if (contactOtpCode.value.trim().length !== 6) return
+  const ok = await confirmContactOtp(contactOtpCode.value.trim())
+  if (ok) contactOtpCode.value = ''
+}
+
 const openRefundModal = () => {
   if (primaryAccount.value) {
     refundBankAccountId.value = primaryAccount.value.id
@@ -132,272 +147,287 @@ const handleConfirmRefund = async () => {
   }
 
   refundFormError.value = null
-  const res = await submitRefundRequest(num.toFixed(2), refundBankAccountId.value)
+  const res = await submitRefundRequest(refundAmount.value, refundBankAccountId.value)
   if (res) showRefundModal.value = false
 }
 </script>
 
 <template>
   <div class="space-y-6">
-    <!-- Header -->
-    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <!-- Encabezado -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          Mi Perfil y Cuentas
-        </h1>
-        <p class="text-sm text-slate-600 sm:text-base">
-          Gestiona tus datos personales, tus cuentas de desembolso y el saldo a favor de tu crédito.
+        <h1 class="text-xl font-bold text-slate-900">Mi Perfil y Cuentas Bancarias</h1>
+        <p class="text-xs text-slate-500">
+          Gestiona tus cuentas de desembolso, canales verificados, privacidad LPDP y saldo a favor.
         </p>
       </div>
-
       <Button variant="outline" size="sm" :disabled="isLoading" @click="loadData">
-        <RefreshCw :class="['mr-2 h-4 w-4', isLoading && 'animate-spin']" />
+        <RefreshCw class="mr-1.5 h-3.5 w-3.5" :class="{ 'animate-spin': isLoading }" />
         <span>Actualizar</span>
       </Button>
     </div>
 
-    <!-- Feedback banners -->
-    <div
-      v-if="successMessage"
-      class="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-xs font-medium text-emerald-800"
-    >
-      <CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-600" />
-      <span>{{ successMessage }}</span>
-    </div>
-
+    <!-- Mensajes de feedback -->
     <div
       v-if="errorMessage"
-      class="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-4 text-xs font-medium text-rose-800"
+      class="flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800"
     >
-      <AlertCircle class="h-4 w-4 shrink-0 text-rose-600" />
+      <AlertCircle class="h-4 w-4 shrink-0 text-rose-600 mt-0.5" />
       <span>{{ errorMessage }}</span>
     </div>
 
-    <div class="grid gap-6 lg:grid-cols-3">
-      <!-- COLUMNA IZQUIERDA: DATOS PERSONALES -->
-      <Card class="lg:col-span-1">
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-base flex items-center gap-2">
-              <User class="h-4 w-4 text-primary" />
-              <span>Datos Personales</span>
-            </CardTitle>
-            <Badge
-              v-if="profile?.kycStatus === 'VERIFIED'"
-              class="bg-emerald-100 text-emerald-800"
+    <div
+      v-if="successMessage"
+      class="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 p-3.5 text-xs text-emerald-800"
+    >
+      <CheckCircle2 class="h-4 w-4 shrink-0 text-emerald-600 mt-0.5" />
+      <span>{{ successMessage }}</span>
+    </div>
+
+    <!-- Alerta de Periodo de Enfriamiento (Cooling-off 24h - FE-CP-18) -->
+    <div
+      v-if="coolingOffAccount"
+      class="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-900"
+    >
+      <Clock class="h-5 w-5 shrink-0 text-amber-600 mt-0.5" />
+      <div class="space-y-1">
+        <p class="font-bold">Periodo de Seguridad Activo (24 horas)</p>
+        <p>
+          Tu nueva cuenta principal <strong>{{ coolingOffAccount.bankName }} ({{ coolingOffAccount.accountNumberMasked }})</strong>
+          se encuentra en periodo de validación por seguridad. Podrá recibir desembolsos a partir de:
+          <strong>{{ formatInstant(coolingOffAccount.coolingOffUntil!) }}</strong>.
+        </p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- COLUMNA 1: Datos Personales y Saldo a Favor -->
+      <div class="space-y-6">
+        <!-- Datos Personales -->
+        <Card v-if="profile">
+          <CardHeader class="pb-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2 text-primary">
+                <User class="h-4 w-4" />
+                <CardTitle class="text-sm">Datos del Titular</CardTitle>
+              </div>
+              <Badge
+                :class="[
+                  profile.kycStatus === 'VERIFIED'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-amber-100 text-amber-800',
+                ]"
+              >
+                <ShieldCheck v-if="profile.kycStatus === 'VERIFIED'" class="mr-1 h-3 w-3" />
+                {{ profile.kycStatus === 'VERIFIED' ? 'KYC Verificado' : profile.kycStatus }}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent class="space-y-3 text-xs">
+            <div>
+              <span class="text-slate-400 block">Nombre Completo</span>
+              <span class="font-semibold text-slate-800">{{ profile.fullName }}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-slate-400 block">Documento</span>
+                <span class="font-mono font-medium text-slate-800">
+                  {{ profile.docType }} {{ profile.docNumber }}
+                </span>
+              </div>
+              <div>
+                <span class="text-slate-400 block">Teléfono</span>
+                <div class="flex items-center gap-1">
+                  <span class="font-mono font-medium text-slate-800">{{ profile.phone }}</span>
+                  <button
+                    v-if="profile.phoneVerified === false"
+                    type="button"
+                    class="text-[10px] text-primary underline"
+                    @click="startContactOtp('SMS')"
+                  >
+                    <Phone class="inline h-3 w-3" /> Verificar
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div>
+              <span class="text-slate-400 block">Correo Electrónico</span>
+              <div class="flex items-center justify-between">
+                <span class="font-medium text-slate-800">{{ profile.email }}</span>
+                <button
+                  v-if="profile.emailVerified === false"
+                  type="button"
+                  class="text-[10px] text-primary underline"
+                  @click="startContactOtp('EMAIL')"
+                >
+                  <Mail class="inline h-3 w-3" /> Verificar
+                </button>
+              </div>
+            </div>
+            <div v-if="profile.address">
+              <span class="text-slate-400 block">Domicilio Declarado</span>
+              <span class="font-medium text-slate-800">
+                {{ profile.address }} {{ profile.district ? `- ${profile.district}` : '' }}
+              </span>
+            </div>
+
+            <!-- Confirmación OTP de contacto inline -->
+            <div
+              v-if="contactOtpIssued"
+              class="rounded-lg border border-primary/30 bg-primary/5 p-2.5 space-y-2"
             >
-              KYC Verificado
-            </Badge>
-            <Badge
-              v-else-if="profile?.kycStatus === 'PENDING'"
-              class="bg-amber-100 text-amber-800"
+              <p class="text-[11px] text-slate-700">
+                Código OTP enviado a <strong>{{ contactOtpIssued.maskedDestination }}</strong>:
+              </p>
+              <div class="flex items-center gap-2">
+                <input
+                  v-model="contactOtpCode"
+                  type="text"
+                  maxlength="6"
+                  placeholder="123456"
+                  class="w-24 rounded border border-slate-300 px-2 py-1 font-mono text-xs"
+                />
+                <Button
+                  size="sm"
+                  class="h-7 text-xs"
+                  :disabled="isVerifyingContact || contactOtpCode.trim().length !== 6"
+                  @click="handleConfirmContactOtp"
+                >
+                  Confirmar
+                </Button>
+              </div>
+            </div>
+
+            <!-- Preferencia LPDP Marketing -->
+            <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+              <div>
+                <span class="font-semibold text-slate-700 block">Comunicaciones Comerciales (LPDP)</span>
+                <span class="text-[10px] text-slate-500">
+                  {{ hasMarketingConsent ? 'Autorizado' : 'No autorizado' }}
+                </span>
+              </div>
+              <Button variant="outline" size="sm" class="h-7 text-[11px]" @click="toggleMarketing">
+                {{ hasMarketingConsent ? 'Revocar' : 'Autorizar' }}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- Tarjeta de Saldo a Favor (FE-CP-19) -->
+        <Card class="border-emerald-200 bg-gradient-to-br from-emerald-50/70 to-white">
+          <CardHeader class="pb-2">
+            <div class="flex items-center gap-2 text-emerald-700">
+              <Banknote class="h-4 w-4" />
+              <CardTitle class="text-sm">Saldo a Favor Disponible</CardTitle>
+            </div>
+            <CardDescription class="text-xs">
+              Excedentes por pagos anticipados o redondeo a tu favor (RF-17).
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <div class="text-2xl font-extrabold text-emerald-800">
+              S/ {{ profile?.creditBalance ?? '0.00' }}
+            </div>
+
+            <Button
+              v-if="parseFloat(profile?.creditBalance ?? '0') > 0"
+              size="sm"
+              class="w-full bg-emerald-600 hover:bg-emerald-700 text-xs"
+              @click="openRefundModal"
             >
-              KYC Pendiente
-            </Badge>
-            <Badge
-              v-else-if="profile?.kycStatus === 'REJECTED'"
-              class="bg-rose-100 text-rose-800"
-            >
-              KYC Rechazado
-            </Badge>
-          </div>
-          <CardDescription>Información registrada en tu onboarding.</CardDescription>
-        </CardHeader>
+              <span>Solicitar Devolución a mi Cuenta</span>
+              <ArrowRight class="ml-1.5 h-3.5 w-3.5" />
+            </Button>
+            <p v-else class="text-[11px] text-slate-500">
+              No tienes saldo a favor pendiente de devolución en este momento.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
-        <CardContent class="space-y-4 text-xs">
-          <div class="space-y-1">
-            <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Nombre Completo</span>
-            <p class="font-semibold text-slate-900 text-sm">{{ profile?.fullName ?? 'María Quispe' }}</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-            <div>
-              <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Documento</span>
-              <p class="font-medium text-slate-800">{{ profile?.docType }} {{ profile?.docNumber }}</p>
-            </div>
-            <div>
-              <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Teléfono</span>
-              <p class="font-medium text-slate-800">{{ profile?.phone }}</p>
-            </div>
-          </div>
-
-          <div class="space-y-1 border-t border-slate-100 pt-3">
-            <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Correo Electrónico</span>
-            <p class="font-medium text-slate-800">{{ profile?.email }}</p>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-            <div>
-              <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Ocupación</span>
-              <p class="font-medium text-slate-800">{{ profile?.occupation ?? 'Comerciante' }}</p>
-            </div>
-            <div>
-              <span class="text-slate-400 uppercase tracking-wider text-[10px] font-bold">Empleador</span>
-              <p class="font-medium text-slate-800">{{ profile?.employerName ?? 'Independiente' }}</p>
-            </div>
-          </div>
-
-          <div class="rounded-lg bg-slate-50 p-3 border border-slate-100 text-[11px] text-slate-500">
-            <ShieldCheck class="h-4 w-4 text-emerald-600 inline mr-1" />
-            Identidad validada con RENIEC y biometría facial bajo Ley 29733.
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- COLUMNA CENTRAL Y DERECHA: CUENTAS BANCARIAS Y SALDO A FAVOR -->
+      <!-- COLUMNA 2 y 3: Cuentas Bancarias y Solicitudes de Devolución -->
       <div class="lg:col-span-2 space-y-6">
-        <!-- 1. CUENTAS BANCARIAS DE DESEMBOLSO (FE-CP-18) -->
+        <!-- Cuentas Bancarias de Desembolso (FE-CP-18) -->
         <Card>
           <CardHeader class="pb-3">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div>
-                <CardTitle class="text-base flex items-center gap-2">
-                  <Building class="h-4 w-4 text-primary" />
-                  <span>Cuentas de Desembolso</span>
-                </CardTitle>
-                <CardDescription>
-                  Cuentas autorizadas para recibir desembolsos y transferencias.
+                <div class="flex items-center gap-2 text-primary">
+                  <Building class="h-4 w-4" />
+                  <CardTitle class="text-sm">Cuentas Bancarias y Billeteras</CardTitle>
+                </div>
+                <CardDescription class="text-xs">
+                  El cambio de cuenta principal requiere confirmación por OTP y aplica enfriamiento de 24h.
                 </CardDescription>
               </div>
-
-              <Button size="sm" @click="openChangeAccountModal">
-                <Plus class="mr-1.5 h-4 w-4" />
+              <Button size="sm" class="text-xs" @click="openChangeAccountModal">
+                <Plus class="mr-1.5 h-3.5 w-3.5" />
                 <span>Cambiar Cuenta Principal</span>
               </Button>
             </div>
           </CardHeader>
 
-          <CardContent class="space-y-4">
-            <!-- ALERTA DE PERIODO DE ENFRIAMIENTO (FE-CP-18 / ARQUITECTURA_GENERAL §9) -->
+          <CardContent class="space-y-3">
             <div
-              v-if="coolingOffAccount"
-              class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 space-y-1.5"
+              v-for="acc in bankAccounts"
+              :key="acc.id"
+              :class="[
+                'flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border p-3.5 text-xs transition-all',
+                acc.isPrimary
+                  ? 'border-primary/40 bg-primary/5 shadow-2xs'
+                  : 'border-slate-200 bg-white',
+              ]"
             >
-              <div class="flex items-center gap-2 font-bold text-amber-950">
-                <Clock class="h-4 w-4 text-amber-600" />
-                <span>Periodo de Espera de Seguridad Activo (Cooling-off)</span>
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="font-bold text-slate-900">{{ acc.bankName }}</span>
+                  <Badge v-if="acc.isPrimary" class="bg-primary text-white text-[10px]">
+                    Principal de Desembolso
+                  </Badge>
+                  <Badge
+                    v-if="acc.isVerified"
+                    variant="outline"
+                    class="border-emerald-300 text-emerald-700 text-[10px]"
+                  >
+                    Verificada
+                  </Badge>
+                </div>
+                <div class="text-slate-600 font-mono">
+                  <span v-if="acc.phoneWallet">Billetera: {{ acc.phoneWallet }}</span>
+                  <span v-else>Cuenta: {{ acc.accountNumberMasked }} · CCI: {{ acc.cci }}</span>
+                </div>
               </div>
-              <p class="leading-relaxed">
-                Por normativa de prevención de fraudes y protección de tu cuenta (ARQUITECTURA_GENERAL §9), los cambios de cuenta principal se activan tras un periodo de espera de 24 horas.
-              </p>
-              <p class="font-semibold text-amber-800">
-                Tu cuenta estará habilitada para desembolsos el:
-                {{ coolingOffAccount.coolingOffUntil ? formatInstant(coolingOffAccount.coolingOffUntil) : 'Mañana' }}
-              </p>
-            </div>
 
-            <!-- Lista de Cuentas -->
-            <div class="space-y-2">
-              <div
-                v-for="acc in bankAccounts"
-                :key="acc.id"
-                :class="[
-                  acc.isPrimary
-                    ? 'border-primary bg-primary/5'
-                    : 'border-slate-200 bg-white',
-                  'flex items-center justify-between rounded-xl border p-4 text-xs transition-all',
-                ]"
-              >
-                <div class="space-y-1">
-                  <div class="flex items-center gap-2">
-                    <span class="font-bold text-slate-900 text-sm">{{ acc.bankName }}</span>
-                    <Badge v-if="acc.isPrimary" class="bg-primary text-white text-[10px]">
-                      Cuenta Principal
-                    </Badge>
-                    <Badge v-if="acc.isVerified" variant="outline" class="border-emerald-200 bg-emerald-50 text-emerald-700 text-[10px]">
-                      Verificada
-                    </Badge>
-                    <Badge v-else variant="outline" class="border-amber-200 bg-amber-50 text-amber-700 text-[10px]">
-                      Pendiente de Verificación
-                    </Badge>
-                  </div>
-                  <p class="text-slate-600 font-mono text-[11px]">
-                    {{ acc.phoneWallet ? `Billetera: ${acc.phoneWallet}` : `CCI: ${acc.cci ?? acc.accountNumberMasked}` }}
-                  </p>
-                  <p class="text-[10px] text-slate-400 capitalize">
-                    Tipo: {{ acc.accountType.replace('_', ' ').toLowerCase() }}
-                  </p>
-                </div>
-
-                <div class="text-right">
-                  <span
-                    v-if="acc.isPrimary && !acc.coolingOffUntil"
-                    class="text-emerald-700 font-semibold text-[11px] flex items-center gap-1"
-                  >
-                    <CheckCircle2 class="h-3.5 w-3.5" />
-                    Activa para desembolso
-                  </span>
-                  <span
-                    v-else-if="acc.isPrimary && acc.coolingOffUntil"
-                    class="text-amber-700 font-medium text-[11px] flex items-center gap-1"
-                  >
-                    <Clock class="h-3.5 w-3.5" />
-                    En enfriamiento
-                  </span>
-                </div>
+              <div class="text-right">
+                <span class="text-[11px] uppercase font-medium text-slate-400">
+                  {{ acc.accountType.replace('_', ' ') }}
+                </span>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <!-- 2. SALDO A FAVOR Y DEVOLUCIONES (FE-CP-19 / RF-17.3) -->
+        <!-- Historial de Solicitudes de Devolución de Saldo a Favor (FE-CP-19) -->
         <Card>
           <CardHeader class="pb-3">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <CardTitle class="text-base flex items-center gap-2">
-                  <Banknote class="h-4 w-4 text-emerald-600" />
-                  <span>Saldo a Favor y Devoluciones</span>
-                </CardTitle>
-                <CardDescription>
-                  Si pagaste un monto mayor al saldo de tu crédito, puedes solicitar la devolución de tu dinero.
-                </CardDescription>
-              </div>
-
-              <Button
-                :disabled="!profile || parseFloat(profile.creditBalance) <= 0"
-                variant="default"
-                size="sm"
-                class="bg-emerald-600 hover:bg-emerald-700"
-                @click="openRefundModal"
-              >
-                <ArrowRight class="mr-1.5 h-4 w-4" />
-                <span>Solicitar Devolución</span>
-              </Button>
-            </div>
+            <CardTitle class="text-sm">Historial de Devoluciones de Saldo a Favor</CardTitle>
+            <CardDescription class="text-xs">
+              Seguimiento de tus solicitudes de abono de excedentes.
+            </CardDescription>
           </CardHeader>
-
-          <CardContent class="space-y-4">
-            <!-- Saldo disponible -->
-            <div class="rounded-xl border border-emerald-100 bg-emerald-50/60 p-4 flex items-center justify-between">
-              <div>
-                <span class="text-xs uppercase font-bold text-emerald-800 tracking-wider">
-                  Saldo a favor disponible
-                </span>
-                <p class="text-2xl font-extrabold text-emerald-900">
-                  S/ {{ profile?.creditBalance ?? '0.00' }}
-                </p>
-              </div>
-              <div class="text-right text-xs text-emerald-700 max-w-xs">
-                Transferible directamente a tu cuenta bancaria verificada según Ley 29571.
-              </div>
+          <CardContent>
+            <div v-if="refunds.length === 0" class="py-6 text-center text-xs text-slate-400">
+              No has realizado solicitudes de devolución de saldo a favor.
             </div>
-
-            <!-- Historial de Devoluciones -->
-            <div class="space-y-2">
-              <span class="text-xs font-semibold text-slate-700">Solicitudes de Devolución Recientes</span>
-
-              <div v-if="refunds.length === 0" class="rounded-lg border border-dashed border-slate-200 p-4 text-center text-xs text-slate-400">
-                No tienes solicitudes de devolución pendientes.
-              </div>
-
+            <div v-else class="divide-y divide-slate-100 text-xs">
               <div
                 v-for="ref in refunds"
                 :key="ref.id"
-                class="flex items-center justify-between rounded-lg border border-slate-200 p-3 text-xs"
+                class="flex items-center justify-between py-3"
               >
-                <div>
-                  <span class="font-bold text-slate-900">S/ {{ ref.amount }}</span>
+                <div class="space-y-0.5">
+                  <span class="font-bold text-slate-800">S/ {{ ref.amount }}</span>
                   <span class="text-slate-500 block text-[11px]">
                     Destino: {{ ref.bankName }} ({{ ref.accountNumberMasked }}) · {{ formatInstant(ref.requestedAt) }}
                   </span>

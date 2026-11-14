@@ -40,7 +40,8 @@ internal sealed class GetCurrentUserUseCase : IGetCurrentUserUseCase
                 user.Email,
                 user.Role.ToString(),
                 permissions,
-                user.MfaEnabled);
+                user.MfaEnabled,
+                _currentUser.CustomerId);
         }
 
         // Fallback to authenticated claims when the user is resolved purely from the principal.
@@ -58,6 +59,8 @@ internal sealed class GetCurrentUserUseCase : IGetCurrentUserUseCase
             _currentUser.Email,
             _currentUser.Email,
             parsedRole.ToString(),
-            RolePermissions.GetForRole(parsedRole));
+            RolePermissions.GetForRole(parsedRole),
+            false,
+            _currentUser.CustomerId);
     }
 }

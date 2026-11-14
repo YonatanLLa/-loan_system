@@ -25,6 +25,28 @@ public static class ProblemDetailsResultMapper
         return ToProblemDetails(result.Error);
     }
 
+    public static IResult ToCreatedResult<T>(this Result<T> result, Func<T, string> locationFactory)
+    {
+        ArgumentNullException.ThrowIfNull(locationFactory);
+
+        if (result.IsSuccess)
+        {
+            return Results.Created(locationFactory(result.Value), result.Value);
+        }
+
+        return ToProblemDetails(result.Error);
+    }
+
+    public static IResult ToAcceptedResult<T>(this Result<T> result)
+    {
+        if (result.IsSuccess)
+        {
+            return Results.Accepted(value: result.Value);
+        }
+
+        return ToProblemDetails(result.Error);
+    }
+
     private static IResult ToProblemDetails(Error error)
     {
         var statusCode = error.Type switch
@@ -39,14 +61,27 @@ public static class ProblemDetailsResultMapper
             _ => StatusCodes.Status500InternalServerError
         };
 
+        var extensions = new Dictionary<string, object?>(StringComparer.Ordinal)
+        {
+            ["code"] = error.Code,
+            ["errorType"] = error.Type.ToString()
+        };
+
+        if (error.Extensions is not null)
+        {
+            foreach (var (key, value) in error.Extensions)
+            {
+                if (key is not "code" and not "errorType")
+                {
+                    extensions[key] = value;
+                }
+            }
+        }
+
         return Results.Problem(
             statusCode: statusCode,
             title: error.Code,
             detail: error.Description,
-            extensions: new Dictionary<string, object?>
-            {
-                ["code"] = error.Code,
-                ["errorType"] = error.Type.ToString()
-            });
+            extensions: extensions);
     }
 }

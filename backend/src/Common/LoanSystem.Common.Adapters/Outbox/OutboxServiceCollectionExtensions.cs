@@ -33,6 +33,14 @@ public static class OutboxServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>Registers an outbound event type in the registry even when downstream module handlers live elsewhere.</summary>
+    public static IServiceCollection RegisterIntegrationEvent<TEvent>(this IServiceCollection services)
+        where TEvent : IIntegrationEvent
+    {
+        GetOrAddRegistry(services).Register(typeof(TEvent));
+        return services;
+    }
+
     // The registry is built while services are registered, so it is kept as a single instance in the collection
     private static IntegrationEventTypeRegistry GetOrAddRegistry(IServiceCollection services)
     {

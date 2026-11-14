@@ -16,6 +16,8 @@ describe('Onboarding Service (FE-CP-01 a FE-CP-05)', () => {
     expect(typeof onboardingService.submitConsents).toBe('function')
     expect(typeof onboardingService.fetchBankAccounts).toBe('function')
     expect(typeof onboardingService.registerBankAccount).toBe('function')
+    expect(typeof onboardingService.getCurrentConsentTexts).toBe('function')
+    expect(typeof onboardingService.uploadCustomerDocument).toBe('function')
   })
 })
 

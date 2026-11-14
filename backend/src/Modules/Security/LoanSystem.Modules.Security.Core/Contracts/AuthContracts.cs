@@ -58,7 +58,8 @@ public sealed record MeResponse(
     string Email,
     string Role,
     IReadOnlyCollection<string> Permissions,
-    bool MfaEnabled = false);
+    bool MfaEnabled = false,
+    Guid? CustomerId = null);
 
 /// <summary>Request to suspend a user and invalidate all their sessions (BE-SEC-06).</summary>
 public sealed record SuspendUserRequest(Guid UserId);

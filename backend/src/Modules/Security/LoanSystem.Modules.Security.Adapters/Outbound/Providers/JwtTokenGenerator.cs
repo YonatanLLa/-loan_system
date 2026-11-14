@@ -30,7 +30,10 @@ internal sealed class JwtTokenGenerator : IJwtTokenGenerator
         _clock = clock;
     }
 
-    public (string AccessToken, DateTimeOffset ExpiresAt) Generate(User user)
+    public (string AccessToken, DateTimeOffset ExpiresAt) Generate(User user) =>
+        Generate(user, customerId: null);
+
+    public (string AccessToken, DateTimeOffset ExpiresAt) Generate(User user, Guid? customerId)
     {
         var issuer = _configuration["Jwt:Issuer"] ?? "LoanSystem.Identity";
         var audience = _configuration["Jwt:Audience"] ?? "LoanSystem.App";
@@ -42,7 +45,7 @@ internal sealed class JwtTokenGenerator : IJwtTokenGenerator
         var now = _clock.UtcNow;
         var expiresAt = now.AddMinutes(minutes);
 
-        var claims = new Claim[]
+        var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new(JwtRegisteredClaimNames.Email, user.Email),
@@ -51,6 +54,11 @@ internal sealed class JwtTokenGenerator : IJwtTokenGenerator
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64)
         };
+
+        if (customerId.HasValue)
+        {
+            claims.Add(new Claim("customer_id", customerId.Value.ToString()));
+        }
 
         var token = new JwtSecurityToken(
             issuer: issuer,

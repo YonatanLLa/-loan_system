@@ -20,7 +20,16 @@ export interface Page<T> {
   pageSize: number
 }
 
-export type KycStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'EXPIRED'
+export type PersonType = 'NATURAL' | 'JURIDICA'
+export type DocType = 'DNI' | 'CE' | 'RUC' | 'PASAPORTE'
+export type KycStatus =
+  | 'PENDING'
+  | 'DRAFT'
+  | 'PENDING_DOCUMENTS'
+  | 'IN_REVIEW'
+  | 'VERIFIED'
+  | 'REJECTED'
+  | 'EXPIRED'
 export type PaymentFrequency = 'DIARIA' | 'SEMANAL' | 'QUINCENAL' | 'MENSUAL'
 export type AmortizationMethod = 'FRANCES' | 'FLAT' | 'ALEMAN' | 'AMERICANO'
 export type ApplicationStatus =
@@ -147,43 +156,283 @@ export interface SecurityPingResponse {
   status: string
 }
 
-// ── Clientes ─────────────────────────────────────────────────────────────────
+// ── Clientes, KYC, Consentimientos, Cuentas y OTP (PLAN_CUSTOMERS_KYC_Y_CUENTAS.md) ──
+export type AmlRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+
+export type DocumentCategory =
+  | 'DNI_FRONTAL'
+  | 'DNI_REVERSO'
+  | 'SELFIE'
+  | 'BOLETA_PAGO'
+  | 'RECIBO_SERVICIOS'
+  | 'ESTADO_CUENTA_BANCO'
+  | 'FICHA_RUC'
+  | 'OTRO'
+
+export type KycCheckType =
+  | 'RENIEC'
+  | 'SUNAT'
+  | 'OFAC_UIF'
+  | 'BIOMETRIC'
+  | 'IDENTITY_REGISTRY'
+  | 'BIOMETRIC_LIVENESS'
+  | 'FACE_MATCH'
+  | 'PEP_SCREENING'
+  | 'AML_SANCTIONS'
+
+export type KycCheckResult = 'PENDING' | 'PASS' | 'FAIL' | 'REVIEW' | 'ERROR'
+
+export type ConsentPurpose = 'DATA_PROCESSING' | 'CREDIT_BUREAU_QUERY' | 'MARKETING'
+
+export type OtpPurpose =
+  | 'LOGIN'
+  | 'CONTACT_VERIFICATION'
+  | 'CONTRACT_SIGNATURE'
+  | 'ACCOUNT_CHANGE'
+
+export type OtpChannel = 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH'
+
+export interface ConsentAcceptance {
+  purpose: ConsentPurpose | string
+  version: string
+}
+
+export interface CurrentConsentTextResponse {
+  purpose: ConsentPurpose | string
+  version: string
+  title?: string
+  legalText?: string
+  body?: string
+  sha256?: string
+  isMandatory?: boolean
+  publishedAt: Instant
+}
+
+export interface GrantConsentRequest {
+  purpose: ConsentPurpose | string
+  version: string
+  channel?: string
+}
+
+export interface CustomerConsentResponse {
+  id: string
+  purpose: ConsentPurpose | string
+  version: string
+  isActive?: boolean
+  ipAddress?: string
+  grantedAt: Instant
+  channel: string
+  revokedAt?: Instant | null
+}
+
+export interface CustomerDocumentResponse {
+  id: string
+  customerId?: string
+  category: DocumentCategory | string
+  fileName?: string
+  contentType?: string
+  sha256?: string
+  sha256Hash: string
+  mimeType?: string
+  sizeBytes: number
+  originalName?: string | null
+  version: number
+  isCurrent: boolean
+  uploadedByUserId?: string
+  uploadedAt: Instant
+  replacedAt?: Instant | null
+}
+
+export interface DocumentSignedUrlResponse {
+  documentId?: string
+  signedUrl: string
+  url?: string
+  expiresAt: Instant
+}
+
+export interface KycVerificationResponse {
+  id: string
+  checkType: KycCheckType | string
+  provider: string
+  result: KycCheckResult | string
+  score?: number | null
+  biometricScore?: number | null
+  externalReference?: string | null
+  errorMessage?: string | null
+  failureReason?: string | null
+  requestedAt?: Instant
+  executedAt?: Instant
+  completedAt?: Instant | null
+}
+
+export interface CustomerKycStatusResponse {
+  customerId: string
+  status: KycStatus
+  kycStatus?: KycStatus
+  isSubmittedForReview?: boolean
+  kycSubmittedAt?: Instant | null
+  verifiedAt?: Instant | null
+  kycVerifiedAt?: Instant | null
+  expiresAt?: Instant | null
+  kycExpiresAt?: Instant | null
+  rejectionReason?: string | null
+  kycRejectedReason?: string | null
+  kycNotes?: string | null
+  isPep: boolean
+  amlRiskLevel: AmlRiskLevel | string
+  requiredDocuments?: string[]
+  missingDocuments: string[]
+  currentDocuments: CustomerDocumentResponse[]
+  verifications: KycVerificationResponse[]
+}
+
+export interface ApproveKycRequest {
+  notes: string
+}
+
+export interface RejectKycRequest {
+  reason: string
+}
+
+export interface OtpIssued {
+  otpRequestId: string
+  channel: OtpChannel | string
+  maskedDestination: string
+  maskedTarget?: string
+  expiresAt: Instant
+  resendAvailableAt?: Instant
+}
+
+export interface StartContactVerificationRequest {
+  channel: 'EMAIL' | 'SMS' | string
+}
+
+export interface ConfirmContactVerificationRequest {
+  otpRequestId: string
+  code: string
+}
+
+export interface RegisterBankAccountRequest {
+  bankName: string
+  accountType: CustomerBankAccount['accountType']
+  cci?: string | null
+  phoneWallet?: string | null
+  gatewayToken?: string | null
+  holderName?: string | null
+}
+
+export interface VerifyBankAccountRequest {
+  holderName: string
+  method?: string
+  notes?: string | null
+}
+
+export interface ConfirmPrimaryBankAccountRequest {
+  otpRequestId: string
+  code: string
+}
+
+export interface BankAccountResponse {
+  id: string
+  bankName: string
+  bankCode: string
+  accountType: CustomerBankAccount['accountType']
+  currency: string
+  accountNumberMasked: string
+  cciMasked: string
+  holderName?: string
+  last4?: string
+  phoneWalletMasked?: string | null
+  isVerified: boolean
+  verificationMethod?: string | null
+  verifiedAt?: Instant | null
+  isPrimary: boolean
+  isActive?: boolean
+  status?: 'ACTIVE' | 'INACTIVE' | 'PENDING_VERIFICATION' | 'PENDING_COOLING'
+  disbursementEnabledFrom?: Instant | null
+  isInCoolingPeriod?: boolean
+}
+
+export interface SetPrimaryBankAccountResult {
+  requiresOtp: boolean
+  account?: BankAccountResponse | null
+  otpChallenge?: OtpIssued | null
+}
+
 export interface CustomerBankAccount {
   id: string
   customerId: string
   bankName: string
-  accountType: 'CUENTA_CORRIENTE' | 'CUENTA_AHORRO' | 'TARJETA_DEBITO' | 'BILLETERA_DIGITAL'
+  bankCode?: string | null
+  accountType:
+    | 'CUENTA_CORRIENTE'
+    | 'CUENTA_AHORRO'
+    | 'TARJETA_DEBITO'
+    | 'BILLETERA_DIGITAL'
+    | 'SAVINGS'
+    | 'CHECKING'
+  currency?: string
+  accountNumber?: string
   /** Enmascarada: "**** 4821". */
   accountNumberMasked: string
+  last4?: string
   cci?: string
+  cciMasked?: string
+  holderName?: string
   phoneWallet?: string
+  phoneWalletMasked?: string | null
   isVerified: boolean
+  verificationMethod?: string | null
+  verifiedAt?: Instant | null
   isPrimary: boolean
-  status: 'ACTIVE' | 'INACTIVE' | 'PENDING_VERIFICATION'
+  isActive?: boolean
+  status?: 'ACTIVE' | 'INACTIVE' | 'PENDING_VERIFICATION' | 'PENDING_COOLING'
   /** Periodo de enfriamiento por seguridad tras cambio con OTP (FE-CP-18 / ARQUITECTURA_GENERAL §9). */
-  coolingOffUntil?: Instant
+  coolingOffUntil?: Instant | null
+  coolingPeriodEndsAt?: Instant | null
+  disbursementEnabledFrom?: Instant | null
+  isInCoolingPeriod?: boolean
 }
 
 export interface Customer {
   id: string
-  personType: 'NATURAL' | 'JURIDICA'
-  docType: 'DNI' | 'CE' | 'RUC' | 'PASAPORTE'
+  personType: PersonType
+  docType: DocType
   docNumber: string
   fullName: string
+  firstName?: string | null
+  lastName?: string | null
+  businessName?: string | null
   email: string
+  emailVerified?: boolean
   phone: string
+  phonePrimary?: string | null
+  phoneVerified?: boolean
+  phoneSecondary?: string | null
   address: string
   district: string
+  province?: string
+  department?: string
+  ubigeo?: string
   birthDate: BusinessDate
   monthlyNetIncome: Money
+  monthlyIncome?: Money
   occupation: string
   employerName: string
   workSeniorityMonths: number
   kycStatus: KycStatus
-  kycVerifiedAt?: Instant
+  kycVerifiedAt?: Instant | null
+  kycExpiresAt?: Instant | null
+  kycRejectedReason?: string | null
+  kycRejectionReason?: string | null
   kycNotes?: string
+  isPep?: boolean
+  amlRiskLevel?: AmlRiskLevel | string
   creditBalance: Money
+  consents?: CustomerConsentResponse[]
+  version?: number
   createdAt: Instant
+  updatedAt?: Instant
 }
 
 export interface CreateCustomerRequest {
@@ -191,15 +440,188 @@ export interface CreateCustomerRequest {
   docType: Customer['docType']
   docNumber: string
   fullName: string
+  firstName?: string
+  lastName?: string
+  businessName?: string
   email: string
   phone: string
+  phonePrimary?: string
+  phoneSecondary?: string | null
   address?: string
   district?: string
+  province?: string
+  department?: string
+  ubigeo?: string
   birthDate: BusinessDate
   monthlyNetIncome: Money
   occupation?: string
   employerName?: string
   workSeniorityMonths?: number
+  isPep?: boolean
+  consents?: ConsentAcceptance[]
+  expectedVersion?: number | null
+}
+
+export interface RegisterCustomerBackendRequest {
+  personType: Customer['personType']
+  docType: Customer['docType']
+  docNumber: string
+  fullName: string
+  birthDate?: BusinessDate | null
+  email: string
+  phonePrimary: string
+  phoneSecondary?: string | null
+  address: string
+  district: string
+  monthlyNetIncome: number
+  occupation?: string | null
+  employerName?: string | null
+  workSeniorityMonths: number
+  consents: ConsentAcceptance[]
+}
+
+export interface ContactPatch {
+  email?: string | null
+  phonePrimary?: string | null
+  phoneSecondary?: string | null
+}
+
+export interface AddressPatch {
+  streetLine?: string | null
+  address?: string | null
+  district?: string | null
+  province?: string | null
+  department?: string | null
+  ubigeo?: string | null
+}
+
+export interface SocioeconomicProfilePatch {
+  monthlyNetIncome?: number | null
+  occupation?: string | null
+  employerName?: string | null
+  workSeniorityMonths?: number | null
+  isPep?: boolean | null
+}
+
+export interface UpdateCustomerRequest {
+  contact?: ContactPatch | null
+  address?: AddressPatch | null
+  profile?: SocioeconomicProfilePatch | null
+  expectedVersion?: number | null
+}
+
+export interface CustomerListItem {
+  id: string
+  personType: Customer['personType']
+  docType: Customer['docType']
+  docNumber: string
+  fullName: string
+  kycStatus: KycStatus
+  amlRiskLevel: AmlRiskLevel | string
+  isPep: boolean
+  createdAt: Instant
+}
+
+export interface CustomerResponse {
+  id: string
+  personType: Customer['personType']
+  docType: Customer['docType']
+  docNumber: string
+  fullName: string
+  birthDate?: BusinessDate | null
+  email: string
+  emailVerified: boolean
+  phonePrimary: string
+  phoneVerified: boolean
+  phoneSecondary?: string | null
+  address: string
+  district?: string | null
+  monthlyNetIncome: number | string
+  occupation: string
+  employerName?: string | null
+  workSeniorityMonths: number
+  kycStatus: KycStatus
+  kycExpiresAt?: Instant | null
+  isPep: boolean
+  amlRiskLevel: AmlRiskLevel | string
+  creditBalance: number | string
+  version: number
+  createdAt: Instant
+}
+
+export interface FieldChange {
+  field: string
+  oldValue?: string | null
+  newValue?: string | null
+}
+
+export interface CustomerChangeEntry {
+  auditId?: string
+  changedAt: Instant
+  changedBy?: string | null
+  changedByUserId?: string | null
+  changedByEmail?: string | null
+  action: string
+  changes: Record<string, { before: unknown; after: unknown }>
+  ip?: string | null
+  userAgent?: string | null
+}
+
+export interface CustomerLoanSummaryDto {
+  loanId: string
+  loanNumber: string
+  productName: string
+  status: LoanStatus | string
+  currency: string
+  principalBalance: number | string
+  interestBalance: number | string
+  lateFeeBalance: number | string
+  daysPastDue: number
+  maxDaysPastDue: number
+  nextDueDate?: BusinessDate | null
+  disbursedAt: Instant
+}
+
+export interface CustomerApplicationSummaryDto {
+  applicationId: string
+  applicationNumber: string
+  productName: string
+  requestedAmount: number | string
+  currency: string
+  termMonths: number
+  status: ApplicationStatus | string
+  submittedAt: Instant
+}
+
+export interface MoneyValueDto {
+  amount: number | string
+  currency: string
+}
+
+export interface ConsolidatedDebtDto {
+  principal: MoneyValueDto | number | string
+  interest: MoneyValueDto | number | string
+  lateFees: MoneyValueDto | number | string
+  total: MoneyValueDto | number | string
+}
+
+export interface CustomerOverviewResponse {
+  customerId?: string
+  customer?: CustomerResponse
+  activeLoans?: CustomerLoanSummaryDto[]
+  closedLoans?: CustomerLoanSummaryDto[]
+  debt?: ConsolidatedDebtDto
+  activeLoansCount?: number
+  totalActiveDebt?: MoneyValueDto | number | string
+  totalActiveDebtAmount?: string
+  availableCreditBalance?: MoneyValueDto | number | string
+  availableCreditBalanceAmount?: string
+  currentMaxDaysPastDue?: number
+  historicalMaxDaysPastDue?: number
+  maxDaysPastDue?: number
+  hasActiveDelinquency?: boolean
+  applications?: CustomerApplicationSummaryDto[]
+  creditBalance?: number | string
 }
 
 export interface Customer360 extends Customer {
@@ -209,7 +631,12 @@ export interface Customer360 extends Customer {
   /** Capital + interés + mora pendientes de todos los préstamos. */
   totalDebt: Money
   maxDaysLate: number
+  historicalMaxDaysLate?: number
   hasActiveArrears: boolean
+  kycDossier?: CustomerKycStatusResponse | null
+  consents?: CustomerConsentResponse[]
+  overview?: CustomerOverviewResponse | null
+  history?: CustomerChangeEntry[]
 }
 
 // ── Productos y simulación ───────────────────────────────────────────────────
@@ -912,13 +1339,15 @@ export interface LoanContractDocument {
 
 // ── Perfil y Cuentas Bancarias (FE-CP-18 y FE-CP-19) ──────────────────────────
 export interface ChangePrimaryBankAccountRequest {
+  accountId?: string
   bankAccountId?: string
   newAccount?: {
     bankName: string
-    accountType?: CustomerBankAccount['accountType']
+    accountType?: 'CUENTA_AHORRO' | 'CUENTA_CORRIENTE' | 'BILLETERA_DIGITAL' | CustomerBankAccount['accountType']
     cci?: string
     phoneWallet?: string
   }
+  otpRequestId?: string
   otpCode: string
 }
 

@@ -15,5 +15,7 @@
     <ProjectReference Include="..\..\src\LoanSystem.DbMigrator\LoanSystem.DbMigrator.csproj" />
     <ProjectReference Include="..\..\src\LoanSystem.WebApi\LoanSystem.WebApi.csproj" />
     <ProjectReference Include="..\..\src\Common\LoanSystem.Common.Adapters\LoanSystem.Common.Adapters.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Customers\LoanSystem.Modules.Customers.Core\LoanSystem.Modules.Customers.Core.csproj" />
+    <ProjectReference Include="..\..\src\Modules\Customers\LoanSystem.Modules.Customers.Adapters\LoanSystem.Modules.Customers.Adapters.csproj" />
   </ItemGroup>
 </Project>

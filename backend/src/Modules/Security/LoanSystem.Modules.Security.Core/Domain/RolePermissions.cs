@@ -7,6 +7,11 @@ internal static class RolePermissions
     [
         "dashboard.view",
         "customers.read",
+        "customers.write",
+        "customers.kyc.review",
+        "customers.documents.read",
+        "customers.accounts.manage",
+        "customers.pii.unmasked",
         "applications.read",
         "loans.read",
         "payments.read",
@@ -31,6 +36,10 @@ internal static class RolePermissions
     [
         "dashboard.view",
         "customers.read",
+        "customers.write",
+        "customers.kyc.review",
+        "customers.documents.read",
+        "customers.pii.unmasked",
         "applications.read",
         "loans.read",
         "reports.read"
@@ -40,6 +49,10 @@ internal static class RolePermissions
     [
         "dashboard.view",
         "customers.read",
+        "customers.write",
+        "customers.documents.read",
+        "customers.accounts.manage",
+        "customers.pii.unmasked",
         "applications.read",
         "loans.read",
         "payments.read",
@@ -62,6 +75,7 @@ internal static class RolePermissions
         "audit.read",
         "reports.read",
         "customers.read",
+        "customers.documents.read",
         "loans.read",
         "payments.read",
         "treasury.read",

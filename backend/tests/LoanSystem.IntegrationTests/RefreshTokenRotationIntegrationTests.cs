@@ -160,7 +160,11 @@ public class RefreshTokenRotationIntegrationTests : IAsyncLifetime
         var result = await scope.ServiceProvider.GetRequiredService<ILoginUseCase>()
             .ExecuteAsync(new LoginRequest(email, Password));
         result.IsSuccess.ShouldBeTrue(result.IsFailure ? result.Error.Code : null);
-        return result.Value;
+        return new AuthTokensResponse(
+            result.Value.AccessToken!,
+            result.Value.RefreshToken!,
+            result.Value.ExpiresInSeconds!.Value,
+            result.Value.Role!);
     }
 
     // One DI scope (= one DbContext) per request, like the real HTTP pipeline.

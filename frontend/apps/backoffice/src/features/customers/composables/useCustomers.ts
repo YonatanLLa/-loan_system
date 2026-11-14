@@ -6,6 +6,7 @@ import type {
   CustomerBankAccount,
   KycStatus,
   Page,
+  PersonType,
 } from '@prestamos/api-client'
 import { toApiError } from '@prestamos/api-client'
 import { customersService } from '../services/customers.service'
@@ -21,6 +22,7 @@ export function useCustomers() {
 
   const searchQuery = ref('')
   const selectedKycStatus = ref('')
+  const selectedPersonType = ref<PersonType | ''>('')
   const currentPage = ref(1)
   const totalPages = ref(1)
 
@@ -40,6 +42,7 @@ export function useCustomers() {
         pageSize: customersPage.value.pageSize,
         q: searchQuery.value,
         kycStatus: selectedKycStatus.value,
+        personType: selectedPersonType.value,
       })
     } catch (error) {
       const apiError = toApiError(error)
@@ -57,6 +60,7 @@ export function useCustomers() {
   function resetFilters() {
     searchQuery.value = ''
     selectedKycStatus.value = ''
+    selectedPersonType.value = ''
     currentPage.value = 1
     void loadCustomers()
   }
@@ -67,9 +71,13 @@ export function useCustomers() {
     void loadCustomers()
   }
 
-  async function saveCustomer(payload: CreateCustomerRequest, editId?: string): Promise<Customer> {
+  async function saveCustomer(
+    payload: CreateCustomerRequest,
+    editId?: string,
+    expectedVersion = 1,
+  ): Promise<Customer> {
     if (editId) {
-      return await customersService.updateCustomer(editId, payload)
+      return await customersService.updateCustomer(editId, payload, expectedVersion)
     }
     return await customersService.createCustomer(payload)
   }
@@ -98,6 +106,7 @@ export function useCustomers() {
     customersPage,
     searchQuery,
     selectedKycStatus,
+    selectedPersonType,
     currentPage,
     totalPages,
     loadCustomers,
@@ -110,6 +119,17 @@ export function useCustomers() {
     getCustomer360: customersService.getCustomer360,
     verifyBankAccount: customersService.verifyBankAccount,
     makePrimaryBankAccount: customersService.makePrimaryBankAccount,
+    confirmPrimaryBankAccount: customersService.confirmPrimaryBankAccount,
+    deactivateBankAccount: customersService.deactivateBankAccount,
+    uploadDocument: customersService.uploadDocument,
+    getDocumentSignedUrl: customersService.getDocumentSignedUrl,
+    submitKycForReview: customersService.submitKycForReview,
+    resubmitKyc: customersService.resubmitKyc,
+    retryKycChecks: customersService.retryKycChecks,
+    grantConsent: customersService.grantConsent,
+    revokeConsent: customersService.revokeConsent,
+    startContactVerification: customersService.startContactVerification,
+    confirmContactVerification: customersService.confirmContactVerification,
     applyCreditBalance: customersService.applyCreditBalance,
     refundCreditBalance: customersService.refundCreditBalance,
   }

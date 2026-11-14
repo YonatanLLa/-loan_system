@@ -4,6 +4,7 @@ using LoanSystem.Common.Adapters.Persistence;
 using LoanSystem.Common.Core.Application;
 using LoanSystem.Common.Core.Ports.Outbound;
 using LoanSystem.Common.Core.Ports.Outbound.Approvals;
+using LoanSystem.Modules.Customers.Core.Contracts;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -16,6 +17,8 @@ using LoanSystem.Modules.Security.Core.Application.Approvals;
 using LoanSystem.Modules.Security.Core.Domain;
 using LoanSystem.Modules.Security.Core.Ports.Inbound;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
+using HttpClientInfoProvider = LoanSystem.Modules.Security.Adapters.Outbound.Providers.HttpClientInfoProvider;
 
 namespace LoanSystem.Modules.Security.Adapters;
 
@@ -144,7 +147,8 @@ public static class SecurityModule
             maxFailedAttempts,
             lockWindowMinutes,
             sp.GetRequiredService<IMfaChallengeRepository>(),
-            mfaOptions));
+            mfaOptions,
+            sp.GetService<ICustomerPortalLookup>()));
 
         services.AddScoped<IVerifyMfaUseCase, VerifyMfaUseCase>();
         services.AddScoped<IBeginMfaEnrollmentUseCase, BeginMfaEnrollmentUseCase>();
@@ -159,7 +163,8 @@ public static class SecurityModule
             sp.GetRequiredService<ISecurityUnitOfWork>(),
             sp.GetRequiredService<IClock>(),
             sp.GetRequiredService<IAuditContext>(),
-            refreshTokenDays));
+            refreshTokenDays,
+            sp.GetService<ICustomerPortalLookup>()));
 
         // Use cases (BE-SEC-04, BE-SEC-06, BE-SEC-08)
         services.AddScoped<ILogoutUseCase, LogoutUseCase>();

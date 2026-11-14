@@ -112,7 +112,13 @@ public static class Program
             "migrations/15_audit_logs_append_only.sql",
             "migrations/16_refresh_tokens_family.sql",
             "migrations/17_users_mfa.sql",
-            "migrations/18_approval_requests.sql"
+            "migrations/18_approval_requests.sql",
+            "migrations/19_customers_kyc_extensions.sql",
+            "migrations/20_customer_documents_v2.sql",
+            "migrations/21_customer_consents.sql",
+            "migrations/22_otp_purpose_and_attempts.sql",
+            "migrations/23_customer_bank_accounts_v2.sql",
+            "seeds/24_seed_consent_texts.sql"
         };
 
         var list = new List<(string Name, string Path)>();

@@ -4,6 +4,7 @@ using LoanSystem.Modules.Security.Core.Application;
 using LoanSystem.Modules.Security.Core.Contracts;
 using LoanSystem.Modules.Security.Core.Domain;
 using LoanSystem.Modules.Security.Core.Ports.Outbound;
+using IClientInfoProvider = LoanSystem.Modules.Security.Core.Ports.Outbound.IClientInfoProvider;
 using Shouldly;
 using Xunit;
 
@@ -62,7 +63,7 @@ public class SecurityAuthUseCasesTests
         result.Value.AccessToken.ShouldNotBeNullOrWhiteSpace();
         result.Value.RefreshToken.ShouldNotBeNullOrWhiteSpace();
         result.Value.Role.ShouldBe("ROLE_ANALYST");
-        result.Value.ExpiresInSeconds.ShouldBeGreaterThan(0);
+        (result.Value.ExpiresInSeconds ?? 0).ShouldBeGreaterThan(0);
 
         _refreshTokens.Added.Count.ShouldBe(1);
         _refreshTokens.Added[0].UserId.ShouldBe(user.Id);

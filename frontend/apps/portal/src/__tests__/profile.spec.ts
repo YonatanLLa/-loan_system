@@ -11,6 +11,9 @@ describe('Profile Service (FE-CP-18 y FE-CP-19)', () => {
     expect(typeof profileService.changePrimaryAccount).toBe('function')
     expect(typeof profileService.fetchRefunds).toBe('function')
     expect(typeof profileService.requestRefund).toBe('function')
+    expect(typeof profileService.startContactVerification).toBe('function')
+    expect(typeof profileService.confirmContactVerification).toBe('function')
+    expect(typeof profileService.toggleMarketingConsent).toBe('function')
   })
 })
 

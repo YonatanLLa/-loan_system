@@ -370,4 +370,499 @@ export const customerHandlers = [
       customer: to360(customer),
     }, { status: 201 })
   })),
+
+  // =========================================================================
+  // Nuevos Endpoints del Plan Customers, KYC, LPDP, Cuentas y OTP
+  // =========================================================================
+
+  http.get('*/api/consents/current', () => {
+    return HttpResponse.json([
+      {
+        purpose: 'DATA_PROCESSING',
+        version: 'v1.0-2026',
+        title: 'Consentimiento de Tratamiento de Datos Personales (Ley N° 29733)',
+        legalText: 'Autorizo el tratamiento de mis datos personales para evaluación crediticia y ejecución contractual.',
+        isMandatory: true,
+        publishedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        purpose: 'CREDIT_BUREAU_QUERY',
+        version: 'v1.0-2026',
+        title: 'Autorización de Consulta en Centrales de Riesgo (SBS / Equifax / Sentinel)',
+        legalText: 'Autorizo la consulta de mi historial crediticio.',
+        isMandatory: false,
+        publishedAt: '2026-01-01T00:00:00Z',
+      },
+      {
+        purpose: 'MARKETING',
+        version: 'v1.0-2026',
+        title: 'Comunicaciones Comerciales y Promociones',
+        legalText: 'Deseo recibir ofertas comerciales.',
+        isMandatory: false,
+        publishedAt: '2026-01-01T00:00:00Z',
+      },
+    ])
+  }),
+
+  http.patch('*/api/customers/:id', secured<{ id: string }>('customers.read', async ({ request, params, user }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<any>(request)
+    const before: Record<string, unknown> = { ...customer }
+    if (body?.contact?.email) customer.email = body.contact.email
+    if (body?.contact?.phonePrimary) customer.phone = body.contact.phonePrimary
+    if (body?.address?.streetLine) customer.address = body.address.streetLine
+    if (body?.profile?.occupation) customer.occupation = body.profile.occupation
+    if (body?.profile?.monthlyNetIncome != null) {
+      customer.monthlyNetIncome = fromCents(Math.round(Number(body.profile.monthlyNetIncome) * 100))
+    }
+    if (typeof body?.profile?.isPep === 'boolean') customer.isPep = body.profile.isPep
+
+    recordAudit({
+      entityName: 'customers',
+      entityId: customer.id,
+      action: 'CUSTOMER_UPDATED',
+      userName: user.fullName,
+      before,
+      after: { ...customer },
+    })
+    return HttpResponse.json({
+      ...to360(customer),
+      phonePrimary: customer.phone,
+      monthlyNetIncome: Number(customer.monthlyNetIncome),
+      version: (Number(body?.expectedVersion) || 1) + 1,
+    })
+  })),
+
+  http.get('*/api/customers/:id/overview', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const dto360 = to360(customer)
+    return HttpResponse.json({
+      customerId: customer.id,
+      fullName: customer.fullName,
+      docType: customer.docType,
+      docNumber: customer.docNumber,
+      kycStatus: customer.kycStatus,
+      kycExpiresAt: customer.kycExpiresAt ?? null,
+      amlRiskLevel: customer.isPep ? 'HIGH' : 'LOW',
+      isPep: customer.isPep,
+      hasVerifiedPrimaryBankAccount: dto360.bankAccounts.some((b) => b.isPrimary && b.isVerified),
+      primaryBankAccountCoolingUntil: null,
+      activeLoansCount: dto360.loans.length,
+      totalActiveDebt: { amount: 0, currency: 'PEN' },
+      availableCreditBalance: { amount: Number(customer.creditBalance || 0), currency: 'PEN' },
+      maxDaysPastDue: 0,
+    })
+  })),
+
+  http.get('*/api/customers/:id/history', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json({
+      items: [
+        {
+          auditId: `aud-${customer.id}-1`,
+          changedAt: customer.createdAt,
+          changedByUserId: 'usr-admin',
+          changedByEmail: 'admin@prestamos.pe',
+          action: 'CUSTOMER_CREATED',
+          ip: '127.0.0.1',
+          changes: {
+            kycStatus: { before: null, after: customer.kycStatus },
+          },
+        },
+      ],
+      totalCount: 1,
+      page: 1,
+      pageSize: 20,
+    })
+  })),
+
+  http.get('*/api/customers/:id/documents', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json([
+      {
+        id: `doc-${customer.id}-front`,
+        category: 'DNI_FRONTAL',
+        fileName: 'dni-frontal.png',
+        contentType: 'image/png',
+        sizeBytes: 24500,
+        sha256Hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+        version: 1,
+        isCurrent: true,
+        uploadedByUserId: 'usr-admin',
+        uploadedAt: customer.createdAt,
+      },
+    ])
+  })),
+
+  http.post('*/api/customers/:id/documents', secured<{ id: string }>('customers.read', async ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json({
+      id: nextId('doc'),
+      category: 'DNI_FRONTAL',
+      fileName: 'documento-kyc.png',
+      contentType: 'image/png',
+      sizeBytes: 18420,
+      sha256Hash: 'a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0',
+      version: 1,
+      isCurrent: true,
+      uploadedByUserId: 'usr-admin',
+      uploadedAt: nowIso(),
+    }, { status: 201 })
+  })),
+
+  http.get('*/api/customers/:id/documents/:docId/url', secured<{ id: string; docId: string }>('customers.read', ({ params }) => {
+    return HttpResponse.json({
+      documentId: params.docId,
+      signedUrl: `https://storage.prestamos.pe/kyc/${params.id}/${params.docId}?sig=mock-signature`,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+    })
+  })),
+
+  http.get('*/api/customers/:id/kyc', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json({
+      customerId: customer.id,
+      status: customer.kycStatus,
+      amlRiskLevel: customer.isPep ? 'HIGH' : 'LOW',
+      isPep: customer.isPep,
+      verifiedAt: customer.kycStatus === 'VERIFIED' ? customer.createdAt : null,
+      expiresAt: customer.kycExpiresAt ?? null,
+      rejectionReason: customer.kycRejectionReason ?? null,
+      currentDocuments: [
+        {
+          id: `doc-${customer.id}-front`,
+          category: 'DNI_FRONTAL',
+          fileName: 'dni-frontal.png',
+          contentType: 'image/png',
+          sizeBytes: 24500,
+          sha256Hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+          version: 1,
+          isCurrent: true,
+          uploadedByUserId: 'usr-admin',
+          uploadedAt: customer.createdAt,
+        },
+      ],
+      missingDocuments: [],
+      verifications: [
+        {
+          id: `chk-${customer.id}-1`,
+          checkType: 'RENIEC',
+          provider: 'MockReniecAdapter',
+          result: 'PASS',
+          biometricScore: null,
+          failureReason: null,
+          executedAt: customer.createdAt,
+        },
+        {
+          id: `chk-${customer.id}-2`,
+          checkType: 'OFAC_UIF',
+          provider: 'MockWatchlistAdapter',
+          result: 'PASS',
+          biometricScore: null,
+          failureReason: null,
+          executedAt: customer.createdAt,
+        },
+        {
+          id: `chk-${customer.id}-3`,
+          checkType: 'BIOMETRIC',
+          provider: 'MockBiometricAdapter',
+          result: 'PASS',
+          biometricScore: 98.4,
+          failureReason: null,
+          executedAt: customer.createdAt,
+        },
+      ],
+    })
+  })),
+
+  http.post('*/api/customers/:id/kyc/submit', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    customer.kycStatus = 'IN_REVIEW'
+    return HttpResponse.json({
+      customerId: customer.id,
+      status: customer.kycStatus,
+      amlRiskLevel: customer.isPep ? 'HIGH' : 'LOW',
+      isPep: customer.isPep,
+      verifiedAt: null,
+      expiresAt: null,
+      rejectionReason: null,
+      currentDocuments: [],
+      missingDocuments: [],
+      verifications: [
+        {
+          id: nextId('chk'),
+          checkType: 'BIOMETRIC',
+          provider: 'MockBiometricAdapter',
+          result: 'PASS',
+          biometricScore: 98.2,
+          failureReason: null,
+          executedAt: nowIso(),
+        },
+      ],
+    })
+  })),
+
+  http.post('*/api/customers/:id/kyc/resubmit', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    customer.kycStatus = 'IN_REVIEW'
+    customer.kycRejectionReason = undefined
+    return HttpResponse.json({
+      customerId: customer.id,
+      status: customer.kycStatus,
+      amlRiskLevel: customer.isPep ? 'HIGH' : 'LOW',
+      isPep: customer.isPep,
+      verifiedAt: null,
+      expiresAt: null,
+      rejectionReason: null,
+      currentDocuments: [],
+      missingDocuments: [],
+      verifications: [],
+    })
+  })),
+
+  http.post('*/api/customers/:id/kyc/retry-checks', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json({
+      customerId: customer.id,
+      status: customer.kycStatus,
+      amlRiskLevel: customer.isPep ? 'HIGH' : 'LOW',
+      isPep: customer.isPep,
+      verifiedAt: null,
+      expiresAt: null,
+      rejectionReason: null,
+      currentDocuments: [],
+      missingDocuments: [],
+      verifications: [],
+    })
+  })),
+
+  http.post('*/api/customers/:id/kyc/approve', secured<{ id: string }>('customers.read', async ({ request, params, user }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ notes?: string }>(request)
+    if (!body?.notes || body.notes.trim().length < 5) {
+      return problem(400, 'Sustento requerido', 'Debes ingresar las notas de aprobación.')
+    }
+    customer.kycStatus = 'VERIFIED'
+    customer.kycRejectionReason = undefined
+    customer.kycExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+    recordAudit({
+      entityName: 'customers',
+      entityId: customer.id,
+      action: 'KYC_APPROVED',
+      userName: user.fullName,
+      after: { kycStatus: 'VERIFIED', notes: body.notes },
+    })
+    return HttpResponse.json(to360(customer))
+  })),
+
+  http.post('*/api/customers/:id/kyc/reject', secured<{ id: string }>('customers.read', async ({ request, params, user }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ reason?: string }>(request)
+    if (!body?.reason || body.reason.trim().length < 5) {
+      return problem(400, 'Motivo requerido', 'Debes especificar el motivo de rechazo.')
+    }
+    customer.kycStatus = 'REJECTED'
+    customer.kycRejectionReason = body.reason.trim()
+    customer.kycExpiresAt = undefined
+    recordAudit({
+      entityName: 'customers',
+      entityId: customer.id,
+      action: 'KYC_REJECTED',
+      userName: user.fullName,
+      after: { kycStatus: 'REJECTED', reason: body.reason },
+    })
+    return HttpResponse.json(to360(customer))
+  })),
+
+  http.get('*/api/customers/:id/consents', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    return HttpResponse.json([
+      {
+        id: `con-${customer.id}-dp`,
+        purpose: 'DATA_PROCESSING',
+        version: 'v1.0-2026',
+        isActive: true,
+        channel: 'BACKOFFICE',
+        ipAddress: '127.0.0.1',
+        grantedAt: customer.createdAt,
+        revokedAt: null,
+      },
+      {
+        id: `con-${customer.id}-cb`,
+        purpose: 'CREDIT_BUREAU_QUERY',
+        version: 'v1.0-2026',
+        isActive: true,
+        channel: 'BACKOFFICE',
+        ipAddress: '127.0.0.1',
+        grantedAt: customer.createdAt,
+        revokedAt: null,
+      },
+    ])
+  })),
+
+  http.post('*/api/customers/:id/consents', secured<{ id: string }>('customers.read', async ({ request, params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ purpose?: string; version?: string; channel?: string }>(request)
+    return HttpResponse.json({
+      id: nextId('con'),
+      purpose: body?.purpose ?? 'MARKETING',
+      version: body?.version ?? 'v1.0-2026',
+      isActive: true,
+      channel: body?.channel ?? 'BACKOFFICE',
+      ipAddress: '127.0.0.1',
+      grantedAt: nowIso(),
+      revokedAt: null,
+    }, { status: 201 })
+  })),
+
+  http.delete('*/api/customers/:id/consents/:purpose', secured<{ id: string; purpose: string }>('customers.read', ({ params }) => {
+    if (params.purpose === 'DATA_PROCESSING') {
+      return problem(422, 'Operación no permitida', 'El consentimiento LPDP obligatorio no puede revocarse con préstamos activos.')
+    }
+    return new HttpResponse(null, { status: 204 })
+  })),
+
+  http.get('*/api/customers/:id/bank-accounts', secured<{ id: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const accounts = db.customerBankAccounts.filter((a) => a.customerId === customer.id)
+    return HttpResponse.json(accounts.map((a) => ({
+      id: a.id,
+      bankCode: a.bankName,
+      bankName: a.bankName,
+      accountType: a.accountType,
+      currency: a.currency,
+      accountNumberMasked: a.accountNumberMasked,
+      cciMasked: a.cci,
+      holderName: customer.fullName,
+      isVerified: a.isVerified,
+      verificationMethod: a.isVerified ? 'MANUAL' : null,
+      verifiedAt: a.isVerified ? customer.createdAt : null,
+      isPrimary: a.isPrimary,
+      isActive: true,
+      disbursementEnabledFrom: null,
+      isInCoolingPeriod: false,
+    })))
+  })),
+
+  http.post('*/api/customers/:id/bank-accounts/:accountId/verify', secured<{ id: string; accountId: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const account = db.customerBankAccounts.find((a) => a.id === params.accountId && a.customerId === customer.id)
+    if (!account) return notFound('La cuenta bancaria')
+    account.isVerified = true
+    return HttpResponse.json({
+      id: account.id,
+      bankCode: account.bankName,
+      bankName: account.bankName,
+      accountType: account.accountType,
+      currency: account.currency,
+      accountNumberMasked: account.accountNumberMasked,
+      cciMasked: account.cci,
+      holderName: customer.fullName,
+      isVerified: true,
+      verificationMethod: 'MANUAL',
+      verifiedAt: nowIso(),
+      isPrimary: account.isPrimary,
+      isActive: true,
+      disbursementEnabledFrom: null,
+      isInCoolingPeriod: false,
+    })
+  })),
+
+  http.delete('*/api/customers/:id/bank-accounts/:accountId', secured<{ id: string; accountId: string }>('customers.read', ({ params }) => {
+    const idx = db.customerBankAccounts.findIndex((a) => a.id === params.accountId && a.customerId === params.id)
+    if (idx === -1) return notFound('La cuenta bancaria')
+    db.customerBankAccounts.splice(idx, 1)
+    return new HttpResponse(null, { status: 204 })
+  })),
+
+  http.put('*/api/customers/:id/bank-accounts/:accountId/primary', secured<{ id: string; accountId: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const account = db.customerBankAccounts.find((a) => a.id === params.accountId && a.customerId === customer.id)
+    if (!account) return notFound('La cuenta bancaria')
+    for (const other of db.customerBankAccounts.filter((a) => a.customerId === customer.id)) {
+      other.isPrimary = other.id === account.id
+    }
+    return HttpResponse.json({
+      requiresOtp: false,
+      account: {
+        id: account.id,
+        bankCode: account.bankName,
+        bankName: account.bankName,
+        accountType: account.accountType,
+        currency: account.currency,
+        accountNumberMasked: account.accountNumberMasked,
+        cciMasked: account.cci,
+        holderName: customer.fullName,
+        isVerified: account.isVerified,
+        verificationMethod: 'MANUAL',
+        verifiedAt: nowIso(),
+        isPrimary: true,
+        isActive: true,
+        disbursementEnabledFrom: null,
+        isInCoolingPeriod: false,
+      },
+      otpChallenge: null,
+    })
+  })),
+
+  http.post('*/api/customers/:id/bank-accounts/:accountId/primary/confirm', secured<{ id: string; accountId: string }>('customers.read', ({ params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const account = db.customerBankAccounts.find((a) => a.id === params.accountId && a.customerId === customer.id)
+    if (!account) return notFound('La cuenta bancaria')
+    for (const other of db.customerBankAccounts.filter((a) => a.customerId === customer.id)) {
+      other.isPrimary = other.id === account.id
+    }
+    const coolingUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    return HttpResponse.json({
+      id: account.id,
+      bankCode: account.bankName,
+      bankName: account.bankName,
+      accountType: account.accountType,
+      currency: account.currency,
+      accountNumberMasked: account.accountNumberMasked,
+      cciMasked: account.cci,
+      holderName: customer.fullName,
+      isVerified: true,
+      verificationMethod: 'MANUAL',
+      verifiedAt: nowIso(),
+      isPrimary: true,
+      isActive: true,
+      disbursementEnabledFrom: coolingUntil,
+      isInCoolingPeriod: true,
+    })
+  })),
+
+  http.post('*/api/customers/:id/contact/verify/start', secured<{ id: string }>('customers.read', async ({ request, params }) => {
+    const customer = db.customers.find((c) => c.id === params.id)
+    if (!customer) return notFound('El cliente')
+    const body = await readJson<{ channel?: string }>(request)
+    return HttpResponse.json({
+      otpRequestId: nextId('otp'),
+      channel: body?.channel ?? 'SMS',
+      maskedDestination: body?.channel === 'EMAIL' ? 'c***@correo.pe' : '+51 9***4321',
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+      resendAvailableAt: new Date(Date.now() + 60 * 1000).toISOString(),
+    })
+  })),
+
+  http.post('*/api/customers/:id/contact/verify/confirm', secured<{ id: string }>('customers.read', () => {
+    return new HttpResponse(null, { status: 204 })
+  })),
 ]

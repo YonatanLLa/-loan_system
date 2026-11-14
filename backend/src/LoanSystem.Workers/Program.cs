@@ -10,6 +10,7 @@ using LoanSystem.Modules.Administration.Adapters;
 using LoanSystem.Modules.Collections.Adapters;
 using LoanSystem.Modules.Collections.Adapters.Inbound.Jobs;
 using LoanSystem.Modules.Customers.Adapters;
+using LoanSystem.Modules.Customers.Adapters.Inbound.Jobs;
 using LoanSystem.Modules.Integrations.Adapters;
 using LoanSystem.Modules.Loans.Adapters;
 using LoanSystem.Modules.Notifications.Adapters;
@@ -50,6 +51,7 @@ builder.Services.AddReportsModule(builder.Configuration);
 builder.Services.AddQuartz(q =>
 {
     q.AddSecurityJobs(LimaTimeZone.Instance);       // ExpireApprovalRequestsJob hourly
+    q.AddCustomersJobs(LimaTimeZone.Instance);      // ExpireKycJob 02:00
     q.AddCollectionsJobs(LimaTimeZone.Instance);    // DailyMoraJob 00:05
     q.AddTreasuryJobs(LimaTimeZone.Instance);       // DailyBalanceJob 06:00, disbursements every 15 min
     q.AddNotificationsJobs(LimaTimeZone.Instance);  // DailyRemindersJob 09:00

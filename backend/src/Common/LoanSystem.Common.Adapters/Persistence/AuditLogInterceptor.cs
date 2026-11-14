@@ -95,6 +95,7 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
         // which may belong to another user if the client still sends a stale Authorization header
         var userId = _auditContext?.ActorId ?? _currentUser?.UserId;
         var businessAction = _auditContext?.Action;
+        var approvalRequestId = _auditContext?.ApprovalRequestId;
         var userIp = _httpContextAccessor?.HttpContext?.Connection.RemoteIpAddress;
         if (userIp is { IsIPv4MappedToIPv6: true })
         {
@@ -115,6 +116,7 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
         {
             var entityName = entry.Metadata.GetTableName() ?? entry.Metadata.ClrType.Name;
             var entityId = GetEntityId(entry);
+            var entityAction = _auditContext?.GetActionForEntity(entityName);
 
             string action;
             string? stateBefore = null;
@@ -123,12 +125,12 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
             switch (entry.State)
             {
                 case EntityState.Added:
-                    action = businessAction ?? "CREATE";
+                    action = entityAction ?? businessAction ?? "CREATE";
                     stateAfter = SerializeState(entry, isOriginal: false);
                     break;
 
                 case EntityState.Modified:
-                    action = businessAction ?? "UPDATE";
+                    action = entityAction ?? businessAction ?? "UPDATE";
                     stateBefore = SerializeState(entry, isOriginal: true);
                     stateAfter = SerializeState(entry, isOriginal: false);
                     break;
@@ -153,6 +155,7 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
                 UserId = userId,
                 UserIp = userIp,
                 UserAgent = userAgent,
+                ApprovalRequestId = approvalRequestId,
                 CreatedAt = createdAt
             });
         }
@@ -202,6 +205,11 @@ public sealed class AuditLogInterceptor : SaveChangesInterceptor
         foreach (var property in entry.Properties)
         {
             var name = property.Metadata.Name;
+            if (property.Metadata.IsShadowProperty() && string.Equals(name, "xmin", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             if (property.Metadata.IsAuditSensitive() || IsSensitiveName(name))
             {
                 values[name] = "[REDACTED]";

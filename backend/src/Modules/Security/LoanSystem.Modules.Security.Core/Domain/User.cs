@@ -17,6 +17,11 @@ internal sealed class User : AggregateRoot<Guid>
     public DateTimeOffset? LockedUntil { get; private set; }
     public DateTimeOffset? LastLoginAt { get; private set; }
 
+    public bool MfaEnabled { get; private set; }
+    public string? MfaSecretEncrypted { get; private set; }
+    public DateTimeOffset? MfaEnrolledAt { get; private set; }
+    public long? MfaLastUsedStep { get; private set; }
+
     public bool IsActive => Status == UserStatus.ACTIVE;
 
     /// <summary>Returns <see langword="true"/> while a temporary lockout window is still in effect (BE-SEC-02).</summary>
@@ -74,6 +79,76 @@ internal sealed class User : AggregateRoot<Guid>
         ResetFailedLogins();
         Status = UserStatus.ACTIVE;
     }
+
+    /// <summary>Returns <see langword="true"/> when the user's role requires MFA (BE-SEC-03).</summary>
+    public bool RequiresMfa(IReadOnlySet<SecurityRole> requiredRoles) =>
+        requiredRoles.Contains(Role);
+
+    /// <summary>Stores a pending encrypted TOTP secret prior to confirmation (BE-SEC-03).</summary>
+    public void StartMfaEnrollment(string encryptedSecret)
+    {
+        if (MfaEnabled)
+        {
+            throw new InvalidOperationException("MFA is already enabled for this user.");
+        }
+
+        if (string.IsNullOrWhiteSpace(encryptedSecret))
+        {
+            throw new ArgumentException("Encrypted MFA secret cannot be empty.", nameof(encryptedSecret));
+        }
+
+        MfaSecretEncrypted = encryptedSecret;
+    }
+
+    /// <summary>Updates the encrypted TOTP secret during lazy key rotation without altering enrollment state (BE-SEC-10).</summary>
+    public void ReprotectMfaSecret(string encryptedSecret)
+    {
+        if (string.IsNullOrWhiteSpace(encryptedSecret))
+        {
+            throw new ArgumentException("Encrypted MFA secret cannot be empty.", nameof(encryptedSecret));
+        }
+
+        MfaSecretEncrypted = encryptedSecret;
+    }
+
+    /// <summary>Activates MFA once the user confirms a valid TOTP code and records the used step (BE-SEC-03).</summary>
+    public void CompleteMfaEnrollment(IClock clock, long step)
+    {
+        if (string.IsNullOrWhiteSpace(MfaSecretEncrypted))
+        {
+            throw new InvalidOperationException("Cannot complete MFA enrollment without a pending secret.");
+        }
+
+        MfaEnabled = true;
+        MfaEnrolledAt = clock.UtcNow;
+        MfaLastUsedStep = step;
+    }
+
+    /// <summary>
+    /// Rejects TOTP steps equal to or earlier than the last accepted step to prevent replay attacks (BE-SEC-03).
+    /// </summary>
+    public bool TryAcceptMfaStep(long step)
+    {
+        if (MfaLastUsedStep.HasValue && step <= MfaLastUsedStep.Value)
+        {
+            return false;
+        }
+
+        MfaLastUsedStep = step;
+        return true;
+    }
+
+    /// <summary>Clears MFA state so the user must re-enroll on next login (BE-SEC-03).</summary>
+    public void ResetMfa()
+    {
+        MfaEnabled = false;
+        MfaSecretEncrypted = null;
+        MfaEnrolledAt = null;
+        MfaLastUsedStep = null;
+    }
+
+    /// <summary>Updates the user's RBAC role upon four-eyes approval (BE-SEC-09).</summary>
+    public void ChangeRole(SecurityRole newRole) => Role = newRole;
 
     /// <summary>Reconstitutes a user from known state. Used by tests and future seeding paths.</summary>
     internal static User Reconstitute(

@@ -6,5 +6,8 @@
   <ItemGroup>
     <PackageReference Include="dbup-postgresql" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.KeyPerFile" />
   </ItemGroup>
 </Project>

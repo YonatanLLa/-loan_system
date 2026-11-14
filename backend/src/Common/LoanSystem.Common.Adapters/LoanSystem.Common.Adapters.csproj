@@ -6,6 +6,7 @@
     <ProjectReference Include="..\LoanSystem.Common.Core\LoanSystem.Common.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Configuration.KeyPerFile" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Dapper" />

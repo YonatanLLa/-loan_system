@@ -1,10 +1,6 @@
 using System.Net;
-using System.Security.Claims;
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.HttpOverrides;
-using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using LoanSystem.Common.Adapters.Clock;
 using LoanSystem.Common.Adapters.Configuration;
@@ -39,6 +35,9 @@ using LoanSystem.Modules.Reports.Adapters.Inbound.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Configuración de secretos pluggable (Development: UserSecrets/appsettings; Producción: KeyPerFile u otros)
+builder.Configuration.AddSecretManager(builder.Environment);
+
 // Servicios base de infraestructura
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
@@ -68,30 +67,8 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 // Soporte de Idempotency-Key: Redis si ConnectionStrings:Redis está configurado; en memoria en caso contrario
 var idempotencyUsesRedis = builder.Services.AddIdempotency(builder.Configuration);
 
-// Autenticación y autorización (roles)
-// La clave de firma no tiene valor por defecto en código: debe venir de configuración (archivo de Development, variable de entorno o almacén de secretos)
-var jwtKey = builder.Configuration.GetRequiredValue("Jwt:Key");
-var jwtKeyBytes = Encoding.UTF8.GetBytes(jwtKey);
-if (jwtKeyBytes.Length < 32)
-{
-    throw new InvalidOperationException("Configuration value 'Jwt:Key' must be at least 32 bytes (256 bits) for HMAC-SHA256.");
-}
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = builder.Configuration["Jwt:Issuer"] ?? "LoanSystem.Identity",
-            ValidAudience = builder.Configuration["Jwt:Audience"] ?? "LoanSystem.App",
-            IssuerSigningKey = new SymmetricSecurityKey(jwtKeyBytes),
-            RoleClaimType = ClaimTypes.Role
-        };
-    });
+// Autenticación RS256 con keyring rotatorio y autorización por roles (BE-SEC-04, BE-SEC-10)
+builder.Services.AddSecurityAuthentication(builder.Configuration, builder.Environment);
 
 builder.Services.AddAuthorization(options =>
 {
@@ -148,12 +125,25 @@ if (app.Environment.IsDevelopment())
     });
 }
 
-app.MapGet("/health", () => Results.Ok(new
+// Falla rápido fuera de Development si faltan secretos obligatorios o hay valores inseguros de dev
+app.Configuration.ValidateStartupSecrets(app.Environment, requireHttpSecuritySecrets: true);
+
+app.MapGet("/health", async (
+    Microsoft.Extensions.Diagnostics.HealthChecks.HealthCheckService healthChecks,
+    CancellationToken ct) =>
 {
-    Status = "Healthy",
-    Timestamp = DateTimeOffset.UtcNow,
-    Service = "LoanSystem.WebApi"
-}))
+    var report = await healthChecks.CheckHealthAsync(ct);
+    var payload = new
+    {
+        Status = report.Status.ToString(),
+        Timestamp = DateTimeOffset.UtcNow,
+        Service = "LoanSystem.WebApi"
+    };
+
+    return report.Status == Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy
+        ? Results.Json(payload, statusCode: StatusCodes.Status503ServiceUnavailable)
+        : Results.Ok(payload);
+})
 .WithTags("Health")
 .AllowAnonymous();
 

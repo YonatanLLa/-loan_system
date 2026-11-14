@@ -15,6 +15,7 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
     private readonly IClock _clock;
     private readonly IUserStatusTracker _statusTracker;
     private readonly IAuditContext _audit;
+    private readonly ISecurityApprovalRequests? _approvals;
 
     public SuspendUserUseCase(
         IUserRepository users,
@@ -23,7 +24,8 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
         ISecurityUnitOfWork unitOfWork,
         IClock clock,
         IUserStatusTracker statusTracker,
-        IAuditContext audit)
+        IAuditContext audit,
+        ISecurityApprovalRequests? approvals = null)
     {
         _users = users;
         _refreshTokens = refreshTokens;
@@ -32,6 +34,7 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
         _clock = clock;
         _statusTracker = statusTracker;
         _audit = audit;
+        _approvals = approvals;
     }
 
     public async Task<Result> ExecuteAsync(SuspendUserRequest request, CancellationToken ct = default)
@@ -47,13 +50,28 @@ internal sealed class SuspendUserUseCase : ISuspendUserUseCase
             return Error.NotFound("Security.UserNotFound", $"User '{request.UserId}' was not found.");
 
         user.Suspend();
-        _audit.SetAction("SUSPEND");
+        _audit.SetAction("SUSPEND", "users");
 
         // RevokeAllForUserAsync is an immediate bulk UPDATE; the transaction keeps it atomic with the
-        // suspension. Its row locks also make a concurrent rotation of one of these tokens lose the race.
+        // suspension and the cancellation of the user's pending approvals. Its row locks also make a
+        // concurrent rotation of one of these tokens lose the race.
         await using (var transaction = await _unitOfWork.BeginTransactionAsync(ct))
         {
             await _refreshTokens.RevokeAllForUserAsync(user.Id, _clock, ct);
+
+            if (_approvals is not null)
+            {
+                var pendingRequests = await _approvals.FindPendingByRequesterAsync(user.Id, ct);
+                if (pendingRequests.Count > 0)
+                {
+                    _audit.SetAction("CANCEL", "approval_requests");
+                    foreach (var pending in pendingRequests)
+                    {
+                        pending.CancelBySystem(_clock, "Requester account was suspended.");
+                    }
+                }
+            }
+
             await _unitOfWork.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
         }

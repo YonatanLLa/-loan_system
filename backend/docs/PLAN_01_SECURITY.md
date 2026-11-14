@@ -23,9 +23,9 @@ cubre el **núcleo MVP**; los requisitos avanzados se documentan solo como pendi
 | **BE-SEC-06** | Suspender un usuario invalida sus tokens al instante | MVP | ✅ En alcance |
 | **BE-SEC-07** | Interceptor de auditoría: entidad, acción, antes/después, usuario, IP y **user-agent**, en la misma transacción | MVP | ✅ En alcance |
 | **BE-SEC-08** | `GET /api/audit-logs` con filtros, solo Auditor y Admin | MVP | ✅ En alcance |
-| **BE-SEC-03** | MFA (TOTP) obligatorio para `ROLE_ADMIN` y `ROLE_OPERATOR` | MVP (Nuevo) | ⏳ Pendiente (§8) |
-| **BE-SEC-09** | **Cuatro ojos**: reversos, castigos, ajustes, cambios de tasa/rol requieren segundo aprobador | F2 | ⏳ Pendiente (§8) |
-| **BE-SEC-10** | JWT firmado con **RS256** y claves rotadas; secretos solo en gestor de secretos | MVP | ⏳ Pendiente (§8) — hoy se usa HS256 |
+| **BE-SEC-03** | MFA (TOTP) obligatorio para `ROLE_ADMIN` y `ROLE_OPERATOR` | MVP (Nuevo) | ✅ Implementado ([`ANALISIS_03_MFA_TOTP.md`](ANALISIS_03_MFA_TOTP.md)) |
+| **BE-SEC-09** | **Cuatro ojos**: reversos, castigos, ajustes, cambios de tasa/rol requieren segundo aprobador | F2 | ✅ Implementado ([`ANALISIS_09_CUATRO_OJOS.md`](ANALISIS_09_CUATRO_OJOS.md)) |
+| **BE-SEC-10** | JWT firmado con **RS256**, JWKS y gestión de secretos | MVP | ✅ Implementado ([`ANALISIS_10_JWT_RS256_Y_SECRETOS.md`](ANALISIS_10_JWT_RS256_Y_SECRETOS.md)) |
 
 > **Regla transversal del proyecto:** montos en `decimal` (no aplica aquí), nada financiero se borra,
 > y toda escritura sensible queda auditada. En Security la regla clave es: **contraseñas y tokens
